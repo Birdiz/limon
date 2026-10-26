@@ -9,7 +9,7 @@ Version en ligne (privée, partagée depuis claude.ai) : https://claude.ai/artif
 - **Calcul** : nombre de hauteurs automatique (Blondel 2h + g ≈ 630 mm), ligne de foulée, balancement des marches dans le quart tournant.
 - **Trémie et échappée** : contrôle de la hauteur libre sous le plancher (alerte sous 2 000 mm, erreur sous 1 900 mm) et trémie minimale.
 - **Plan et 3D** : plan coté en SVG, vue 3D Three.js avec limons, poteau, marches et contremarches.
-- **Export CNC** : zip contenant `marches.dxf`, `limons.dxf`, la fiche des marches en CSV et une notice.
+- **Export CNC** : zip contenant `marches.dxf`, `contremarches.dxf` (si l'escalier en a), `limons.dxf`, la fiche des marches en CSV et une notice.
   - DXF R12 en millimètres.
   - Calques `DECOUPE` (contours), `DEFONCE` (logements), `CM_DESSUS` et `CM_DESSOUS` (traits des contremarches), `TEXTE`.
 

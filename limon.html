@@ -185,6 +185,8 @@ td.low { color: var(--warn); font-weight: 500; }
 @media (max-width: 900px) { .cncgrid { grid-template-columns: minmax(0, 1fr); } }
 .pv { height: clamp(260px, 40vh, 440px); padding: 12px; }
 .pv svg { display: block; width: 100%; height: 100%; }
+.view.wide { grid-column: 1 / -1; }
+.pv.short { height: clamp(200px, 30vh, 340px); }
 .cx-DECOUPE { fill: var(--panel); stroke: var(--ink); }
 .cx-DEFONCE { fill: var(--chalk-soft); stroke: var(--chalk); }
 .cx-CM_DESSUS, .cx-CM_DESSOUS { fill: none; stroke: var(--muted); stroke-dasharray: 4 3; }
@@ -295,7 +297,7 @@ td.low { color: var(--warn); font-weight: 500; }
         <h2>Export CNC</h2>
         <div class="actions"><span class="copied" id="dlmsg" hidden></span><button class="btn primary" id="dl" type="button" hidden>Télécharger les DXF (.zip)</button></div>
       </div>
-      <p class="disclaimer" id="cncintro">Marches vues de dessus, nez en bas, encastrement compris. Limons développés, vus depuis la face côté marches et couchés dans le sens de la planche, avec les logements à défoncer. Fichiers DXF R12 en millimètres.</p>
+      <p class="disclaimer" id="cncintro">Marches vues de dessus, nez en bas, encastrement compris. Contremarches vues de face, longueur hors tout. Limons développés, vus depuis la face côté marches et couchés dans le sens de la planche, avec les logements à défoncer. Fichiers DXF R12 en millimètres.</p>
       <div class="notes" id="cncnotes"></div>
       <div class="cncgrid">
         <div class="view">
@@ -306,9 +308,13 @@ td.low { color: var(--warn); font-weight: 500; }
           <div class="vhead"><h2>Limons</h2><div class="legend"><span><i class="lg-cut"></i>découpe</span><span><i class="lg-def"></i>défonce</span></div></div>
           <div class="pv" id="pvB"></div>
         </div>
+        <div class="view wide" id="pvRbox">
+          <div class="vhead"><h2>Contremarches</h2><div class="legend"><span><i class="lg-cut"></i>découpe</span></div></div>
+          <div class="pv short" id="pvR"></div>
+        </div>
       </div>
       <div class="tablewrap"><table id="parts"></table></div>
-      <div class="actions"><button class="btn" id="cpT" type="button">Copier marches.dxf</button><button class="btn" id="cpB" type="button">Copier limons.dxf</button><span class="copied" id="cpmsg" hidden></span></div>
+      <div class="actions"><button class="btn" id="cpT" type="button">Copier marches.dxf</button><button class="btn" id="cpR" type="button">Copier contremarches.dxf</button><button class="btn" id="cpB" type="button">Copier limons.dxf</button><span class="copied" id="cpmsg" hidden></span></div>
       <textarea id="dxffb" hidden readonly aria-label="Contenu DXF"></textarea>
       <p class="disclaimer">Girons mesurés de nez à nez. Repères de confort usuels (Blondel 600 à 640 mm, hauteur 160 à 185 mm, giron d'au moins 240 mm, échappée d'au moins 2 000 mm et jamais sous 1 900 mm) : à confronter au NF DTU 36.3 et aux exigences du chantier avant fabrication.</p>
     </section>
@@ -834,11 +840,32 @@ function buildCNC(R, p) {
     treadParts.push({ j: t.j, L: w, l: d });
   });
 
-  // Contremarches (débit seulement)
-  const riserParts = p.cm ? R.risers.map((r, i) => {
-    const band = riserBand(R.lines[i]);
-    return { j: i + 1, L: V.len(V.sub(band.a.outD.p, band.a.inD.p)), l: r.z1 - r.z0 };
-  }) : [];
+  // Contremarches : vues de face depuis l'escalier, bas en bas, encastrement compris, longueur hors tout.
+  // Dans le tournant, la contremarche arrive en biais sur le limon : chaque bout biais est coté.
+  const riserEnts = [], riserParts = [];
+  cx = 0; cy = 0; rowH = 0;
+  if (p.cm) R.risers.forEach((r, i) => {
+    const ln = R.lines[i], band = riserBand(ln), nr = M(ln.nr), ax = [nr[1], -nr[0]];
+    const x = q => V.dot(M(q), ax);
+    const ends = [[band.a.inD.p, band.b.inD.p], [band.a.outD.p, band.b.outD.p]].map(([f, b]) => ({ f: x(f), b: x(b) }));
+    const [lo, hi] = ends[0].f + ends[0].b < ends[1].f + ends[1].b ? ends : [ends[1], ends[0]];
+    const x0 = Math.min(lo.f, lo.b), x1 = Math.max(hi.f, hi.b), w = x1 - x0, d = r.z1 - r.z0;
+    if (cx > 0 && cx + w > rowMax) { cx = 0; cy += rowH + gap + 30; rowH = 0; }
+    riserEnts.push({ kind: "poly", layer: "DECOUPE", pts: [[cx, cy], [cx + w, cy], [cx + w, cy + d], [cx, cy + d]], closed: true });
+    riserEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + d / 2, h: 50, s: `CM${i + 1}`, center: true });
+    // Parement : face vue, côté nez. Un bout est biais quand parement et dos n'ont pas la même longueur.
+    const bevel = (end, shortF, y, right) => {
+      const dev = Math.abs(end.f - end.b);
+      if (dev < 0.5) return;
+      const deg = Math.atan2(dev, p.ecm) * 180 / Math.PI;
+      riserEnts.push({ kind: "text", layer: "TEXTE", x: right ? cx + w - 12 : cx + 12, y, h: 20, right,
+        s: `biais ${fmt(deg, 1)} deg (${shortF ? "parement" : "dos"} -${fmt(dev, 1)} mm)` });
+    };
+    bevel(lo, lo.f > lo.b, cy + 12, false);
+    bevel(hi, hi.f < hi.b, cy + d - 32, true);
+    cx += w + gap; rowH = Math.max(rowH, d);
+    riserParts.push({ j: i + 1, L: w, l: d });
+  });
 
   // Limons
   const boardEnts = [], boardParts = [];
@@ -872,7 +899,7 @@ function buildCNC(R, p) {
     boardParts.push({ name, L, l: H, pockets: pockets.length, need: sp.need, hl: sp.hl });
     by += H + 180;
   });
-  return { treadEnts, boardEnts, treadParts, riserParts, boardParts };
+  return { treadEnts, riserEnts, boardEnts, treadParts, riserParts, boardParts };
 }
 
 const ascii = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\x20-\x7e]/g, "");
@@ -897,6 +924,7 @@ function toDXF(ents) {
     } else {
       g(0, "TEXT"); g(8, e.layer); g(10, n(e.x)); g(20, n(e.y)); g(30, "0.0"); g(40, n(e.h)); g(1, ascii(e.s));
       if (e.center) { g(72, 1); g(73, 2); g(11, n(e.x)); g(21, n(e.y)); g(31, "0.0"); }
+      else if (e.right) { g(72, 2); g(11, n(e.x)); g(21, n(e.y)); g(31, "0.0"); }
     }
   });
   g(0, "ENDSEC"); g(0, "EOF");
@@ -943,6 +971,14 @@ function readme(R, p) {
     "  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)",
     "  TEXTE       numéro de marche",
     "",
+    ...(p.cm ? [
+      "contremarches.dxf : chaque contremarche vue de face depuis l'escalier, bas en bas,",
+      `  longueur hors tout, encastrement de ${p.enc} mm compris de chaque côté.`,
+      "  DECOUPE     contour de découpe",
+      "  TEXTE       numéro de contremarche ; dans le tournant, angle des bouts biais",
+      "              et face la plus courte (parement = face vue depuis l'escalier, dos = face cachée)",
+      "",
+    ] : []),
     "limons.dxf : chaque limon développé, vu depuis la face côté marches, haut en haut,",
     "  couché dans le sens de la planche (cotes = plus petit rectangle de débit).",
     "  DECOUPE     contour du limon",
@@ -1114,7 +1150,7 @@ function previewSVG(ents, label) {
   const P2 = q => `${q[0].toFixed(1)},${(-q[1]).toFixed(1)}`;
   const body = ents.map(e => e.kind === "poly"
     ? `<polygon class="cx-${e.layer}" vector-effect="non-scaling-stroke" points="${e.pts.map(P2).join(" ")}"/>`
-    : `<text class="cx-TEXTE" x="${e.x.toFixed(1)}" y="${(-e.y).toFixed(1)}" font-size="${e.h}" ${e.center ? 'text-anchor="middle" dominant-baseline="central"' : ""}>${e.s}</text>`).join("");
+    : `<text class="cx-TEXTE" x="${e.x.toFixed(1)}" y="${(-e.y).toFixed(1)}" font-size="${e.h}" ${e.center ? 'text-anchor="middle" dominant-baseline="central"' : e.right ? 'text-anchor="end"' : ""}>${e.s}</text>`).join("");
   return `<svg viewBox="${b.x0 - pad} ${-b.y1 - pad} ${b.x1 - b.x0 + 2 * pad} ${b.y1 - b.y0 + 2 * pad}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${label}">${body}</svg>`;
 }
 function drawCNC(R) {
@@ -1124,6 +1160,8 @@ function drawCNC(R) {
   cncData = buildCNC(R, P);
   $("pvT").innerHTML = previewSVG(cncData.treadEnts, "Aperçu des marches à découper");
   $("pvB").innerHTML = previewSVG(cncData.boardEnts, "Aperçu des limons développés");
+  $("pvRbox").hidden = $("cpR").hidden = !P.cm;
+  $("pvR").innerHTML = previewSVG(cncData.riserEnts, "Aperçu des contremarches à découper");
   const tight = cncData.boardParts.filter(b => b.need > b.hl + 0.5);
   const fixes = [R.hl < R.needM - 0.5 && `passez la hauteur de limon à ${fmt(Math.ceil(R.needM / 10) * 10)} mm`,
     R.quart && R.hlj < R.needJ - 0.5 && `passez le limon de jour à ${fmt(R.hljAuto)} mm`].filter(Boolean);
@@ -1148,6 +1186,7 @@ function cncFiles() {
   return [
     { name: "marches.dxf", data: toDXF(cncData.treadEnts) },
     { name: "limons.dxf", data: toDXF(cncData.boardEnts) },
+    ...(P.cm ? [{ name: "contremarches.dxf", data: toDXF(cncData.riserEnts) }] : []),
     { name: "fiche-marches.csv", data: "﻿" + csv(current) },
     { name: "LISEZMOI.txt", data: readme(current, P) },
   ];
@@ -1174,11 +1213,12 @@ $("dl").addEventListener("click", async () => {
 });
 const copyDXF = (which, label) => {
   if (!cncData) return;
-  const text = toDXF(which === "T" ? cncData.treadEnts : cncData.boardEnts), fb = $("dxffb");
+  const text = toDXF({ T: cncData.treadEnts, R: cncData.riserEnts, B: cncData.boardEnts }[which]), fb = $("dxffb");
   const fallback = () => { fb.hidden = false; fb.value = text; fb.focus(); fb.select(); };
   try { navigator.clipboard.writeText(text).then(() => flash($("cpmsg"), `${label} copié`), fallback); } catch (e) { fallback(); }
 };
 $("cpT").addEventListener("click", () => copyDXF("T", "marches.dxf"));
+$("cpR").addEventListener("click", () => copyDXF("R", "contremarches.dxf"));
 $("cpB").addEventListener("click", () => copyDXF("B", "limons.dxf"));
 
 /* ---------- Boucle ---------- */
