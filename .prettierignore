@@ -1,0 +1,4 @@
+dist/
+out/
+tests/__snapshots__/
+package-lock.json

@@ -1,0 +1,20 @@
+Limon - export CNC
+Escalier quart tournant gauche : 15 hauteurs de 180,0 mm, giron 262,0 mm, emmarchement 850 mm.
+Unités : millimètres. Format DXF R12 (AC1009).
+
+marches.dxf : chaque marche vue de dessus, nez en bas.
+  DECOUPE     contour de découpe, encastrement de 15 mm compris de chaque côté
+  CM_DESSUS   contremarche posée sur la marche (face supérieure)
+  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)
+  TEXTE       numéro de marche
+
+limons.dxf : chaque limon développé, vu depuis la face côté marches, haut en haut,
+  couché dans le sens de la planche (cotes = plus petit rectangle de débit).
+  DECOUPE     contour du limon
+  DEFONCE     logements des marches et contremarches, profondeur 15 mm
+  TEXTE       nom de la pièce et cotes brutes
+
+fiche-marches.csv : girons et longueurs de nez de chaque marche.
+
+À vérifier avant usinage : sens des pièces, jeu d'assemblage, arrondi des nez,
+assemblage des limons sur le poteau et au palier.
