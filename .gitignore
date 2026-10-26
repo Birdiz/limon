@@ -1,0 +1,7 @@
+.venv/
+venv/
+out/
+preview/
+__pycache__/
+.DS_Store
+.claude/launch.json
