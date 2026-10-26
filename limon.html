@@ -253,11 +253,13 @@ td.low { color: var(--warn); font-weight: 500; }
       <div class="row"><label for="ess">Essence</label><select id="ess"><option value="chene">Chêne</option><option value="hetre">Hêtre</option><option value="frene">Frêne</option><option value="sapin">Sapin</option><option value="noyer">Noyer</option></select></div>
       <div class="row"><label for="et">Épaisseur de marche</label><div class="num"><input id="et" type="number" step="1" min="18"><span>mm</span></div></div>
       <div class="row"><label for="deb">Débord de nez<small>recouvrement</small></label><div class="num"><input id="deb" type="number" step="1" min="0"><span>mm</span></div></div>
+      <div class="row"><label for="rn">Rayon du nez<small>arrondi dessus et dessous, 0 = vif</small></label><div class="num"><input id="rn" type="number" step="1" min="0"><span>mm</span></div></div>
       <div class="row"><div><label for="ecm">Contremarches</label><label class="check"><input type="checkbox" id="cm"> avec</label></div><div class="num"><input id="ecm" type="number" step="1" min="10"><span>mm</span></div></div>
       <div class="row"><label for="el">Épaisseur de limon</label><div class="num"><input id="el" type="number" step="1" min="20"><span>mm</span></div></div>
       <div class="row"><label for="hl">Hauteur de limon<small data-show="quart">limon de mur</small></label><div class="num"><input id="hl" type="number" step="5" min="150"><span>mm</span></div></div>
       <div class="row" data-show="quart"><div><label for="hlj">Hauteur du limon de jour</label><label class="check"><input type="checkbox" id="hljAuto"> automatique</label></div><div class="num"><input id="hlj" type="number" step="5" min="150"><span>mm</span></div></div>
       <div class="row"><label for="enc">Encastrement<small>marches et contremarches dans les limons</small></label><div class="num"><input id="enc" type="number" step="1" min="0" max="40"><span>mm</span></div></div>
+      <div class="row"><label for="jeu">Jeu d'assemblage<small>par côté, sur les logements</small></label><div class="num"><input id="jeu" type="number" step="0.1" min="0" max="5"><span>mm</span></div></div>
     </div>
     <button class="btn" id="reset" type="button">Revenir à l'exemple</button>
   </aside>
@@ -471,13 +473,22 @@ function compute(p) {
   const region = (fr, bk) => [...polyPath(inner, fr.sIn, bk.sIn), ...polyPath(outer, bk.sOut, fr.sOut)];
 
   const bo = p.deb + (p.cm ? p.ecm : 0);
+  // Nez arrondi : bande de largeur rn derrière la ligne de nez, dessinée à part en 3D.
+  const rn = clamp(p.rn, 0, p.et / 2);
+  const noseSpan = ln => {
+    const d2 = [ln.nr[1], -ln.nr[0]], c = cutOff(ln, rn);
+    const us = [polyAt(inner, ln.sIn), polyAt(outer, ln.sOut), polyAt(inner, c.sIn), polyAt(outer, c.sOut)].map(q => V.dot(V.sub(q, ln.Q), d2));
+    const u0 = Math.min(...us), u1 = Math.max(...us);
+    return { o: V.add(ln.Q, V.mul(d2, u0)), len: u1 - u0, nr: ln.nr };
+  };
   const treads = [];
   for (let j = 1; j < n; j++) {
     const fr = lines[j - 1], bk = lines[j];
     treads.push({
       j, top: j * h,
       plan: region(fr, bk),
-      solid: region(fr, cutOff(bk, bo)),
+      solid: region(rn > 0 ? cutOff(fr, rn) : fr, cutOff(bk, bo)),
+      nose: rn > 0 ? noseSpan(fr) : null,
       gIn: bk.sIn - fr.sIn, gOut: bk.sOut - fr.sOut, gWalk: g,
       nez: V.len(V.sub(fr.O, fr.Q)),
       balanced: !!bal && j > bal.a && j <= bal.b,
@@ -588,6 +599,8 @@ function compute(p) {
   if (quart && st.gIn !== "ok") N.push([st.gIn, `Giron côté jour de ${fmt(gInMin)} mm seulement : augmentez le nombre de marches balancées.`]);
   if (bal && bal.extended) N.push(["warn", `Balancement étendu à ${bal.m} marches pour couvrir tout le tournant.`]);
   if (bal && bal.pr + 0.01 < bal.want) N.push(["warn", `Progressivité limitée à ${fmt(bal.pr * 100)} % pour garder au moins 100 mm au jour.`]);
+  if (p.rn > p.et / 2 + 0.01) N.push(["info", `Rayon du nez ramené à ${fmt(rn, 1)} mm, la moitié de l'épaisseur de marche (demi-rond).`]);
+  if (p.cm && rn > p.deb) N.push(["warn", `Le rayon du nez (${fmt(rn)} mm) dépasse le débord (${fmt(p.deb)} mm) : l'arrondi du dessous mord sur la contremarche.`]);
   if (hl < needM - 0.5) N.push(["warn", `Limon${quart ? " de mur" : ""} trop étroit : ${fmt(hl)} mm pour des marches de ${fmt(h)} mm, prévoyez au moins ${fmt(ceil10(needM))} mm pour garder 20 mm de bois sous les logements.`]);
   if (quart && hlj < needJ - 0.5) N.push(["warn", `Limon de jour trop étroit : ${fmt(hlj)} mm, les logements du tournant demandent au moins ${fmt(hljAuto)} mm.`]);
   if (st.ech !== "ok") {
@@ -604,7 +617,7 @@ function compute(p) {
   if (!N.some(x => x[0] === "warn" || x[0] === "bad")) N.unshift(["ok", "Toutes les règles de confort sont respectées."]);
 
   Object.assign(R, { quart, n, nAuto, h, g, f, fAuto, Lw, T1, T2, W, A, B, L, H, inner, outer, walkAt, lines, treads, risers,
-    stringers, hl, hlj, hljAuto, needJ, needM, newel, slab, tre, ceil, ech, tLmin, tXmin, tYmin, bal, blondel, pente, gInMin, st });
+    stringers, rn, hl, hlj, hljAuto, needJ, needM, newel, slab, tre, ceil, ech, tLmin, tXmin, tYmin, bal, blondel, pente, gInMin, st });
   return R;
 }
 
@@ -614,9 +627,9 @@ const STATUS = { ok: "Bon", warn: "Limite", bad: "Hors norme" };
 
 /* ---------- Réglages ---------- */
 const DEF = { forme: "quart-d", H: 2700, L: 3650, A: 2900, B: 1800, W: 850, fAuto: true, f: 425, nAuto: true, n: 15,
-  mb: 7, prog: 60, ess: "chene", et: 40, deb: 30, cm: true, ecm: 22, el: 45, hl: 340, hljAuto: true, hlj: 470,
-  tL: 3200, tX: 1850, tY: 2550, ep: 200, enc: 15 };
-const NUMS = ["H", "L", "A", "B", "W", "f", "n", "mb", "prog", "et", "deb", "ecm", "el", "hl", "hlj", "tL", "tX", "tY", "ep", "enc"];
+  mb: 7, prog: 60, ess: "chene", et: 40, deb: 30, rn: 10, cm: true, ecm: 22, el: 45, hl: 340, hljAuto: true, hlj: 470,
+  tL: 3200, tX: 1850, tY: 2550, ep: 200, enc: 15, jeu: 0.5 };
+const NUMS = ["H", "L", "A", "B", "W", "f", "n", "mb", "prog", "et", "deb", "rn", "ecm", "el", "hl", "hlj", "tL", "tX", "tY", "ep", "enc", "jeu"];
 const $ = id => document.getElementById(id);
 let P = { ...DEF };
 try { const saved = JSON.parse(localStorage.getItem("limon-v2") || "null"); if (saved) P = { ...DEF, ...saved }; } catch (e) {}
@@ -787,8 +800,10 @@ function cncFrame(R, p) {
 }
 // Logements de chaque limon dans son plan (u le long du limon, z en hauteur),
 // et hauteur de limon nécessaire pour garder 20 mm de bois sous chaque logement.
+// Le jeu agrandit chaque logement de chaque côté ; le bout avant d'un logement de marche suit le nez arrondi
+// (arc en bulge DXF, troisième coordonnée du sommet).
 function stringerPockets(R, p, F) {
-  const bo = p.deb + (p.cm ? p.ecm : 0);
+  const bo = p.deb + (p.cm ? p.ecm : 0), jeu = Math.max(0, p.jeu), rn = clamp(p.rn, 0, p.et / 2), B = Math.tan(Math.PI / 8);
   return R.stringers.map(sp => {
     const uLo = sp.prof[0][0], uHi = sp.prof[sp.prof.length - 1][0];
     const proj = q => V.dot(V.sub(q, sp.a), sp.dir);
@@ -797,16 +812,22 @@ function stringerPockets(R, p, F) {
     const topAt = u => interp(sp.prof.map(q => q[0]), sp.prof.map(q => q[1]), u);
     const pockets = [];
     let need = 0;
-    const pocket = (c1, c2, z0, z1) => {
+    const pocket = (c1, c2, z0, z1, nose) => {
       if (!touches(c1[keyF].s, c2[keyF].s)) return;
       const us = [c1[keyF].p, c1[keyD].p, c2[keyF].p, c2[keyD].p].map(proj);
-      const u0 = clamp(Math.min(...us), uLo, uHi), u1 = clamp(Math.max(...us), uLo, uHi);
+      const a = Math.min(...us), b = Math.max(...us);
+      const u0 = clamp(a - jeu, uLo, uHi), u1 = clamp(b + jeu, uLo, uHi);
       if (!(u1 - u0 > 2 && z1 > z0)) return;
-      pockets.push([[u0, z0], [u1, z0], [u1, z1], [u0, z1]]);
-      if (z0 > 0.5) need = Math.max(need, topAt(u0) - z0 + 20, topAt(u1) - z0 + 20);
+      const lo = z0 > 0.5 ? z0 - jeu : z0, hi = z1 + jeu;
+      // Le nez est au bout bas du logement, s'il tombe dans cette pièce de limon.
+      const r = nose && rn > 0 && a - jeu >= uLo - 1e-6 ? Math.min(rn + jeu, (hi - lo) / 2, u1 - u0) : 0;
+      pockets.push(r > 0.05
+        ? [[u1, lo], [u1, hi], [u0 + r, hi, B], ...(hi - lo - 2 * r > 0.01 ? [[u0, hi - r], [u0, lo + r, B]] : [[u0, hi - r, B]]), [u0 + r, lo]]
+        : [[u0, lo], [u1, lo], [u1, hi], [u0, hi]]);
+      if (z0 > 0.5) need = Math.max(need, topAt(u0) - lo + 20, topAt(u1) - lo + 20);
     };
-    R.treads.forEach(t => pocket(F.at(R.lines[t.j - 1], 0), F.at(R.lines[t.j], bo), t.top - p.et, t.top));
-    if (p.cm) R.risers.forEach((r, i) => { const band = F.riserBand(R.lines[i]); pocket(band.a, band.b, r.z0, r.z1); });
+    R.treads.forEach(t => pocket(F.at(R.lines[t.j - 1], 0), F.at(R.lines[t.j], bo), t.top - p.et, t.top, true));
+    if (p.cm) R.risers.forEach((r, i) => { const band = F.riserBand(R.lines[i]); pocket(band.a, band.b, r.z0, r.z1, false); });
     return { pockets, need };
   });
 }
@@ -835,7 +856,7 @@ function buildCNC(R, p) {
     marks.forEach(([layer, quad]) => treadEnts.push({ kind: "poly", layer, pts: quad.map(q => place(loc(q))), closed: true }));
     const w = b.x1 - b.x0, d = b.y1 - b.y0;
     treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + d / 2, h: 50, s: `M${t.j}`, center: true });
-    treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + 18, h: 22, s: "nez", center: true });
+    treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + 18, h: 22, s: R.rn > 0 ? `nez R${fmt(R.rn, 1)}` : "nez", center: true });
     cx += w + gap; rowH = Math.max(rowH, d);
     treadParts.push({ j: t.j, L: w, l: d });
   });
@@ -889,13 +910,17 @@ function buildCNC(R, p) {
       const area = (r.x1 - r.x0) * (r.y1 - r.y0);
       if (!best || area < best.area - 1 || (Math.abs(area - best.area) <= 1 && Math.abs(th) < Math.abs(best.th))) best = { area, th, r, c, s };
     }
-    const tr = q => { const f = fl(q); return [f[0] * best.c - f[1] * best.s - best.r.x0, f[0] * best.s + f[1] * best.c - best.r.y0 + by]; };
+    // Le retournement inverse le sens des arcs.
+    const tr = q => {
+      const f = fl(q), t = [f[0] * best.c - f[1] * best.s - best.r.x0, f[0] * best.s + f[1] * best.c - best.r.y0 + by];
+      return q.length > 2 ? [...t, flip ? -q[2] : q[2]] : t;
+    };
     boardEnts.push({ kind: "poly", layer: "DECOUPE", pts: outline.map(tr), closed: true });
     pockets.forEach(pk => boardEnts.push({ kind: "poly", layer: "DEFONCE", pts: pk.map(tr), closed: true }));
     const name = names[sp.side] + (sp.count > 1 ? ` ${sp.idx + 1}/${sp.count}` : "");
     const L = best.r.x1 - best.r.x0, H = best.r.y1 - best.r.y0;
     boardEnts.push({ kind: "text", layer: "TEXTE", x: 0, y: by + H + 40, h: 45,
-      s: `${name} - face cote marches - ${Math.ceil(L)} x ${Math.ceil(H)} x ${p.el} - defonce ${e} mm` });
+      s: `${name} - face cote marches - ${Math.ceil(L)} x ${Math.ceil(H)} x ${p.el} - defonce ${e} mm, jeu ${fmt(p.jeu, 1)} mm` });
     boardParts.push({ name, L, l: H, pockets: pockets.length, need: sp.need, hl: sp.hl });
     by += H + 180;
   });
@@ -919,7 +944,7 @@ function toDXF(ents) {
   ents.forEach(e => {
     if (e.kind === "poly") {
       g(0, "POLYLINE"); g(8, e.layer); g(66, 1); g(10, "0.0"); g(20, "0.0"); g(30, "0.0"); g(70, e.closed ? 1 : 0);
-      e.pts.forEach(q => { g(0, "VERTEX"); g(8, e.layer); g(10, n(q[0])); g(20, n(q[1])); g(30, "0.0"); });
+      e.pts.forEach(q => { g(0, "VERTEX"); g(8, e.layer); g(10, n(q[0])); g(20, n(q[1])); g(30, "0.0"); if (q[2]) g(42, q[2].toFixed(6)); });
       g(0, "SEQEND"); g(8, e.layer);
     } else {
       g(0, "TEXT"); g(8, e.layer); g(10, n(e.x)); g(20, n(e.y)); g(30, "0.0"); g(40, n(e.h)); g(1, ascii(e.s));
@@ -969,7 +994,7 @@ function readme(R, p) {
     `  DECOUPE     contour de découpe, encastrement de ${p.enc} mm compris de chaque côté`,
     "  CM_DESSUS   contremarche posée sur la marche (face supérieure)",
     "  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)",
-    "  TEXTE       numéro de marche",
+    `  TEXTE       numéro de marche${R.rn > 0 ? `, nez arrondi R${fmt(R.rn, 1)} dessus et dessous (à profiler, hors contour)` : ""}`,
     "",
     ...(p.cm ? [
       "contremarches.dxf : chaque contremarche vue de face depuis l'escalier, bas en bas,",
@@ -982,13 +1007,13 @@ function readme(R, p) {
     "limons.dxf : chaque limon développé, vu depuis la face côté marches, haut en haut,",
     "  couché dans le sens de la planche (cotes = plus petit rectangle de débit).",
     "  DECOUPE     contour du limon",
-    `  DEFONCE     logements des marches et contremarches, profondeur ${p.enc} mm`,
+    `  DEFONCE     logements des marches et contremarches, profondeur ${p.enc} mm,`,
+    `              jeu de ${fmt(p.jeu, 1)} mm par côté compris${R.rn > 0 ? ", bout avant arrondi comme le nez (arcs)" : ""}`,
     "  TEXTE       nom de la pièce et cotes brutes",
     "",
     "fiche-marches.csv : girons et longueurs de nez de chaque marche.",
     "",
-    "À vérifier avant usinage : sens des pièces, jeu d'assemblage, arrondi des nez,",
-    "assemblage des limons sur le poteau et au palier.",
+    "À vérifier avant usinage : sens des pièces, assemblage des limons sur le poteau et au palier.",
   ].join("\r\n") + "\r\n";
 }
 
@@ -1056,6 +1081,16 @@ function extrudePlan(poly, z0, depth, mat) {
   geo.rotateX(-Math.PI / 2); geo.translate(0, z0, 0);
   const m = new THREE.Mesh(geo, mat); m.castShadow = m.receiveShadow = true; return m;
 }
+// Nez arrondi : profil (v vers l'arrière de la marche, z) extrudé le long de la ligne de nez.
+function noseMesh(n, z0, et, r, mat) {
+  const pts = [], k = 8, flat = et - 2 * r > 0.01;
+  for (let i = 0; i <= k; i++) { const a = -Math.PI / 2 - Math.PI / 2 * i / k; pts.push([r + r * Math.cos(a), r + r * Math.sin(a)]); }
+  for (let i = flat ? 0 : 1; i <= k; i++) { const a = Math.PI - Math.PI / 2 * i / k; pts.push([r + r * Math.cos(a), et - r + r * Math.sin(a)]); }
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(q => new THREE.Vector2(q[0], q[1]))), { depth: n.len, bevelEnabled: false });
+  const X = new THREE.Vector3(n.nr[0], 0, -n.nr[1]), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(n.nr[1], 0, n.nr[0]);
+  geo.applyMatrix4(new THREE.Matrix4().makeBasis(X, Y, Z).setPosition(n.o[0], z0, -n.o[1]));
+  const m = new THREE.Mesh(geo, mat); m.castShadow = m.receiveShadow = true; return m;
+}
 function dedupe(arr) { return arr.filter((q, i) => i === 0 || Math.hypot(q[0] - arr[i - 1][0], q[1] - arr[i - 1][1]) > 0.05); }
 // Contour du limon dans son plan (u le long du limon, z en hauteur), coupé au sol.
 function stringerOutline(sp, hl) {
@@ -1091,7 +1126,10 @@ function draw3D(R) {
   const woodDark = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.86), map: woodTex, roughness: 0.66 });
   const slab = new THREE.MeshStandardMaterial({ color: new THREE.Color(cssVar("--rule") || "#c9d0d9"), roughness: 0.95 });
   const g = new THREE.Group();
-  R.treads.forEach(t => g.add(extrudePlan(t.solid, t.top - P.et, P.et, wood)));
+  R.treads.forEach(t => {
+    g.add(extrudePlan(t.solid, t.top - P.et, P.et, wood));
+    if (t.nose) g.add(noseMesh(t.nose, t.top - P.et, P.et, R.rn, wood));
+  });
   R.risers.forEach(r => g.add(extrudePlan(r.plan, r.z0, Math.max(1, r.z1 - r.z0), wood)));
   R.stringers.forEach(sp => g.add(stringerMesh(sp, sp.hl, woodDark)));
   if (R.newel) {
@@ -1142,6 +1180,19 @@ function viewTop() {
 
 /* ---------- Panneau CNC ---------- */
 let cncData = null;
+// Arcs DXF (bulge en troisième coordonnée) découpés en segments pour l'aperçu.
+function bulgePts(pts) {
+  const out = [];
+  pts.forEach((q, i) => {
+    out.push(q);
+    if (!q[2]) return;
+    const b = q[2], c = V.sub(pts[(i + 1) % pts.length], q);
+    const ctr = V.add(V.add(q, V.mul(c, 0.5)), V.mul([-c[1], c[0]], (1 - b * b) / (4 * b)));
+    const a0 = Math.atan2(q[1] - ctr[1], q[0] - ctr[0]), th = 4 * Math.atan(b), r = V.len(V.sub(q, ctr));
+    for (let k = 1; k < 8; k++) out.push([ctr[0] + r * Math.cos(a0 + th * k / 8), ctr[1] + r * Math.sin(a0 + th * k / 8)]);
+  });
+  return out;
+}
 function previewSVG(ents, label) {
   const pts = [];
   ents.forEach(e => e.kind === "poly" ? pts.push(...e.pts) : pts.push([e.x, e.y + e.h]));
@@ -1149,7 +1200,7 @@ function previewSVG(ents, label) {
   const b = bbox(pts), pad = Math.max(b.x1 - b.x0, b.y1 - b.y0) * 0.03;
   const P2 = q => `${q[0].toFixed(1)},${(-q[1]).toFixed(1)}`;
   const body = ents.map(e => e.kind === "poly"
-    ? `<polygon class="cx-${e.layer}" vector-effect="non-scaling-stroke" points="${e.pts.map(P2).join(" ")}"/>`
+    ? `<polygon class="cx-${e.layer}" vector-effect="non-scaling-stroke" points="${bulgePts(e.pts).map(P2).join(" ")}"/>`
     : `<text class="cx-TEXTE" x="${e.x.toFixed(1)}" y="${(-e.y).toFixed(1)}" font-size="${e.h}" ${e.center ? 'text-anchor="middle" dominant-baseline="central"' : e.right ? 'text-anchor="end"' : ""}>${e.s}</text>`).join("");
   return `<svg viewBox="${b.x0 - pad} ${-b.y1 - pad} ${b.x1 - b.x0 + 2 * pad} ${b.y1 - b.y0 + 2 * pad}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${label}">${body}</svg>`;
 }
