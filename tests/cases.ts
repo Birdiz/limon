@@ -8,6 +8,8 @@ export const CASES: Record<string, Partial<Params>> = {
   "quart-d": { forme: "quart-d" },
   "quart-d-manuel": { forme: "quart-d", nAuto: false, n: 17, fAuto: false, f: 380, mb: 5, prog: 100, cm: false },
   "droit-court": { forme: "droit", L: 2400, tL: 1500 },
+  "quart-d-vif": { forme: "quart-d", rn: 0, jeu: 0 },
+  "quart-g-reglages": { forme: "quart-g", hljAuto: false, hlj: 380, hl: 300, rn: 25, deb: 20, jeu: 1.2 },
 };
 
 export function stairOf(over: Partial<Params>): Stair {

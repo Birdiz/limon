@@ -20,18 +20,28 @@ export function readme(R: Stair): string {
       `  DECOUPE     contour de découpe, encastrement de ${p.enc} mm compris de chaque côté`,
       "  CM_DESSUS   contremarche posée sur la marche (face supérieure)",
       "  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)",
-      "  TEXTE       numéro de marche",
+      `  TEXTE       numéro de marche${R.rn > 0 ? `, nez arrondi R${fmt(R.rn, 1)} dessus et dessous (à profiler, hors contour)` : ""}`,
       "",
+      ...(p.cm
+        ? [
+            "contremarches.dxf : chaque contremarche vue de face depuis l'escalier, bas en bas,",
+            `  longueur hors tout, encastrement de ${p.enc} mm compris de chaque côté.`,
+            "  DECOUPE     contour de découpe",
+            "  TEXTE       numéro de contremarche ; dans le tournant, angle des bouts biais",
+            "              et face la plus courte (parement = face vue depuis l'escalier, dos = face cachée)",
+            "",
+          ]
+        : []),
       "limons.dxf : chaque limon développé, vu depuis la face côté marches, haut en haut,",
       "  couché dans le sens de la planche (cotes = plus petit rectangle de débit).",
       "  DECOUPE     contour du limon",
-      `  DEFONCE     logements des marches et contremarches, profondeur ${p.enc} mm`,
+      `  DEFONCE     logements des marches et contremarches, profondeur ${p.enc} mm,`,
+      `              jeu de ${fmt(p.jeu, 1)} mm par côté compris${R.rn > 0 ? ", bout avant arrondi comme le nez (arcs)" : ""}`,
       "  TEXTE       nom de la pièce et cotes brutes",
       "",
       "fiche-marches.csv : girons et longueurs de nez de chaque marche.",
       "",
-      "À vérifier avant usinage : sens des pièces, jeu d'assemblage, arrondi des nez,",
-      "assemblage des limons sur le poteau et au palier.",
+      "À vérifier avant usinage : sens des pièces, assemblage des limons sur le poteau et au palier.",
     ].join("\r\n") + "\r\n"
   );
 }
@@ -41,6 +51,7 @@ export function exportFiles(R: Stair, cnc: CNC = buildCNC(R)): ZipFile[] {
   return [
     { name: "marches.dxf", data: toDXF(cnc.treadEnts) },
     { name: "limons.dxf", data: toDXF(cnc.boardEnts) },
+    ...(R.params.cm ? [{ name: "contremarches.dxf", data: toDXF(cnc.riserEnts) }] : []),
     { name: "fiche-marches.csv", data: "\ufeff" + treadsCSV(R) },
     { name: "LISEZMOI.txt", data: readme(R) },
   ];

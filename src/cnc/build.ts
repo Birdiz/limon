@@ -1,17 +1,20 @@
 /* Export CNC.
    Marches : vue de dessus, nez en bas, encastrement compris des deux côtés.
+   Contremarches : vues de face, longueur hors tout.
    Limons : développé vu depuis la face côté marches, avec les logements à défoncer. */
-import { offsetPoly, polyCut, polyPath, type Cut } from "../core/poly";
-import type { NoseLine, Stair } from "../core/stair";
+import { fmt } from "../core/format";
+import { cncFrame } from "../core/pockets";
+import { polyPath } from "../core/poly";
+import type { Stair } from "../core/stair";
 import { stringerOutline } from "../core/stringer";
-import { V, bbox, clamp, closeRing, interp, type Box, type Pt } from "../core/vec";
+import { V, bbox, closeRing, type Box, type Pt, type Vertex } from "../core/vec";
 import type { Entity, Layer } from "./entities";
 
 export interface TreadPart {
   j: number;
   /** Longueur hors tout (le long du nez). */
   L: number;
-  /** Profondeur hors tout. */
+  /** Profondeur hors tout (hauteur pour une contremarche). */
   l: number;
 }
 
@@ -22,22 +25,17 @@ export interface BoardPart {
   pockets: number;
   /** Hauteur de limon nécessaire pour garder 20 mm de bois sous chaque logement. */
   need: number;
+  /** Hauteur retenue pour cette pièce. */
+  hl: number;
 }
 
 export interface CNC {
   treadEnts: Entity[];
+  riserEnts: Entity[];
   boardEnts: Entity[];
   treadParts: TreadPart[];
   riserParts: TreadPart[];
   boardParts: BoardPart[];
-}
-
-/** Points d'une ligne de marche décalée : sur les faces des limons (F) et au fond des logements (D). */
-interface Section {
-  inF: Cut;
-  inD: Cut;
-  outF: Cut;
-  outD: Cut;
 }
 
 export function buildCNC(R: Stair): CNC {
@@ -47,25 +45,7 @@ export function buildCNC(R: Stair): CNC {
     M = (q: Pt): Pt => [mx * q[0], q[1]];
   const e = p.enc,
     bo = p.deb + (p.cm ? p.ecm : 0);
-  const inOff = offsetPoly(R.inner, e),
-    outOff = offsetPoly(R.outer, -e);
-  const at = (ln: NoseLine, off: number): Section => {
-    const pt = V.add(ln.Q, V.mul(ln.nr, off));
-    const cuts = {
-      inF: polyCut(R.inner, pt, ln.dir, "near"),
-      inD: polyCut(inOff, pt, ln.dir, "near"),
-      outF: polyCut(R.outer, pt, ln.dir, "ahead"),
-      outD: polyCut(outOff, pt, ln.dir, "ahead"),
-    };
-    if (!cuts.inF || !cuts.inD || !cuts.outF || !cuts.outD)
-      throw new Error(`Ligne de marche ${ln.k} sans intersection avec les limons`);
-    return cuts as Section;
-  };
-  const riserBand = (ln: NoseLine) => {
-    const a = at(ln, p.deb),
-      b = at(ln, p.deb + p.ecm);
-    return { a, b, quad: [a.inF.p, a.outF.p, b.outF.p, b.inF.p] };
-  };
+  const { inOff, outOff, at, riserBand } = cncFrame(R, p);
 
   // Marches
   const treadEnts: Entity[] = [],
@@ -75,7 +55,7 @@ export function buildCNC(R: Stair): CNC {
     rowH = 0;
   const gap = 40,
     rowMax = 2600;
-  const items = R.treads.map((t) => {
+  R.treads.forEach((t) => {
     const lnF = R.lines[t.j - 1]!,
       lnB = R.lines[t.j]!;
     const fr = at(lnF, 0),
@@ -110,20 +90,90 @@ export function buildCNC(R: Stair): CNC {
     const w = b.x1 - b.x0,
       d = b.y1 - b.y0;
     treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + d / 2, h: 50, s: `M${t.j}`, center: true });
-    treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + 18, h: 22, s: "nez", center: true });
+    treadEnts.push({
+      kind: "text",
+      layer: "TEXTE",
+      x: cx + w / 2,
+      y: cy + 18,
+      h: 22,
+      s: R.rn > 0 ? `nez R${fmt(R.rn, 1)}` : "nez",
+      center: true,
+    });
     cx += w + gap;
     rowH = Math.max(rowH, d);
     treadParts.push({ j: t.j, L: w, l: d });
-    return { t, fr, bk };
   });
 
-  // Contremarches (débit seulement)
-  const riserParts: TreadPart[] = p.cm
-    ? R.risers.map((r, i) => {
-        const band = riserBand(R.lines[i]!);
-        return { j: i + 1, L: V.len(V.sub(band.a.outD.p, band.a.inD.p)), l: r.z1 - r.z0 };
-      })
-    : [];
+  // Contremarches : vues de face depuis l'escalier, bas en bas, encastrement compris, longueur hors tout.
+  // Dans le tournant, la contremarche arrive en biais sur le limon : chaque bout biais est coté.
+  const riserEnts: Entity[] = [],
+    riserParts: TreadPart[] = [];
+  cx = 0;
+  cy = 0;
+  rowH = 0;
+  if (p.cm)
+    R.risers.forEach((r, i) => {
+      const ln = R.lines[i]!,
+        band = riserBand(ln),
+        nr = M(ln.nr),
+        ax: Pt = [nr[1], -nr[0]];
+      const x = (q: Pt) => V.dot(M(q), ax);
+      type End = { f: number; b: number };
+      const ends: End[] = [
+        [band.a.inD.p, band.b.inD.p],
+        [band.a.outD.p, band.b.outD.p],
+      ].map(([f, b]) => ({ f: x(f!), b: x(b!) }));
+      const [lo, hi] = (ends[0]!.f + ends[0]!.b < ends[1]!.f + ends[1]!.b ? ends : [ends[1], ends[0]]) as [End, End];
+      const x0 = Math.min(lo.f, lo.b),
+        x1 = Math.max(hi.f, hi.b),
+        w = x1 - x0,
+        d = r.z1 - r.z0;
+      if (cx > 0 && cx + w > rowMax) {
+        cx = 0;
+        cy += rowH + gap + 30;
+        rowH = 0;
+      }
+      riserEnts.push({
+        kind: "poly",
+        layer: "DECOUPE",
+        pts: [
+          [cx, cy],
+          [cx + w, cy],
+          [cx + w, cy + d],
+          [cx, cy + d],
+        ],
+        closed: true,
+      });
+      riserEnts.push({
+        kind: "text",
+        layer: "TEXTE",
+        x: cx + w / 2,
+        y: cy + d / 2,
+        h: 50,
+        s: `CM${i + 1}`,
+        center: true,
+      });
+      // Parement : face vue, côté nez. Un bout est biais quand parement et dos n'ont pas la même longueur.
+      const bevel = (end: End, shortF: boolean, y: number, right: boolean) => {
+        const dev = Math.abs(end.f - end.b);
+        if (dev < 0.5) return;
+        const deg = (Math.atan2(dev, p.ecm) * 180) / Math.PI;
+        riserEnts.push({
+          kind: "text",
+          layer: "TEXTE",
+          x: right ? cx + w - 12 : cx + 12,
+          y,
+          h: 20,
+          right,
+          s: `biais ${fmt(deg, 1)} deg (${shortF ? "parement" : "dos"} -${fmt(dev, 1)} mm)`,
+        });
+      };
+      bevel(lo, lo.f > lo.b, cy + 12, false);
+      bevel(hi, hi.f < hi.b, cy + d - 32, true);
+      cx += w + gap;
+      rowH = Math.max(rowH, d);
+      riserParts.push({ j: i + 1, L: w, l: d });
+    });
 
   // Limons
   const boardEnts: Entity[] = [],
@@ -131,44 +181,12 @@ export function buildCNC(R: Stair): CNC {
   let by = 0;
   const names = R.quart ? { in: "LIMON DE JOUR", out: "LIMON DE MUR" } : { in: "LIMON DROIT", out: "LIMON GAUCHE" };
   R.stringers.forEach((sp) => {
-    const outline = stringerOutline(sp, p.hl),
-      bb = bbox(outline);
-    const proj = (q: Pt) => V.dot(V.sub(q, sp.a), sp.dir);
-    const keyF = sp.side === "in" ? "inF" : "outF",
-      keyD = sp.side === "in" ? "inD" : "outD";
-    const touches = (s1: number, s2: number) => Math.max(s1, s2) > sp.sLo + 0.5 && Math.min(s1, s2) < sp.sHi - 0.5;
-    const pockets: Pt[][] = [];
-    let need = 0;
-    const topAt = (u: number) =>
-      interp(
-        sp.prof.map((q) => q[0]),
-        sp.prof.map((q) => q[1]),
-        u,
-      );
-    const pocket = (c1: Section, c2: Section, z0: number, z1: number) => {
-      if (!touches(c1[keyF].s, c2[keyF].s)) return;
-      const us = [c1[keyF].p, c1[keyD].p, c2[keyF].p, c2[keyD].p].map(proj);
-      const u0 = clamp(Math.min(...us), bb.x0, bb.x1),
-        u1 = clamp(Math.max(...us), bb.x0, bb.x1);
-      if (!(u1 - u0 > 2 && z1 > z0)) return;
-      pockets.push([
-        [u0, z0],
-        [u1, z0],
-        [u1, z1],
-        [u0, z1],
-      ]);
-      if (z0 > 0.5) need = Math.max(need, topAt(u0) - z0 + 20, topAt(u1) - z0 + 20);
-    };
-    items.forEach((it) => pocket(it.fr, it.bk, it.t.top - p.et, it.t.top));
-    if (p.cm)
-      R.risers.forEach((r, i) => {
-        const band = riserBand(R.lines[i]!);
-        pocket(band.a, band.b, r.z0, r.z1);
-      });
+    const outline = stringerOutline(sp, sp.hl),
+      pockets = sp.pockets;
     // Vu depuis la face côté marches : le limon de jour se lit à l'envers du sens de montée.
     // Puis couché dans le sens de la planche (plus petit rectangle de débit), haut en haut.
     const flip = (sp.side === "in") !== left;
-    const fl = (q: Pt): Pt => [flip ? -q[0] : q[0], q[1]];
+    const fl = (q: Vertex): Pt => [flip ? -q[0] : q[0], q[1]];
     const flat = outline.map(fl);
     let best: { area: number; th: number; r: Box; c: number; s: number } | null = null;
     for (let i = 0; i < flat.length; i++) {
@@ -185,9 +203,11 @@ export function buildCNC(R: Stair): CNC {
         best = { area, th, r, c, s };
     }
     const B = best!;
-    const tr = (q: Pt): Pt => {
-      const f = fl(q);
-      return [f[0] * B.c - f[1] * B.s - B.r.x0, f[0] * B.s + f[1] * B.c - B.r.y0 + by];
+    // Le retournement inverse le sens des arcs.
+    const tr = (q: Vertex): Vertex => {
+      const f = fl(q),
+        t: Pt = [f[0] * B.c - f[1] * B.s - B.r.x0, f[0] * B.s + f[1] * B.c - B.r.y0 + by];
+      return q.length > 2 ? [...t, flip ? -q[2]! : q[2]!] : t;
     };
     boardEnts.push({ kind: "poly", layer: "DECOUPE", pts: outline.map(tr), closed: true });
     pockets.forEach((pk) => boardEnts.push({ kind: "poly", layer: "DEFONCE", pts: pk.map(tr), closed: true }));
@@ -200,10 +220,10 @@ export function buildCNC(R: Stair): CNC {
       x: 0,
       y: by + H + 40,
       h: 45,
-      s: `${name} - face cote marches - ${Math.ceil(L)} x ${Math.ceil(H)} x ${p.el} - defonce ${e} mm`,
+      s: `${name} - face cote marches - ${Math.ceil(L)} x ${Math.ceil(H)} x ${p.el} - defonce ${e} mm, jeu ${fmt(p.jeu, 1)} mm`,
     });
-    boardParts.push({ name, L, l: H, pockets: pockets.length, need });
+    boardParts.push({ name, L, l: H, pockets: pockets.length, need: sp.need, hl: sp.hl });
     by += H + 180;
   });
-  return { treadEnts, boardEnts, treadParts, riserParts, boardParts };
+  return { treadEnts, riserEnts, boardEnts, treadParts, riserParts, boardParts };
 }

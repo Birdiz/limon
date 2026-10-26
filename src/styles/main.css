@@ -681,6 +681,12 @@ td.low {
   width: 100%;
   height: 100%;
 }
+.view.wide {
+  grid-column: 1 / -1;
+}
+.pv.short {
+  height: clamp(200px, 30vh, 340px);
+}
 .cx-DECOUPE {
   fill: var(--panel);
   stroke: var(--ink);

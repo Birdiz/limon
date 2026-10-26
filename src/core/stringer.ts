@@ -1,8 +1,8 @@
-import type { StringerPiece } from "./stair";
+import type { StringerGeom } from "./stair";
 import { dedupe, type Pt } from "./vec";
 
 /** Contour du limon dans son plan (u le long du limon, z en hauteur), coupé au sol. */
-export function stringerOutline(sp: StringerPiece, hl: number): Pt[] {
+export function stringerOutline(sp: Pick<StringerGeom, "prof">, hl: number): Pt[] {
   const top = sp.prof,
     bot: Pt[] = [];
   for (let i = 0; i < top.length; i++) {

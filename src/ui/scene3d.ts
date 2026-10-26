@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Essence } from "../core/params";
-import type { StringerPiece, Stair } from "../core/stair";
+import type { StringerPiece, Stair, Tread } from "../core/stair";
 import { stringerOutline } from "../core/stringer";
 import type { Pt } from "../core/vec";
 import { cssVar } from "./dom";
@@ -74,8 +74,29 @@ function extrudePlan(poly: readonly Pt[], z0: number, depth: number, mat: THREE.
   return shaded(geo, mat);
 }
 
-function stringerMesh(sp: StringerPiece, hl: number, mat: THREE.Material): THREE.Mesh {
-  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(v2(stringerOutline(sp, hl))), {
+/** Nez arrondi : profil (v vers l'arrière de la marche, z) extrudé le long de la ligne de nez. */
+function noseMesh(n: NonNullable<Tread["nose"]>, z0: number, et: number, r: number, mat: THREE.Material): THREE.Mesh {
+  const pts: Pt[] = [],
+    k = 8,
+    flat = et - 2 * r > 0.01;
+  for (let i = 0; i <= k; i++) {
+    const a = -Math.PI / 2 - ((Math.PI / 2) * i) / k;
+    pts.push([r + r * Math.cos(a), r + r * Math.sin(a)]);
+  }
+  for (let i = flat ? 0 : 1; i <= k; i++) {
+    const a = Math.PI - ((Math.PI / 2) * i) / k;
+    pts.push([r + r * Math.cos(a), et - r + r * Math.sin(a)]);
+  }
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(v2(pts)), { depth: n.len, bevelEnabled: false });
+  const X = new THREE.Vector3(n.nr[0], 0, -n.nr[1]),
+    Y = new THREE.Vector3(0, 1, 0),
+    Z = new THREE.Vector3(n.nr[1], 0, n.nr[0]);
+  geo.applyMatrix4(new THREE.Matrix4().makeBasis(X, Y, Z).setPosition(n.o[0], z0, -n.o[1]));
+  return shaded(geo, mat);
+}
+
+function stringerMesh(sp: StringerPiece, mat: THREE.Material): THREE.Mesh {
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(v2(stringerOutline(sp, sp.hl))), {
     depth: sp.width,
     bevelEnabled: false,
   });
@@ -201,9 +222,12 @@ export class Scene3D {
       roughness: 0.66,
     });
     const g = new THREE.Group();
-    R.treads.forEach((t) => g.add(extrudePlan(t.solid, t.top - p.et, p.et, wood)));
+    R.treads.forEach((t) => {
+      g.add(extrudePlan(t.solid, t.top - p.et, p.et, wood));
+      if (t.nose) g.add(noseMesh(t.nose, t.top - p.et, p.et, R.rn, wood));
+    });
     R.risers.forEach((r) => g.add(extrudePlan(r.plan, r.z0, Math.max(1, r.z1 - r.z0), wood)));
-    R.stringers.forEach((sp) => g.add(stringerMesh(sp, p.hl, woodDark)));
+    R.stringers.forEach((sp) => g.add(stringerMesh(sp, woodDark)));
     if (R.newel) {
       const nb = shaded(new THREE.BoxGeometry(R.newel.size, R.newel.h, R.newel.size), woodDark);
       nb.position.set(R.newel.c[0], R.newel.h / 2, -R.newel.c[1]);

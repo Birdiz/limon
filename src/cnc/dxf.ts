@@ -61,6 +61,7 @@ export function toDXF(ents: readonly Entity[]): string {
         g(10, n(q[0]));
         g(20, n(q[1]));
         g(30, "0.0");
+        if (q[2]) g(42, q[2].toFixed(6));
       });
       g(0, "SEQEND");
       g(8, e.layer);
@@ -75,6 +76,11 @@ export function toDXF(ents: readonly Entity[]): string {
       if (e.center) {
         g(72, 1);
         g(73, 2);
+        g(11, n(e.x));
+        g(21, n(e.y));
+        g(31, "0.0");
+      } else if (e.right) {
+        g(72, 2);
         g(11, n(e.x));
         g(21, n(e.y));
         g(31, "0.0");

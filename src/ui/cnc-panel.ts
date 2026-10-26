@@ -2,32 +2,56 @@ import type { BoardPart, CNC, TreadPart } from "../cnc/build";
 import type { Entity } from "../cnc/entities";
 import { ceil10, fmt } from "../core/format";
 import type { Stair } from "../core/stair";
-import { bbox, type Pt } from "../core/vec";
+import { V, bbox, type Pt, type Vertex } from "../core/vec";
+
+/** Arcs DXF (bulge en troisième coordonnée) découpés en segments pour l'aperçu. */
+export function bulgePts(pts: readonly Vertex[]): Vertex[] {
+  const out: Vertex[] = [];
+  pts.forEach((q, i) => {
+    out.push(q);
+    if (!q[2]) return;
+    const a: Pt = [q[0], q[1]],
+      nx = pts[(i + 1) % pts.length]!;
+    const b = q[2],
+      c = V.sub([nx[0], nx[1]], a);
+    const ctr = V.add(V.add(a, V.mul(c, 0.5)), V.mul([-c[1], c[0]], (1 - b * b) / (4 * b)));
+    const a0 = Math.atan2(q[1] - ctr[1], q[0] - ctr[0]),
+      th = 4 * Math.atan(b),
+      r = V.len(V.sub(a, ctr));
+    for (let k = 1; k < 8; k++)
+      out.push([ctr[0] + r * Math.cos(a0 + (th * k) / 8), ctr[1] + r * Math.sin(a0 + (th * k) / 8)]);
+  });
+  return out;
+}
 
 /** Aperçu SVG d'un jeu d'entités DXF (y vers le haut). */
 export function previewSVG(ents: readonly Entity[], label: string): string {
-  const pts: Pt[] = [];
+  const pts: Vertex[] = [];
   ents.forEach((e) => (e.kind === "poly" ? pts.push(...e.pts) : pts.push([e.x, e.y + e.h])));
   if (!pts.length) return "";
   const b = bbox(pts),
     pad = Math.max(b.x1 - b.x0, b.y1 - b.y0) * 0.03;
-  const P2 = (q: Pt) => `${q[0].toFixed(1)},${(-q[1]).toFixed(1)}`;
+  const P2 = (q: Vertex) => `${q[0].toFixed(1)},${(-q[1]).toFixed(1)}`;
   const body = ents
     .map((e) =>
       e.kind === "poly"
-        ? `<polygon class="cx-${e.layer}" vector-effect="non-scaling-stroke" points="${e.pts.map(P2).join(" ")}"/>`
-        : `<text class="cx-TEXTE" x="${e.x.toFixed(1)}" y="${(-e.y).toFixed(1)}" font-size="${e.h}" ${e.center ? 'text-anchor="middle" dominant-baseline="central"' : ""}>${e.s}</text>`,
+        ? `<polygon class="cx-${e.layer}" vector-effect="non-scaling-stroke" points="${bulgePts(e.pts).map(P2).join(" ")}"/>`
+        : `<text class="cx-TEXTE" x="${e.x.toFixed(1)}" y="${(-e.y).toFixed(1)}" font-size="${e.h}" ${e.center ? 'text-anchor="middle" dominant-baseline="central"' : e.right ? 'text-anchor="end"' : ""}>${e.s}</text>`,
     )
     .join("");
   return `<svg viewBox="${b.x0 - pad} ${-b.y1 - pad} ${b.x1 - b.x0 + 2 * pad} ${b.y1 - b.y0 + 2 * pad}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${label}">${body}</svg>`;
 }
 
 /** Alerte si des logements débordent sous le bord d'un limon. */
-export function stringerFitHTML(boards: readonly BoardPart[], hl: number): string {
-  const tight = boards.filter((b) => b.need > hl);
+export function stringerFitHTML(boards: readonly BoardPart[], R: Stair): string {
+  const tight = boards.filter((b) => b.need > b.hl + 0.5);
+  const fixes = [
+    R.hl < R.needM - 0.5 && `passez la hauteur de limon à ${fmt(ceil10(R.needM))} mm`,
+    R.quart && R.hlj < R.needJ - 0.5 && `passez le limon de jour à ${fmt(R.hljAuto)} mm`,
+  ].filter(Boolean);
   return tight.length
-    ? `<div class="note warn">Des logements débordent sous le bord du limon (${tight.map((b) => b.name.toLowerCase()).join(", ")}) : passez la hauteur de limon à ${fmt(ceil10(Math.max(...tight.map((b) => b.need))))} mm, ou élargissez ce limon dans le tournant.</div>`
-    : `<div class="note ok">Tous les logements tiennent dans les limons, avec au moins 20 mm de bois dessous.</div>`;
+    ? `<div class="note warn">Des logements débordent sous le bord du limon (${tight.map((b) => b.name.toLowerCase()).join(", ")}) : ${fixes.join(" et ")}.</div>`
+    : `<div class="note ok">Tous les logements tiennent dans les limons, avec au moins 20 mm de bois dessous${R.quart ? ` (limon de jour de ${fmt(R.hlj)} mm)` : ""}.</div>`;
 }
 
 interface CutRow {

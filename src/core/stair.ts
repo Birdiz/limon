@@ -3,8 +3,9 @@
    Quart tournant calculé à droite (2e volée vers +x) ; la version gauche est un miroir. */
 import { fmt, ceil10 } from "./format";
 import type { Params } from "./params";
+import { cncFrame, stringerPockets } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
-import { V, clamp, interp, type Pt } from "./vec";
+import { V, clamp, interp, type Pt, type Vertex } from "./vec";
 
 export type Status = "ok" | "warn" | "bad";
 export type NoteLevel = Status | "info";
@@ -32,8 +33,10 @@ export interface Tread {
   top: number;
   /** Surface vue en plan, de nez à nez. */
   plan: Pt[];
-  /** Surface réelle de la marche (sous la contremarche suivante). */
+  /** Surface réelle de la marche (sous la contremarche suivante), sans la bande du nez arrondi. */
   solid: Pt[];
+  /** Bande du nez arrondi, de largeur rn derrière la ligne de nez ; null si le nez est vif. */
+  nose: { o: Pt; len: number; nr: Pt } | null;
   gIn: number;
   gOut: number;
   gWalk: number;
@@ -49,7 +52,7 @@ export interface Riser {
 }
 
 /** Tronçon de limon droit, développé dans son plan (u le long du limon, z en hauteur). */
-export interface StringerPiece {
+export interface StringerGeom {
   origin: Pt;
   dir: Pt;
   /** Normale à droite de dir, vers l'épaisseur du limon. */
@@ -64,6 +67,15 @@ export interface StringerPiece {
   a: Pt;
   sLo: number;
   sHi: number;
+}
+
+export interface StringerPiece extends StringerGeom {
+  /** Logements, dans le plan du limon. */
+  pockets: Vertex[][];
+  /** Hauteur qui garde 20 mm de bois sous le logement le plus bas. */
+  need: number;
+  /** Hauteur retenue pour cette pièce. */
+  hl: number;
 }
 
 export interface Rect {
@@ -120,6 +132,16 @@ export interface Stair {
   treads: Tread[];
   risers: Riser[];
   stringers: StringerPiece[];
+  /** Rayon du nez appliqué (au plus la moitié de l'épaisseur de marche). */
+  rn: number;
+  /** Hauteur du limon de mur (ou des deux limons en escalier droit). */
+  hl: number;
+  /** Hauteur du limon de jour. */
+  hlj: number;
+  /** Hauteur de limon de jour proposée d'après ses logements. */
+  hljAuto: number;
+  needJ: number;
+  needM: number;
   newel: { c: Pt; size: number; h: number } | null;
   slab: Rect;
   tre: Rect;
@@ -300,6 +322,18 @@ export function compute(p: Params): ComputeResult {
   const region = (fr: Edge, bk: Edge) => [...polyPath(inner, fr.sIn, bk.sIn), ...polyPath(outer, bk.sOut, fr.sOut)];
 
   const bo = p.deb + (p.cm ? p.ecm : 0);
+  // Nez arrondi : bande de largeur rn derrière la ligne de nez, dessinée à part en 3D.
+  const rn = clamp(p.rn, 0, p.et / 2);
+  const noseSpan = (ln: NoseLine) => {
+    const d2: Pt = [ln.nr[1], -ln.nr[0]],
+      c = cutOff(ln, rn);
+    const us = [polyAt(inner, ln.sIn), polyAt(outer, ln.sOut), polyAt(inner, c.sIn), polyAt(outer, c.sOut)].map((q) =>
+      V.dot(V.sub(q, ln.Q), d2),
+    );
+    const u0 = Math.min(...us),
+      u1 = Math.max(...us);
+    return { o: V.add(ln.Q, V.mul(d2, u0)), len: u1 - u0, nr: ln.nr };
+  };
   const treads: Tread[] = [];
   for (let j = 1; j < n; j++) {
     const fr = lines[j - 1]!,
@@ -308,7 +342,8 @@ export function compute(p: Params): ComputeResult {
       j,
       top: j * h,
       plan: region(fr, bk),
-      solid: region(fr, cutOff(bk, bo)),
+      solid: region(rn > 0 ? cutOff(fr, rn) : fr, cutOff(bk, bo)),
+      nose: rn > 0 ? noseSpan(fr) : null,
       gIn: bk.sIn - fr.sIn,
       gOut: bk.sOut - fr.sOut,
       gWalk: g,
@@ -346,8 +381,8 @@ export function compute(p: Params): ComputeResult {
       lines.map((l) => (l.k + 1) * h + LIFT),
       v,
     );
-  const pieces = (P: Poly, arr: number[], zf: (v: number) => number, isOuter: boolean): StringerPiece[] => {
-    const out: StringerPiece[] = [],
+  const pieces = (P: Poly, arr: number[], zf: (v: number) => number, isOuter: boolean): StringerGeom[] => {
+    const out: StringerGeom[] = [],
       N = P.pts.length;
     for (let i = 0; i < N - 1; i++) {
       const a = P.pts[i]!,
@@ -377,7 +412,7 @@ export function compute(p: Params): ComputeResult {
     }
     return out;
   };
-  const stringers = [
+  const geoms = [
     ...pieces(
       inner,
       lines.map((l) => l.sIn),
@@ -391,6 +426,17 @@ export function compute(p: Params): ComputeResult {
       true,
     ),
   ];
+  // Logements de chaque limon et hauteur qui garde 20 mm de bois sous le plus bas.
+  // Le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.
+  const geo = { inner, outer, lines, treads, risers, stringers: geoms };
+  const isJour = (sp: StringerGeom) => quart && sp.side === "in";
+  const pk = stringerPockets(geo, p, cncFrame(geo, p));
+  const withPockets = geoms.map((sp, i) => ({ ...sp, ...pk[i]! }));
+  const needJ = Math.max(0, ...withPockets.filter(isJour).map((sp) => sp.need));
+  const needM = Math.max(0, ...withPockets.filter((sp) => !isJour(sp)).map((sp) => sp.need));
+  const hljAuto = Math.max(150, ceil10(needJ));
+  const hlj = quart ? (p.hljAuto ? hljAuto : p.hlj) : hl;
+  const stringers: StringerPiece[] = withPockets.map((sp) => ({ ...sp, hl: isJour(sp) ? hlj : hl }));
   const newelSize = Math.max(90, el * 2);
   const newel = quart ? { c: [W + el / 2, A - W - el / 2] as Pt, size: newelSize, h: zIn(T1) + 120 } : null;
   // Plancher haut et trémie (rectangle adossé au bord du palier ; en quart tournant, aussi au mur face à la montée).
@@ -476,12 +522,22 @@ export function compute(p: Params): ComputeResult {
   if (bal && bal.extended) N.push(["warn", `Balancement étendu à ${bal.m} marches pour couvrir tout le tournant.`]);
   if (bal && bal.pr + 0.01 < bal.want)
     N.push(["warn", `Progressivité limitée à ${fmt(bal.pr * 100)} % pour garder au moins 100 mm au jour.`]);
-  // Arrière de la marche (sous la contremarche suivante) + 20 mm de bois sous le logement.
-  const hlNeed = LIFT + h + (bo * h) / g + p.et + 20;
-  if (hl < hlNeed)
+  if (p.rn > p.et / 2 + 0.01)
+    N.push(["info", `Rayon du nez ramené à ${fmt(rn, 1)} mm, la moitié de l'épaisseur de marche (demi-rond).`]);
+  if (p.cm && rn > p.deb)
     N.push([
       "warn",
-      `Limon trop étroit : ${fmt(hl)} mm pour des marches de ${fmt(h)} mm, prévoyez au moins ${fmt(ceil10(hlNeed))} mm.`,
+      `Le rayon du nez (${fmt(rn)} mm) dépasse le débord (${fmt(p.deb)} mm) : l'arrondi du dessous mord sur la contremarche.`,
+    ]);
+  if (hl < needM - 0.5)
+    N.push([
+      "warn",
+      `Limon${quart ? " de mur" : ""} trop étroit : ${fmt(hl)} mm pour des marches de ${fmt(h)} mm, prévoyez au moins ${fmt(ceil10(needM))} mm pour garder 20 mm de bois sous les logements.`,
+    ]);
+  if (quart && hlj < needJ - 0.5)
+    N.push([
+      "warn",
+      `Limon de jour trop étroit : ${fmt(hlj)} mm, les logements du tournant demandent au moins ${fmt(hljAuto)} mm.`,
     ]);
   if (ech && st.ech !== "ok") {
     const fixes = quart
@@ -537,6 +593,12 @@ export function compute(p: Params): ComputeResult {
       treads,
       risers,
       stringers,
+      rn,
+      hl,
+      hlj,
+      hljAuto,
+      needJ,
+      needM,
       newel,
       slab,
       tre,

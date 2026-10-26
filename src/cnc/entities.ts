@@ -1,4 +1,4 @@
-import type { Pt } from "../core/vec";
+import type { Vertex } from "../core/vec";
 
 export type Layer = "DECOUPE" | "DEFONCE" | "CM_DESSUS" | "CM_DESSOUS" | "TEXTE";
 
@@ -14,7 +14,7 @@ export const LAYERS: readonly [Layer, number][] = [
 export interface PolyEntity {
   kind: "poly";
   layer: Layer;
-  pts: Pt[];
+  pts: Vertex[];
   closed: boolean;
 }
 
@@ -27,6 +27,8 @@ export interface TextEntity {
   h: number;
   s: string;
   center?: boolean;
+  /** Aligné à droite sur (x, y). */
+  right?: boolean;
 }
 
 export type Entity = PolyEntity | TextEntity;

@@ -29,14 +29,19 @@ export interface Params {
   et: number;
   /** Débord de nez. */
   deb: number;
+  /** Rayon du nez, dessus et dessous ; 0 = vif. */
+  rn: number;
   /** Avec contremarches. */
   cm: boolean;
   /** Épaisseur de contremarche. */
   ecm: number;
   /** Épaisseur de limon. */
   el: number;
-  /** Hauteur de limon. */
+  /** Hauteur de limon (limon de mur en quart tournant). */
   hl: number;
+  hljAuto: boolean;
+  /** Hauteur du limon de jour (quart tournant). */
+  hlj: number;
   /** Longueur de trémie (droit). */
   tL: number;
   /** Trémie côté arrivée (quart). */
@@ -47,6 +52,8 @@ export interface Params {
   ep: number;
   /** Encastrement des marches et contremarches dans les limons. */
   enc: number;
+  /** Jeu d'assemblage par côté, sur les logements. */
+  jeu: number;
 }
 
 export const DEFAULTS: Readonly<Params> = {
@@ -65,15 +72,19 @@ export const DEFAULTS: Readonly<Params> = {
   ess: "chene",
   et: 40,
   deb: 30,
+  rn: 10,
   cm: true,
   ecm: 22,
   el: 45,
   hl: 340,
+  hljAuto: true,
+  hlj: 470,
   tL: 3200,
   tX: 1850,
   tY: 2550,
   ep: 200,
   enc: 15,
+  jeu: 0.5,
 };
 
 export const FORMES: readonly Forme[] = ["droit", "quart-g", "quart-d"];
@@ -91,18 +102,21 @@ export const NUMERIC_KEYS = [
   "prog",
   "et",
   "deb",
+  "rn",
   "ecm",
   "el",
   "hl",
+  "hlj",
   "tL",
   "tX",
   "tY",
   "ep",
   "enc",
+  "jeu",
 ] as const satisfies readonly (keyof Params)[];
 export type NumericKey = (typeof NUMERIC_KEYS)[number];
 
-export const BOOLEAN_KEYS = ["fAuto", "nAuto", "cm"] as const satisfies readonly (keyof Params)[];
+export const BOOLEAN_KEYS = ["fAuto", "nAuto", "hljAuto", "cm"] as const satisfies readonly (keyof Params)[];
 
 /** Fusionne des réglages enregistrés (non fiables) avec les valeurs par défaut, champ par champ. */
 export function sanitizeParams(raw: unknown): Params {

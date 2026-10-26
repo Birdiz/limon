@@ -51,10 +51,12 @@ export function syncInputs(p: Params, stair: Stair | null): void {
     .forEach((el) => (el.hidden = (el.dataset.show === "quart") !== quart));
   input("n").disabled = p.nAuto;
   input("f").disabled = p.fAuto;
+  input("hlj").disabled = p.hljAuto;
   input("ecm").disabled = !p.cm;
   if (stair) {
     if (p.nAuto) input("n").value = String(stair.n);
     if (p.fAuto) input("f").value = String(Math.round(stair.f));
+    if (p.hljAuto && stair.quart) input("hlj").value = String(stair.hljAuto);
   }
   byId("progTxt").textContent = `${p.prog} % · 0 % = girons égaux au jour`;
 }

@@ -145,6 +145,10 @@
             <div class="num"><input id="deb" type="number" step="1" min="0" /><span>mm</span></div>
           </div>
           <div class="row">
+            <label for="rn">Rayon du nez<small>arrondi dessus et dessous, 0 = vif</small></label>
+            <div class="num"><input id="rn" type="number" step="1" min="0" /><span>mm</span></div>
+          </div>
+          <div class="row">
             <div>
               <label for="ecm">Contremarches</label><label class="check"><input type="checkbox" id="cm" /> avec</label>
             </div>
@@ -155,12 +159,23 @@
             <div class="num"><input id="el" type="number" step="1" min="20" /><span>mm</span></div>
           </div>
           <div class="row">
-            <label for="hl">Hauteur de limon</label>
+            <label for="hl">Hauteur de limon<small data-show="quart">limon de mur</small></label>
             <div class="num"><input id="hl" type="number" step="5" min="150" /><span>mm</span></div>
+          </div>
+          <div class="row" data-show="quart">
+            <div>
+              <label for="hlj">Hauteur du limon de jour</label
+              ><label class="check"><input type="checkbox" id="hljAuto" /> automatique</label>
+            </div>
+            <div class="num"><input id="hlj" type="number" step="5" min="150" /><span>mm</span></div>
           </div>
           <div class="row">
             <label for="enc">Encastrement<small>marches et contremarches dans les limons</small></label>
             <div class="num"><input id="enc" type="number" step="1" min="0" max="40" /><span>mm</span></div>
+          </div>
+          <div class="row">
+            <label for="jeu">Jeu d'assemblage<small>par côté, sur les logements</small></label>
+            <div class="num"><input id="jeu" type="number" step="0.1" min="0" max="5" /><span>mm</span></div>
           </div>
         </div>
         <button class="btn" id="reset" type="button">Revenir à l'exemple</button>
@@ -214,8 +229,9 @@
             </div>
           </div>
           <p class="disclaimer">
-            Marches vues de dessus, nez en bas, encastrement compris. Limons développés, vus depuis la face côté marches
-            et couchés dans le sens de la planche, avec les logements à défoncer. Fichiers DXF R12 en millimètres.
+            Marches vues de dessus, nez en bas, encastrement compris. Contremarches vues de face, longueur hors tout.
+            Limons développés, vus depuis la face côté marches et couchés dans le sens de la planche, avec les logements
+            à défoncer. Fichiers DXF R12 en millimètres.
           </p>
           <div class="notes" id="cncnotes"></div>
           <div class="cncgrid">
@@ -237,10 +253,20 @@
               </div>
               <div class="pv" id="pvB"></div>
             </div>
+            <div class="view wide" id="pvRbox">
+              <div class="vhead">
+                <h2>Contremarches</h2>
+                <div class="legend">
+                  <span><i class="lg-cut"></i>découpe</span>
+                </div>
+              </div>
+              <div class="pv short" id="pvR"></div>
+            </div>
           </div>
           <div class="tablewrap"><table id="parts"></table></div>
           <div class="actions">
             <button class="btn" id="cpT" type="button">Copier marches.dxf</button
+            ><button class="btn" id="cpR" type="button">Copier contremarches.dxf</button
             ><button class="btn" id="cpB" type="button">Copier limons.dxf</button
             ><span class="copied" id="cpmsg" hidden></span>
           </div>

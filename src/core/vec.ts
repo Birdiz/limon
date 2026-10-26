@@ -1,6 +1,9 @@
 /** Point ou vecteur du plan, en millimètres. */
 export type Pt = [number, number];
 
+/** Sommet de contour ; la troisième valeur, si présente, est le bulge DXF de l'arc vers le sommet suivant. */
+export type Vertex = [number, number, number?];
+
 export const V = {
   add: (a: Pt, b: Pt): Pt => [a[0] + b[0], a[1] + b[1]],
   sub: (a: Pt, b: Pt): Pt => [a[0] - b[0], a[1] - b[1]],
@@ -44,7 +47,7 @@ export interface Box {
   y1: number;
 }
 
-export function bbox(pts: readonly Pt[]): Box {
+export function bbox(pts: readonly Vertex[]): Box {
   const xs = pts.map((q) => q[0]),
     ys = pts.map((q) => q[1]);
   return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };

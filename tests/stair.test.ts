@@ -90,6 +90,48 @@ describe("quart tournant", () => {
   });
 });
 
+describe("nez arrondi et limons", () => {
+  it("détache une bande de nez de largeur rn, sauf nez vif", () => {
+    const R = stairOf({ forme: "droit" });
+    expect(R.rn).toBe(DEFAULTS.rn);
+    for (const t of R.treads) expect(t.nose!.len).toBeCloseTo(DEFAULTS.W, 6);
+    expect(stairOf({ forme: "droit", rn: 0 }).treads.every((t) => t.nose === null)).toBe(true);
+  });
+
+  it("ramène le rayon à la moitié de l'épaisseur de marche", () => {
+    const R = stairOf({ forme: "droit", rn: 30, et: 40 });
+    expect(R.rn).toBe(20);
+    expect(R.notes.some(([s, t]) => s === "info" && t.startsWith("Rayon du nez ramené"))).toBe(true);
+  });
+
+  it("propose la hauteur du limon de jour d'après ses logements", () => {
+    const R = stairOf({ forme: "quart-d" });
+    expect(R.hljAuto).toBe(Math.max(150, Math.ceil(R.needJ / 10) * 10));
+    expect(R.hlj).toBe(470);
+    expect(R.stringers.map((s) => [s.side, s.hl])).toEqual([
+      ["in", 470],
+      ["in", 470],
+      ["out", DEFAULTS.hl],
+      ["out", DEFAULTS.hl],
+    ]);
+    for (const s of R.stringers) expect(s.need).toBeLessThanOrEqual(s.hl);
+  });
+
+  it("signale un limon de jour réglé trop bas", () => {
+    const R = stairOf({ forme: "quart-d", hljAuto: false, hlj: 380 });
+    expect(R.hlj).toBe(380);
+    expect(R.notes.some(([s, t]) => s === "warn" && t.startsWith("Limon de jour trop étroit"))).toBe(true);
+  });
+
+  it("agrandit les logements du jeu d'assemblage", () => {
+    const width = (jeu: number) => {
+      const pk = stairOf({ forme: "droit", rn: 0, jeu }).stringers[0]!.pockets[5]!;
+      return Math.max(...pk.map((q) => q[0])) - Math.min(...pk.map((q) => q[0]));
+    };
+    expect(width(1) - width(0)).toBeCloseTo(2, 6);
+  });
+});
+
 describe("validation", () => {
   it("refuse les dimensions impossibles", () => {
     const r = compute({ ...DEFAULTS, forme: "quart-d", W: 300, A: 200 });
