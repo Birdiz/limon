@@ -19,7 +19,7 @@ Outil d'escaliers pour un ébéniste et d'autres menuisiers. L'interface, les te
 
 - DXF R12 (AC1009), texte sans accents, zip sans compression avec CRC32. Le zip est nécessaire : `downloads.save` refuse l'extension `.dxf`.
 - Marches vues de dessus, nez le long de x, encastrement `enc` inclus. Limons vus côté marches, tournés au rectangle d'aire minimale.
-- Le limon de jour du quart tournant demande environ 470 mm de hauteur dans le tournant avec l'exemple par défaut : la page le signale.
+- Logements et hauteur nécessaire de chaque limon calculés dans `compute` (`stringerPockets`, `cncFrame`). Le limon de jour du quart tournant a sa propre hauteur `hlj` (automatique par défaut : `need` arrondi à 10 mm, 470 mm avec l'exemple) ; chaque pièce porte sa hauteur dans `sp.hl`.
 
 ## Tests
 

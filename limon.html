@@ -253,7 +253,8 @@ td.low { color: var(--warn); font-weight: 500; }
       <div class="row"><label for="deb">Débord de nez<small>recouvrement</small></label><div class="num"><input id="deb" type="number" step="1" min="0"><span>mm</span></div></div>
       <div class="row"><div><label for="ecm">Contremarches</label><label class="check"><input type="checkbox" id="cm"> avec</label></div><div class="num"><input id="ecm" type="number" step="1" min="10"><span>mm</span></div></div>
       <div class="row"><label for="el">Épaisseur de limon</label><div class="num"><input id="el" type="number" step="1" min="20"><span>mm</span></div></div>
-      <div class="row"><label for="hl">Hauteur de limon</label><div class="num"><input id="hl" type="number" step="5" min="150"><span>mm</span></div></div>
+      <div class="row"><label for="hl">Hauteur de limon<small data-show="quart">limon de mur</small></label><div class="num"><input id="hl" type="number" step="5" min="150"><span>mm</span></div></div>
+      <div class="row" data-show="quart"><div><label for="hlj">Hauteur du limon de jour</label><label class="check"><input type="checkbox" id="hljAuto"> automatique</label></div><div class="num"><input id="hlj" type="number" step="5" min="150"><span>mm</span></div></div>
       <div class="row"><label for="enc">Encastrement<small>marches et contremarches dans les limons</small></label><div class="num"><input id="enc" type="number" step="1" min="0" max="40"><span>mm</span></div></div>
     </div>
     <button class="btn" id="reset" type="button">Revenir à l'exemple</button>
@@ -510,6 +511,17 @@ function compute(p) {
     ...pieces(inner, lines.map(l => l.sIn), zIn, false),
     ...pieces(outer, lines.map(l => l.sOut), zOut, true),
   ];
+  // Logements de chaque limon et hauteur qui garde 20 mm de bois sous le plus bas.
+  // Le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.
+  const geo = { inner, outer, lines, treads, risers, stringers };
+  stringerPockets(geo, p, cncFrame(geo, p)).forEach((pk, i) => Object.assign(stringers[i], pk));
+  const isJour = sp => quart && sp.side === "in";
+  const ceil10 = v => Math.ceil(v / 10) * 10;
+  const needJ = Math.max(0, ...stringers.filter(isJour).map(sp => sp.need));
+  const needM = Math.max(0, ...stringers.filter(sp => !isJour(sp)).map(sp => sp.need));
+  const hljAuto = Math.max(150, ceil10(needJ));
+  const hlj = quart ? (p.hljAuto ? hljAuto : p.hlj) : hl;
+  stringers.forEach(sp => sp.hl = isJour(sp) ? hlj : hl);
   const newelSize = Math.max(90, el * 2);
   const newel = quart ? { c: [W + el / 2, A - W - el / 2], size: newelSize, h: zIn(T1) + 120 } : null;
   // Plancher haut et trémie (rectangle adossé au bord du palier ; en quart tournant, aussi au mur face à la montée).
@@ -570,9 +582,8 @@ function compute(p) {
   if (quart && st.gIn !== "ok") N.push([st.gIn, `Giron côté jour de ${fmt(gInMin)} mm seulement : augmentez le nombre de marches balancées.`]);
   if (bal && bal.extended) N.push(["warn", `Balancement étendu à ${bal.m} marches pour couvrir tout le tournant.`]);
   if (bal && bal.pr + 0.01 < bal.want) N.push(["warn", `Progressivité limitée à ${fmt(bal.pr * 100)} % pour garder au moins 100 mm au jour.`]);
-  // Arrière de la marche (sous la contremarche suivante) + 20 mm de bois sous le logement.
-  const hlNeed = lift + h + bo * h / g + p.et + 20;
-  if (hl < hlNeed) N.push(["warn", `Limon trop étroit : ${fmt(hl)} mm pour des marches de ${fmt(h)} mm, prévoyez au moins ${fmt(Math.ceil(hlNeed / 10) * 10)} mm.`]);
+  if (hl < needM - 0.5) N.push(["warn", `Limon${quart ? " de mur" : ""} trop étroit : ${fmt(hl)} mm pour des marches de ${fmt(h)} mm, prévoyez au moins ${fmt(ceil10(needM))} mm pour garder 20 mm de bois sous les logements.`]);
+  if (quart && hlj < needJ - 0.5) N.push(["warn", `Limon de jour trop étroit : ${fmt(hlj)} mm, les logements du tournant demandent au moins ${fmt(hljAuto)} mm.`]);
   if (st.ech !== "ok") {
     const fixes = quart
       ? [tYmin != null && `élargissez la trémie côté départ à ${fmt(tYmin)} mm`, tXmin != null && `allongez-la côté arrivée à ${fmt(tXmin)} mm`].filter(Boolean).join(" ou ")
@@ -587,7 +598,7 @@ function compute(p) {
   if (!N.some(x => x[0] === "warn" || x[0] === "bad")) N.unshift(["ok", "Toutes les règles de confort sont respectées."]);
 
   Object.assign(R, { quart, n, nAuto, h, g, f, fAuto, Lw, T1, T2, W, A, B, L, H, inner, outer, walkAt, lines, treads, risers,
-    stringers, newel, slab, tre, ceil, ech, tLmin, tXmin, tYmin, bal, blondel, pente, gInMin, st });
+    stringers, hl, hlj, hljAuto, needJ, needM, newel, slab, tre, ceil, ech, tLmin, tXmin, tYmin, bal, blondel, pente, gInMin, st });
   return R;
 }
 
@@ -597,9 +608,9 @@ const STATUS = { ok: "Bon", warn: "Limite", bad: "Hors norme" };
 
 /* ---------- Réglages ---------- */
 const DEF = { forme: "quart-d", H: 2700, L: 3650, A: 2900, B: 1800, W: 850, fAuto: true, f: 425, nAuto: true, n: 15,
-  mb: 7, prog: 60, ess: "chene", et: 40, deb: 30, cm: true, ecm: 22, el: 45, hl: 340,
+  mb: 7, prog: 60, ess: "chene", et: 40, deb: 30, cm: true, ecm: 22, el: 45, hl: 340, hljAuto: true, hlj: 470,
   tL: 3200, tX: 1850, tY: 2550, ep: 200, enc: 15 };
-const NUMS = ["H", "L", "A", "B", "W", "f", "n", "mb", "prog", "et", "deb", "ecm", "el", "hl", "tL", "tX", "tY", "ep", "enc"];
+const NUMS = ["H", "L", "A", "B", "W", "f", "n", "mb", "prog", "et", "deb", "ecm", "el", "hl", "hlj", "tL", "tX", "tY", "ep", "enc"];
 const $ = id => document.getElementById(id);
 let P = { ...DEF };
 try { const saved = JSON.parse(localStorage.getItem("limon-v2") || "null"); if (saved) P = { ...DEF, ...saved }; } catch (e) {}
@@ -607,22 +618,23 @@ try { const saved = JSON.parse(localStorage.getItem("limon-v2") || "null"); if (
 function writeInputs() {
   document.querySelectorAll('input[name="forme"]').forEach(r => r.checked = r.value === P.forme);
   NUMS.forEach(k => $(k).value = P[k]);
-  $("fAuto").checked = P.fAuto; $("nAuto").checked = P.nAuto; $("cm").checked = P.cm; $("ess").value = P.ess;
+  $("fAuto").checked = P.fAuto; $("nAuto").checked = P.nAuto; $("hljAuto").checked = P.hljAuto; $("cm").checked = P.cm; $("ess").value = P.ess;
 }
 function readInputs() {
   const r = document.querySelector('input[name="forme"]:checked');
   P.forme = r ? r.value : "droit";
   NUMS.forEach(k => { const v = parseFloat($(k).value); if (!Number.isNaN(v)) P[k] = v; });
-  P.fAuto = $("fAuto").checked; P.nAuto = $("nAuto").checked; P.cm = $("cm").checked; P.ess = $("ess").value;
+  P.fAuto = $("fAuto").checked; P.nAuto = $("nAuto").checked; P.hljAuto = $("hljAuto").checked; P.cm = $("cm").checked; P.ess = $("ess").value;
   try { localStorage.setItem("limon-v2", JSON.stringify(P)); } catch (e) {}
 }
 function syncVisibility(R) {
   const quart = P.forme !== "droit";
   document.querySelectorAll("[data-show]").forEach(el => el.hidden = (el.dataset.show === "quart") !== quart);
-  $("n").disabled = P.nAuto; $("f").disabled = P.fAuto; $("ecm").disabled = !P.cm;
+  $("n").disabled = P.nAuto; $("f").disabled = P.fAuto; $("hlj").disabled = P.hljAuto; $("ecm").disabled = !P.cm;
   if (R && !R.errors.length) {
     if (P.nAuto) $("n").value = R.n;
     if (P.fAuto) $("f").value = Math.round(R.f);
+    if (P.hljAuto && R.quart) $("hlj").value = R.hljAuto;
   }
   $("progTxt").textContent = `${P.prog} % · 0 % = girons égaux au jour`;
 }
@@ -756,10 +768,8 @@ function offsetPoly(P, d) {
 const closeRing = pts => { const d = dedupe(pts); if (d.length > 2 && Math.hypot(d[0][0] - d[d.length - 1][0], d[0][1] - d[d.length - 1][1]) < 0.05) d.pop(); return d; };
 const bbox = pts => { const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]); return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }; };
 
-function buildCNC(R, p) {
-  const left = p.forme === "quart-g", mx = left ? -1 : 1, M = q => [mx * q[0], q[1]];
-  const e = p.enc, bo = p.deb + (p.cm ? p.ecm : 0);
-  const inOff = offsetPoly(R.inner, e), outOff = offsetPoly(R.outer, -e);
+function cncFrame(R, p) {
+  const inOff = offsetPoly(R.inner, p.enc), outOff = offsetPoly(R.outer, -p.enc);
   // Points d'une ligne de marche décalée de off : sur les faces des limons (F) et au fond des logements (D).
   const at = (ln, off) => {
     const pt = V.add(ln.Q, V.mul(ln.nr, off));
@@ -767,12 +777,44 @@ function buildCNC(R, p) {
              outF: polyCut(R.outer, pt, ln.dir, "ahead"), outD: polyCut(outOff, pt, ln.dir, "ahead") };
   };
   const riserBand = ln => { const a = at(ln, p.deb), b = at(ln, p.deb + p.ecm); return { a, b, quad: [a.inF.p, a.outF.p, b.outF.p, b.inF.p] }; };
+  return { inOff, outOff, at, riserBand };
+}
+// Logements de chaque limon dans son plan (u le long du limon, z en hauteur),
+// et hauteur de limon nécessaire pour garder 20 mm de bois sous chaque logement.
+function stringerPockets(R, p, F) {
+  const bo = p.deb + (p.cm ? p.ecm : 0);
+  return R.stringers.map(sp => {
+    const uLo = sp.prof[0][0], uHi = sp.prof[sp.prof.length - 1][0];
+    const proj = q => V.dot(V.sub(q, sp.a), sp.dir);
+    const keyF = sp.side === "in" ? "inF" : "outF", keyD = sp.side === "in" ? "inD" : "outD";
+    const touches = (s1, s2) => Math.max(s1, s2) > sp.sLo + 0.5 && Math.min(s1, s2) < sp.sHi - 0.5;
+    const topAt = u => interp(sp.prof.map(q => q[0]), sp.prof.map(q => q[1]), u);
+    const pockets = [];
+    let need = 0;
+    const pocket = (c1, c2, z0, z1) => {
+      if (!touches(c1[keyF].s, c2[keyF].s)) return;
+      const us = [c1[keyF].p, c1[keyD].p, c2[keyF].p, c2[keyD].p].map(proj);
+      const u0 = clamp(Math.min(...us), uLo, uHi), u1 = clamp(Math.max(...us), uLo, uHi);
+      if (!(u1 - u0 > 2 && z1 > z0)) return;
+      pockets.push([[u0, z0], [u1, z0], [u1, z1], [u0, z1]]);
+      if (z0 > 0.5) need = Math.max(need, topAt(u0) - z0 + 20, topAt(u1) - z0 + 20);
+    };
+    R.treads.forEach(t => pocket(F.at(R.lines[t.j - 1], 0), F.at(R.lines[t.j], bo), t.top - p.et, t.top));
+    if (p.cm) R.risers.forEach((r, i) => { const band = F.riserBand(R.lines[i]); pocket(band.a, band.b, r.z0, r.z1); });
+    return { pockets, need };
+  });
+}
+
+function buildCNC(R, p) {
+  const left = p.forme === "quart-g", mx = left ? -1 : 1, M = q => [mx * q[0], q[1]];
+  const e = p.enc, bo = p.deb + (p.cm ? p.ecm : 0);
+  const { inOff, outOff, at, riserBand } = cncFrame(R, p);
 
   // Marches
   const treadEnts = [], treadParts = [];
   let cx = 0, cy = 0, rowH = 0;
   const gap = 40, rowMax = 2600;
-  const items = R.treads.map(t => {
+  R.treads.forEach(t => {
     const lnF = R.lines[t.j - 1], lnB = R.lines[t.j];
     const fr = at(lnF, 0), bk = at(lnB, bo);
     const outline = closeRing([...polyPath(inOff, fr.inD.s, bk.inD.s), ...polyPath(outOff, bk.outD.s, fr.outD.s)]);
@@ -790,7 +832,6 @@ function buildCNC(R, p) {
     treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + 18, h: 22, s: "nez", center: true });
     cx += w + gap; rowH = Math.max(rowH, d);
     treadParts.push({ j: t.j, L: w, l: d });
-    return { t, fr, bk };
   });
 
   // Contremarches (débit seulement)
@@ -804,24 +845,7 @@ function buildCNC(R, p) {
   let by = 0;
   const names = R.quart ? { in: "LIMON DE JOUR", out: "LIMON DE MUR" } : { in: "LIMON DROIT", out: "LIMON GAUCHE" };
   R.stringers.forEach(sp => {
-    const outline = stringerOutline(sp, p.hl), bb = bbox(outline);
-    const proj = q => V.dot(V.sub(q, sp.a), sp.dir);
-    const keyF = sp.side === "in" ? "inF" : "outF", keyD = sp.side === "in" ? "inD" : "outD";
-    const touches = (s1, s2) => Math.max(s1, s2) > sp.sLo + 0.5 && Math.min(s1, s2) < sp.sHi - 0.5;
-    const pockets = [];
-    // Hauteur de limon nécessaire pour garder 20 mm de bois sous chaque logement.
-    let need = 0;
-    const topAt = u => interp(sp.prof.map(q => q[0]), sp.prof.map(q => q[1]), u);
-    const pocket = (c1, c2, z0, z1) => {
-      if (!touches(c1[keyF].s, c2[keyF].s)) return;
-      const us = [c1[keyF].p, c1[keyD].p, c2[keyF].p, c2[keyD].p].map(proj);
-      const u0 = clamp(Math.min(...us), bb.x0, bb.x1), u1 = clamp(Math.max(...us), bb.x0, bb.x1);
-      if (!(u1 - u0 > 2 && z1 > z0)) return;
-      pockets.push([[u0, z0], [u1, z0], [u1, z1], [u0, z1]]);
-      if (z0 > 0.5) need = Math.max(need, topAt(u0) - z0 + 20, topAt(u1) - z0 + 20);
-    };
-    items.forEach(it => pocket(it.fr, it.bk, it.t.top - p.et, it.t.top));
-    if (p.cm) R.risers.forEach((r, i) => { const band = riserBand(R.lines[i]); pocket(band.a, band.b, r.z0, r.z1); });
+    const outline = stringerOutline(sp, sp.hl), pockets = sp.pockets;
     // Vu depuis la face côté marches : le limon de jour se lit à l'envers du sens de montée.
     // Puis couché dans le sens de la planche (plus petit rectangle de débit), haut en haut.
     const flip = (sp.side === "in") !== left;
@@ -845,7 +869,7 @@ function buildCNC(R, p) {
     const L = best.r.x1 - best.r.x0, H = best.r.y1 - best.r.y0;
     boardEnts.push({ kind: "text", layer: "TEXTE", x: 0, y: by + H + 40, h: 45,
       s: `${name} - face cote marches - ${Math.ceil(L)} x ${Math.ceil(H)} x ${p.el} - defonce ${e} mm` });
-    boardParts.push({ name, L, l: H, pockets: pockets.length, need });
+    boardParts.push({ name, L, l: H, pockets: pockets.length, need: sp.need, hl: sp.hl });
     by += H + 180;
   });
   return { treadEnts, boardEnts, treadParts, riserParts, boardParts };
@@ -1033,7 +1057,7 @@ function draw3D(R) {
   const g = new THREE.Group();
   R.treads.forEach(t => g.add(extrudePlan(t.solid, t.top - P.et, P.et, wood)));
   R.risers.forEach(r => g.add(extrudePlan(r.plan, r.z0, Math.max(1, r.z1 - r.z0), wood)));
-  R.stringers.forEach(sp => g.add(stringerMesh(sp, P.hl, woodDark)));
+  R.stringers.forEach(sp => g.add(stringerMesh(sp, sp.hl, woodDark)));
   if (R.newel) {
     const nb = new THREE.Mesh(new THREE.BoxGeometry(R.newel.size, R.newel.h, R.newel.size), woodDark);
     nb.position.set(R.newel.c[0], R.newel.h / 2, -R.newel.c[1]); nb.castShadow = nb.receiveShadow = true; g.add(nb);
@@ -1100,10 +1124,12 @@ function drawCNC(R) {
   cncData = buildCNC(R, P);
   $("pvT").innerHTML = previewSVG(cncData.treadEnts, "Aperçu des marches à découper");
   $("pvB").innerHTML = previewSVG(cncData.boardEnts, "Aperçu des limons développés");
-  const tight = cncData.boardParts.filter(b => b.need > P.hl);
+  const tight = cncData.boardParts.filter(b => b.need > b.hl + 0.5);
+  const fixes = [R.hl < R.needM - 0.5 && `passez la hauteur de limon à ${fmt(Math.ceil(R.needM / 10) * 10)} mm`,
+    R.quart && R.hlj < R.needJ - 0.5 && `passez le limon de jour à ${fmt(R.hljAuto)} mm`].filter(Boolean);
   $("cncnotes").innerHTML = tight.length
-    ? `<div class="note warn">Des logements débordent sous le bord du limon (${tight.map(b => b.name.toLowerCase()).join(", ")}) : passez la hauteur de limon à ${fmt(Math.ceil(Math.max(...tight.map(b => b.need)) / 10) * 10)} mm, ou élargissez ce limon dans le tournant.</div>`
-    : `<div class="note ok">Tous les logements tiennent dans les limons, avec au moins 20 mm de bois dessous.</div>`;
+    ? `<div class="note warn">Des logements débordent sous le bord du limon (${tight.map(b => b.name.toLowerCase()).join(", ")}) : ${fixes.join(" et ")}.</div>`
+    : `<div class="note ok">Tous les logements tiennent dans les limons, avec au moins 20 mm de bois dessous${R.quart ? ` (limon de jour de ${fmt(R.hlj)} mm)` : ""}.</div>`;
   // Débit : pièces identiques regroupées
   const groups = (list, one, many) => {
     const m = new Map();
