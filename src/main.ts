@@ -11,8 +11,9 @@ import { buildCNC, type CNC } from "./cnc/build";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { DEFAULTS, type Params } from "./core/params";
-import { NOM_PAR_DEFAUT, type Project } from "./core/project";
+import { NOM_PAR_DEFAUT, fileBase, type Project } from "./core/project";
 import { treadsCSV } from "./core/sheet";
+import { fichePDF } from "./pdf/fiche";
 import { compute, type ComputeResult } from "./core/stair";
 import { SECTIONS, sectionSummaries } from "./core/summary";
 import { cutListHTML, previewSVG, stringerFitHTML } from "./ui/cnc-panel";
@@ -140,10 +141,22 @@ byId("reset").addEventListener("click", () => {
 byId("v3d").addEventListener("click", () => scene?.viewPerspective());
 byId("vtop").addEventListener("click", () => scene?.viewTop());
 
-byId("copy").addEventListener("click", async () => {
+byId("ficheDl").addEventListener("click", () => {
   if (!current?.ok) return;
-  if (await copyText(treadsCSV(current.stair), byId<HTMLTextAreaElement>("csvfb")))
-    flash(byId("copied"), "Fiche copiée", false, 1800);
+  const base = fileBase(project?.nom ?? NOM_PAR_DEFAUT);
+  if (byId<HTMLSelectElement>("ficheFmt").value === "csv")
+    downloadBytes(new TextEncoder().encode("\ufeff" + treadsCSV(current.stair)), `${base} - marches.csv`, "text/csv");
+  else {
+    const vue3d = scene?.snapshot() ?? undefined;
+    const date = new Date().toLocaleDateString("fr-FR");
+    const nom = project?.nom ?? NOM_PAR_DEFAUT;
+    downloadBytes(
+      fichePDF(current.stair, { nom, date, ...(vue3d ? { vue3d } : {}) }),
+      `${base}.pdf`,
+      "application/pdf",
+    );
+  }
+  flash(byId("ficheMsg"), "Fiche enregistrée");
 });
 byId("dl").addEventListener("click", () => {
   if (!current?.ok || !cnc) return;

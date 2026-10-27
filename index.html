@@ -220,13 +220,16 @@
         <section class="sheet" id="sheetBox">
           <div class="shead">
             <h2>Fiche des marches</h2>
-            <div style="display: flex; gap: 10px; align-items: baseline">
-              <span class="copied" id="copied" hidden>Fiche copiée</span
-              ><button class="btn" id="copy" type="button">Copier la fiche (CSV)</button>
+            <div class="actions">
+              <span class="copied" id="ficheMsg" hidden></span>
+              <label class="visually-hidden" for="ficheFmt">Format de la fiche</label>
+              <select id="ficheFmt" class="fmtsel">
+                <option value="pdf">Fiche PDF</option>
+                <option value="csv">Tableau CSV</option></select
+              ><button class="btn primary" id="ficheDl" type="button">Télécharger</button>
             </div>
           </div>
           <div class="tablewrap"><table id="table"></table></div>
-          <textarea id="csvfb" hidden readonly aria-label="Fiche au format CSV"></textarea>
         </section>
 
         <section class="sheet" id="cnc">
