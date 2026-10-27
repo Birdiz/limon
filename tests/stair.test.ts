@@ -137,9 +137,15 @@ describe("validation", () => {
     const r = compute({ ...DEFAULTS, forme: "quart-d", W: 300, A: 200 });
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.errors).toContain("L'emmarchement doit faire au moins 400 mm.");
-      expect(r.errors).toContain("La longueur côté départ doit dépasser l'emmarchement.");
+      expect(r.errors).toContainEqual({ key: "W", message: "L'emmarchement doit faire au moins 400 mm." });
+      expect(r.errors).toContainEqual({ key: "A", message: "La longueur côté départ doit dépasser l'emmarchement." });
     }
+  });
+
+  it("rattache chaque erreur au champ à corriger", () => {
+    const r = compute({ ...DEFAULTS, H: 120 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.map((e) => e.key)).toEqual(["H", "ep"]);
   });
 
   it("refuse un plancher plus épais que la hauteur le permet", () => {

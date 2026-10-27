@@ -7,7 +7,7 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./styles/main.css";
 
-import { buildCNC, type CNC } from "./cnc/build";
+import { buildCNC, tightBoards, type CNC } from "./cnc/build";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { DEFAULTS, type Params } from "./core/params";
@@ -18,7 +18,15 @@ import { byId, copyText, downloadBytes, flash } from "./ui/dom";
 import { planSVG } from "./ui/plan";
 import { headlineHTML, notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
-import { loadParams, readInputs, saveParams, syncInputs, writeInputs } from "./ui/settings";
+import {
+  loadParams,
+  missingErrors,
+  readInputs,
+  saveParams,
+  showFieldErrors,
+  syncInputs,
+  writeInputs,
+} from "./ui/settings";
 
 let params: Params = loadParams();
 let current: ComputeResult | null = null;
@@ -28,14 +36,18 @@ let scene: Scene3D | null = null;
 function render(result: ComputeResult): void {
   const errHTML = (e: string) => `<div class="errbox">${e}</div>`;
   if (!result.ok) {
+    // Les erreurs rattachées à un champ s'affichent sous ce champ ; les vues renvoient vers le formulaire.
+    const msg = result.errors.some((e) => e.key)
+      ? "Calcul impossible : corrigez les champs signalés en rouge."
+      : result.errors[0]!.message;
     cnc = null;
-    byId("plan").innerHTML = errHTML(result.errors[0]!);
+    byId("plan").innerHTML = errHTML(msg);
     byId("tiles").innerHTML = "";
     byId("table").innerHTML = "";
-    byId("notes").innerHTML = notesHTML(result.errors.map((e) => ["bad", e]));
+    byId("notes").innerHTML = "";
     byId("headline").textContent = "";
     byId("cnc").hidden = true;
-    scene?.showError(result.errors[0]!);
+    scene?.showError(msg);
     return;
   }
   const R = result.stair;
@@ -58,10 +70,12 @@ function render(result: ComputeResult): void {
 
 function update(): void {
   queued = false;
-  params = readInputs(params);
+  const read = readInputs(params);
+  params = read.params;
   saveParams(params);
   current = compute(params);
   syncInputs(params, current.ok ? current.stair : null);
+  showFieldErrors([...missingErrors(params, read.missing), ...(current.ok ? [] : current.errors)]);
   render(current);
 }
 
@@ -89,13 +103,19 @@ byId("copy").addEventListener("click", async () => {
   if (await copyText(treadsCSV(current.stair), byId<HTMLTextAreaElement>("csvfb")))
     flash(byId("copied"), "Fiche copiée", false, 1800);
 });
+/** Confirmation avant d'exporter des limons dont les logements débordent sous le bord. */
+const confirmTight = (c: CNC): boolean =>
+  !tightBoards(c.boardParts).length ||
+  window.confirm(
+    "Des logements débordent sous le bord du limon : ces limons ne sont pas fabricables tels quels. Exporter quand même ?",
+  );
 byId("dl").addEventListener("click", () => {
-  if (!current?.ok || !cnc) return;
+  if (!current?.ok || !cnc || !confirmTight(cnc)) return;
   downloadBytes(exportZip(current.stair, cnc), exportFilename(current.stair), "application/zip");
   flash(byId("dlmsg"), "Archive enregistrée");
 });
 const copyDXF = async (which: "treadEnts" | "riserEnts" | "boardEnts", label: string) => {
-  if (!cnc) return;
+  if (!cnc || (which === "boardEnts" && !confirmTight(cnc))) return;
   const text = toDXF(cnc[which]);
   if (await copyText(text, byId<HTMLTextAreaElement>("dxffb"))) flash(byId("cpmsg"), `${label} copié`);
 };

@@ -1,4 +1,4 @@
-import type { BoardPart, CNC, TreadPart } from "../cnc/build";
+import { tightBoards, type BoardPart, type CNC, type TreadPart } from "../cnc/build";
 import type { Entity } from "../cnc/entities";
 import { ceil10, fmt } from "../core/format";
 import type { Stair } from "../core/stair";
@@ -44,7 +44,7 @@ export function previewSVG(ents: readonly Entity[], label: string): string {
 
 /** Alerte si des logements débordent sous le bord d'un limon. */
 export function stringerFitHTML(boards: readonly BoardPart[], R: Stair): string {
-  const tight = boards.filter((b) => b.need > b.hl + 0.5);
+  const tight = tightBoards(boards);
   const fixes = [
     R.hl < R.needM - 0.5 && `passez la hauteur de limon à ${fmt(ceil10(R.needM))} mm`,
     R.quart && R.hlj < R.needJ - 0.5 && `passez le limon de jour à ${fmt(R.hljAuto)} mm`,

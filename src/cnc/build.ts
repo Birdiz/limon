@@ -29,6 +29,9 @@ export interface BoardPart {
   hl: number;
 }
 
+/** Limons dont des logements débordent sous le bord : moins de 20 mm de bois sous le plus bas. */
+export const tightBoards = (boards: readonly BoardPart[]): BoardPart[] => boards.filter((b) => b.need > b.hl + 0.5);
+
 export interface CNC {
   treadEnts: Entity[];
   riserEnts: Entity[];

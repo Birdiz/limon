@@ -2,7 +2,7 @@
    Repère plan (mm) : départ en y = 0, montée vers +y, limon extérieur en x = 0, jour (intérieur) en x = W.
    Quart tournant calculé à droite (2e volée vers +x) ; la version gauche est un miroir. */
 import { fmt, ceil10 } from "./format";
-import type { Params } from "./params";
+import type { NumericKey, Params } from "./params";
 import { cncFrame, stringerPockets } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import { V, clamp, interp, type Pt, type Vertex } from "./vec";
@@ -158,7 +158,13 @@ export interface Stair {
   st: Record<"h" | "g" | "bl" | "pente" | "gIn" | "ech", Status>;
 }
 
-export type ComputeResult = { ok: true; stair: Stair } | { ok: false; errors: string[] };
+/** Réglage refusé ; key désigne le champ à corriger quand il y en a un. */
+export interface InputError {
+  message: string;
+  key?: NumericKey;
+}
+
+export type ComputeResult = { ok: true; stair: Stair } | { ok: false; errors: InputError[] };
 
 /** Échappée visée. */
 export const ECHAPPEE = 2000;
@@ -183,17 +189,18 @@ export function pickN(H: number, Lw: number): number {
   return best ? best.n : Math.max(3, Math.round(H / 175));
 }
 
-function validate(p: Params, quart: boolean): string[] {
-  const errors: string[] = [];
+function validate(p: Params, quart: boolean): InputError[] {
+  const errors: InputError[] = [];
+  const err = (key: NumericKey, message: string) => errors.push({ key, message });
   const { H, W } = p;
-  if (!(H >= 300)) errors.push("La hauteur à monter doit dépasser 300 mm.");
-  if (!(W >= 400)) errors.push("L'emmarchement doit faire au moins 400 mm.");
+  if (!(H >= 300)) err("H", "La hauteur à monter doit faire au moins 300 mm.");
+  if (!(W >= 400)) err("W", "L'emmarchement doit faire au moins 400 mm.");
   if (quart) {
-    if (!(p.A > W + 1)) errors.push("La longueur côté départ doit dépasser l'emmarchement.");
-    if (!(p.B > W + 1)) errors.push("La longueur côté arrivée doit dépasser l'emmarchement.");
-  } else if (!(p.L >= 500)) errors.push("Le reculement doit faire au moins 500 mm.");
+    if (!(p.A > W + 1)) err("A", "La longueur côté départ doit dépasser l'emmarchement.");
+    if (!(p.B > W + 1)) err("B", "La longueur côté arrivée doit dépasser l'emmarchement.");
+  } else if (!(p.L >= 500)) err("L", "Le reculement doit faire au moins 500 mm.");
   if (!(p.ep >= 0 && p.ep < H - 500))
-    errors.push("L'épaisseur du plancher doit rester inférieure à la hauteur à monter moins 500 mm.");
+    err("ep", "L'épaisseur du plancher doit rester inférieure à la hauteur à monter moins 500 mm.");
   return errors;
 }
 
@@ -309,7 +316,10 @@ export function compute(p: Params): ComputeResult {
     if (V.dot(nr, walkTan(t)) < 0) nr = [-nr[0], -nr[1]];
     const o = polyCut(outer, Q, dir, "ahead");
     if (!o)
-      return { ok: false, errors: ["Géométrie impossible : une ligne de marche ne rejoint pas le limon extérieur."] };
+      return {
+        ok: false,
+        errors: [{ message: "Géométrie impossible : une ligne de marche ne rejoint pas le limon extérieur." }],
+      };
     lines.push({ k, t, Q, P, dir, nr, sIn: s[k]!, sOut: o.s, O: o.p });
   }
   const cutOff = (ln: NoseLine, off: number) => {
@@ -361,7 +371,11 @@ export function compute(p: Params): ComputeResult {
     return {
       ok: false,
       errors: [
-        "Géométrie impossible : des marches se croisent. Augmentez le nombre de marches balancées ou réduisez la progressivité.",
+        {
+          key: "mb",
+          message:
+            "Géométrie impossible : des marches se croisent. Augmentez le nombre de marches balancées ou réduisez la progressivité.",
+        },
       ],
     };
   }

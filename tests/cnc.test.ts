@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCNC } from "../src/cnc/build";
+import { buildCNC, tightBoards } from "../src/cnc/build";
 import { toDXF } from "../src/cnc/dxf";
 import { exportFiles, exportFilename, readme } from "../src/cnc/package";
 import { treadsCSV } from "../src/core/sheet";
@@ -54,5 +54,17 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
 
   it("nomme l'archive d'après la forme et le nombre de hauteurs", () => {
     expect(exportFilename(R)).toMatch(/^escalier-(droit|quart-gauche|quart-droit)-\d+h\.zip$/);
+  });
+});
+
+describe("logements sous le bord du limon", () => {
+  it("ne signale rien avec l'exemple par défaut", () => {
+    for (const forme of ["droit", "quart-g", "quart-d"] as const)
+      expect(tightBoards(buildCNC(stairOf({ forme })).boardParts)).toEqual([]);
+  });
+
+  it("repère les limons de mur trop étroits pour des marches plus hautes", () => {
+    const tight = tightBoards(buildCNC(stairOf({ forme: "quart-d", H: 3200 })).boardParts);
+    expect(tight.map((b) => b.name)).toEqual(["LIMON DE MUR 1/2", "LIMON DE MUR 2/2"]);
   });
 });

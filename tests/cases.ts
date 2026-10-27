@@ -14,6 +14,6 @@ export const CASES: Record<string, Partial<Params>> = {
 
 export function stairOf(over: Partial<Params>): Stair {
   const r = compute({ ...DEFAULTS, ...over });
-  if (!r.ok) throw new Error(r.errors.join(" "));
+  if (!r.ok) throw new Error(r.errors.map((e) => e.message).join(" "));
   return r.stair;
 }
