@@ -1,5 +1,5 @@
 import { fmt } from "../core/format";
-import type { Stair } from "../core/stair";
+import type { Note, Stair } from "../core/stair";
 import { STATUS_LABEL, checks, type Check } from "../core/summary";
 
 const tile = ({ k, v, unit, sub, s }: Check) =>
@@ -8,8 +8,14 @@ const tile = ({ k, v, unit, sub, s }: Check) =>
 /** Tuiles de synthèse sous les vues. */
 export const tilesHTML = (R: Stair): string => checks(R).map(tile).join("");
 
-export const notesHTML = (notes: readonly [string, string][]): string =>
-  notes.map(([s, t]) => `<div class="note ${s}">${t}</div>`).join("");
+/** Notes ; une correction proposée devient un bouton qui renvoie l'indice de sa note (data-fix). */
+export const notesHTML = (notes: readonly Note[]): string =>
+  notes
+    .map(
+      ([s, t, fix], i) =>
+        `<div class="note ${s}"><span>${t}${fix ? ` <button class="btn fix" type="button" data-fix="${i}">${fix.label}</button>` : ""}</span></div>`,
+    )
+    .join("");
 
 export const headlineHTML = (R: Stair): string =>
   `<b>${R.n}</b> hauteurs de <b>${fmt(R.h, 1)}</b> mm · giron <b>${fmt(R.g, 1)}</b> mm`;

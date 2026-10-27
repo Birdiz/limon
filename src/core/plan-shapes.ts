@@ -7,6 +7,7 @@ export type PlanRole =
   | "pl-str"
   | "pl-tread"
   | "pl-bal"
+  | "pl-gc"
   | "pl-tremie"
   | "pl-walk"
   | "pl-walk-end"
@@ -80,6 +81,18 @@ export function planShapes(R: Stair): PlanDrawing {
   }
   // Marches
   R.treads.forEach((t) => poly(t.plan, t.balanced ? "pl-bal" : "pl-tread"));
+  // Garde-corps, au-dessus des marches : main courante et balustres ou montants.
+  const G = R.rail;
+  if (G) {
+    const p = R.params;
+    const box = (idx: number, u0: number, u1: number, w: number) => {
+      const sp = R.stringers.find((s) => s.side === "in" && s.idx === idx)!;
+      const q = (u: number, t: number) => V.add(V.add(sp.a, V.mul(sp.dir, u)), V.mul(sp.rn, G.off + t));
+      poly([q(u0, -w / 2), q(u1, -w / 2), q(u1, w / 2), q(u0, w / 2)], "pl-gc");
+    };
+    G.handrails.forEach((hr) => box(hr.idx, hr.u0, hr.u1, p.mcL));
+    G.posts.forEach((q) => box(q.idx, q.u - p.bs / 2, q.u + p.bs / 2, p.bs));
+  }
   // Trémie, au-dessus des marches
   const Tr = R.tre;
   poly(

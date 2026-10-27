@@ -1,7 +1,7 @@
 import { fmt } from "../core/format";
 import { planShapes, type PlanRole } from "../core/plan-shapes";
 import type { Stair, Status } from "../core/stair";
-import { ESSENCE_LABEL, FORME_LABEL, STATUS_LABEL, checks } from "../core/summary";
+import { ESSENCE_LABEL, FORME_LABEL, GC_LABEL, POSE_LABEL, STATUS_LABEL, checks } from "../core/summary";
 import { A4, PdfDoc, hex, wrap, type Page, type RGB, type Stroke } from "./pdf";
 
 /** Couleurs du thème clair de la page, la fiche étant faite pour l'impression. */
@@ -65,6 +65,7 @@ const PLAN_STYLE: Record<PlanRole, Stroke> = {
   "pl-str": { fill: C.rule, stroke: C.muted, width: 0.5 },
   "pl-tread": { fill: C.white, stroke: C.ink, width: 0.5 },
   "pl-bal": { fill: C.chalkSoft, stroke: C.ink, width: 0.5 },
+  "pl-gc": { stroke: C.chalk, width: 0.5 },
   "pl-tremie": { stroke: C.ink, width: 0.9, dash: [6, 2, 1, 2] },
   "pl-walk": { stroke: C.chalk, width: 0.9, dash: [3.5, 2.5] },
   "pl-walk-end": { fill: C.chalk },
@@ -225,9 +226,16 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   const asm: [string, string][] = [
     ["Épaisseur de limon", mm(p.el)],
     [R.quart ? "Hauteur du limon de mur" : "Hauteur de limon", mm(R.hl)],
-    ...(R.quart ? ([["Hauteur du limon de jour", mm(R.hlj)]] as [string, string][]) : []),
+    ...(R.quart
+      ? ([
+          ["Hauteur du limon de jour", mm(R.hlj)],
+          ["Section du poteau", mm(p.ps)],
+        ] as [string, string][])
+      : []),
     ["Encastrement", mm(p.enc)],
     ["Jeu d'assemblage par côté", mm(p.jeu, 1)],
+    ["Garde-corps", p.gc === "aucun" ? "aucun" : `${GC_LABEL[p.gc]} ${POSE_LABEL[p.gcPose]}`],
+    ...(p.gc === "aucun" ? [] : ([["Main courante", `${fmt(p.mcL)} × ${fmt(p.mcH)} mm`]] as [string, string][])),
   ];
   yL = keyValues(p2, M, 106, colW, bois);
   heading(p2, xR, 88, "Limons et assemblage");

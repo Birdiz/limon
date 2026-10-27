@@ -240,7 +240,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 9 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>
 endobj
 9 0 obj
-<< /Length 8571 >>
+<< /Length 8793 >>
 stream
 BT /F2 18 Tf 1 0 0 1 42 783.89 Tm 0 Tr 0.11 0.13 0.16 rg (Bois et fiche des marches) Tj ET
 BT /F1 8.5 Tf 1 0 0 1 504.16 795.89 Tm 0 Tr 0.35 0.39 0.45 rg (Escalier droit) Tj ET
@@ -290,6 +290,11 @@ BT /F1 9.5 Tf 1 0 0 1 311.64 690.89 Tm 0 Tr 0.35 0.39 0.45 rg (Jeu d'assemblage 
 BT /F2 9.5 Tf 1 0 0 1 520.54 690.89 Tm 0 Tr 0.11 0.13 0.16 rg (0,5 mm) Tj ET
 0.4 w [] 0 d 0.79 0.82 0.85 RG
 311.64 686.39 m 553.28 686.39 l
+S
+BT /F1 9.5 Tf 1 0 0 1 311.64 675.89 Tm 0 Tr 0.35 0.39 0.45 rg (Garde-corps) Tj ET
+BT /F2 9.5 Tf 1 0 0 1 525.3 675.89 Tm 0 Tr 0.11 0.13 0.16 rg (aucun) Tj ET
+0.4 w [] 0 d 0.79 0.82 0.85 RG
+311.64 671.39 m 553.28 671.39 l
 S
 BT /F2 8.5 Tf 1 0 0 1 42 646.89 Tm 0 Tr 0.35 0.39 0.45 rg (FICHE DES MARCHES) Tj ET
 [] 0 d 0.93 0.94 0.95 rg
@@ -424,5 +429,5 @@ xref
 trailer
 << /Size 10 /Root 1 0 R /Info 5 0 R >>
 startxref
-21255
+21477
 %%EOF

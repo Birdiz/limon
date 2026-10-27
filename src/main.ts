@@ -7,26 +7,36 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./styles/main.css";
 
-import { buildCNC, type CNC } from "./cnc/build";
+import { buildCNC, tightBoards, type CNC } from "./cnc/build";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { DEFAULTS, type Params } from "./core/params";
-import { NOM_PAR_DEFAUT, fileBase, type Project } from "./core/project";
+import { NOM_PAR_DEFAUT, fileBase, newProject, type Project } from "./core/project";
+import { paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
 import { fichePDF } from "./pdf/fiche";
 import { compute, type ComputeResult } from "./core/stair";
 import { SECTIONS, sectionSummaries } from "./core/summary";
-import { cutListHTML, previewSVG, stringerFitHTML } from "./ui/cnc-panel";
+import { cutListHTML, previewSVG, stockFitHTML, stringerFitHTML } from "./ui/cnc-panel";
 import { byId, copyText, downloadBytes, flash } from "./ui/dom";
 import { planSVG } from "./ui/plan";
 import { headlineHTML, notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
 import { ProjectsDialog } from "./ui/projects";
-import { readInputs, syncInputs, writeInputs } from "./ui/settings";
+import {
+  missingErrors,
+  readInputs,
+  settingsSummaryHTML,
+  showFieldErrors,
+  syncInputs,
+  writeInputs,
+} from "./ui/settings";
 import { Steps } from "./ui/steps";
-import { LocalStore } from "./ui/store";
+import { LocalStore, newId } from "./ui/store";
 
 const store = new LocalStore();
+// Lu avant le premier calcul, qui réécrit l'adresse.
+const sharedAtStart = paramsFromHash(location.hash);
 let project: Project | null = null;
 let params: Params = { ...DEFAULTS };
 let current: ComputeResult | null = null;
@@ -36,14 +46,18 @@ let scene: Scene3D | null = null;
 function render(result: ComputeResult): void {
   const errHTML = (e: string) => `<div class="errbox">${e}</div>`;
   if (!result.ok) {
+    // Les erreurs rattachées à un champ s'affichent sous ce champ ; les vues renvoient vers le formulaire.
+    const msg = result.errors.some((e) => e.key)
+      ? "Calcul impossible : corrigez les champs signalés en rouge."
+      : result.errors[0]!.message;
     cnc = null;
-    byId("plan").innerHTML = errHTML(result.errors[0]!);
+    byId("plan").innerHTML = errHTML(msg);
     byId("tiles").innerHTML = "";
     byId("table").innerHTML = "";
-    byId("notes").innerHTML = notesHTML(result.errors.map((e) => ["bad", e]));
+    byId("notes").innerHTML = "";
     byId("headline").textContent = "";
     byId("cnc").hidden = true;
-    scene?.showError(result.errors[0]!);
+    scene?.showError(msg);
     return;
   }
   const R = result.stair;
@@ -51,6 +65,7 @@ function render(result: ComputeResult): void {
   byId("tiles").innerHTML = tilesHTML(R);
   byId("notes").innerHTML = notesHTML(R.notes);
   byId("headline").innerHTML = headlineHTML(R);
+  byId("printsum").innerHTML = settingsSummaryHTML();
   byId("table").innerHTML = treadsTableHTML(R);
   scene?.draw(R);
 
@@ -62,19 +77,27 @@ function render(result: ComputeResult): void {
   byId("pvB").innerHTML = previewSVG(cnc.boardEnts, "Aperçu des limons développés");
   byId("pvRbox").hidden = byId("cpR").hidden = !R.params.cm;
   byId("pvR").innerHTML = previewSVG(cnc.riserEnts, "Aperçu des contremarches à découper");
-  byId("cncnotes").innerHTML = stringerFitHTML(cnc.boardParts, R);
+  byId("pvPbox").hidden = byId("cpP").hidden = !R.newel;
+  byId("pvP").innerHTML = previewSVG(cnc.postEnts, "Aperçu des faces du poteau");
+  byId("pvGbox").hidden = byId("cpG").hidden = !cnc.rail;
+  byId("pvG").innerHTML = cnc.rail ? previewSVG(cnc.rail.ents, "Aperçu des pièces du garde-corps") : "";
+  byId("cncnotes").innerHTML = stringerFitHTML(cnc.boardParts, R) + stockFitHTML(cnc, R);
   byId("parts").innerHTML = cutListHTML(cnc, R);
 }
 
 function update(): void {
   queued = false;
-  params = readInputs(params);
+  const read = readInputs(params);
+  params = read.params;
   if (project && JSON.stringify(params) !== JSON.stringify(project.params)) {
     project = { ...project, params, modifie: Date.now() };
     void store.save(project);
   }
+  const hash = paramsToHash(params);
+  if (location.hash.slice(1) !== hash) history.replaceState(null, "", hash ? `#${hash}` : location.pathname);
   current = compute(params);
   syncInputs(params, current.ok ? current.stair : null);
+  showFieldErrors([...missingErrors(params, read.missing), ...(current.ok ? [] : current.errors)]);
   const sums = sectionSummaries(params, current.ok ? current.stair : null);
   SECTIONS.forEach((k) => (byId(`sum-${k}`).textContent = sums[k]));
   render(current);
@@ -138,6 +161,29 @@ byId("reset").addEventListener("click", () => {
   writeInputs(params);
   schedule();
 });
+byId("notes").addEventListener("click", (ev) => {
+  const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>("button[data-fix]");
+  const fix = btn && current?.ok ? current.stair.notes[Number(btn.dataset.fix)]?.[2] : undefined;
+  if (!fix) return;
+  params = { ...params, ...fix.set };
+  writeInputs(params);
+  schedule();
+});
+/** Un lien de projet devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert. */
+async function openShared(p: Params): Promise<void> {
+  if (project && JSON.stringify(p) === JSON.stringify(project.params)) return;
+  const q = newProject(newId(), "Projet reçu par lien", "complet", Date.now(), p);
+  await store.save(q);
+  await store.setCurrent(q.id);
+  openProject(q);
+}
+window.addEventListener("hashchange", () => {
+  const p = paramsFromHash(location.hash);
+  if (p) void openShared(p);
+});
+byId("share").addEventListener("click", async () => {
+  if (await copyText(location.href, byId<HTMLTextAreaElement>("linkfb"))) flash(byId("sharemsg"), "Lien copié");
+});
 byId("v3d").addEventListener("click", () => scene?.viewPerspective());
 byId("vtop").addEventListener("click", () => scene?.viewTop());
 
@@ -158,19 +204,37 @@ byId("ficheDl").addEventListener("click", () => {
   }
   flash(byId("ficheMsg"), "Fiche enregistrée");
 });
+/** Confirmation avant d'exporter des limons dont les logements débordent sous le bord. */
+const confirmTight = (c: CNC): boolean =>
+  !tightBoards(c.boardParts).length ||
+  window.confirm(
+    "Des logements débordent sous le bord du limon : ces limons ne sont pas fabricables tels quels. Exporter quand même ?",
+  );
+// La fiche d'atelier imprime la liste de débit : l'export CNC doit être calculé.
+byId("print").addEventListener("click", () => {
+  setCNC(true);
+  update();
+  window.print();
+});
 byId("dl").addEventListener("click", () => {
-  if (!current?.ok || !cnc) return;
+  if (!current?.ok || !cnc || !confirmTight(cnc)) return;
   downloadBytes(exportZip(current.stair, cnc), exportFilename(current.stair), "application/zip");
   flash(byId("dlmsg"), "Archive enregistrée");
 });
-const copyDXF = async (which: "treadEnts" | "riserEnts" | "boardEnts", label: string) => {
-  if (!cnc) return;
+const copyDXF = async (which: "treadEnts" | "riserEnts" | "boardEnts" | "postEnts", label: string) => {
+  if (!cnc || (which === "boardEnts" && !confirmTight(cnc))) return;
   const text = toDXF(cnc[which]);
   if (await copyText(text, byId<HTMLTextAreaElement>("dxffb"))) flash(byId("cpmsg"), `${label} copié`);
 };
 byId("cpT").addEventListener("click", () => copyDXF("treadEnts", "marches.dxf"));
 byId("cpR").addEventListener("click", () => copyDXF("riserEnts", "contremarches.dxf"));
 byId("cpB").addEventListener("click", () => copyDXF("boardEnts", "limons.dxf"));
+byId("cpP").addEventListener("click", () => copyDXF("postEnts", "poteau.dxf"));
+byId("cpG").addEventListener("click", async () => {
+  if (!cnc?.rail) return;
+  if (await copyText(toDXF(cnc.rail.ents), byId<HTMLTextAreaElement>("dxffb")))
+    flash(byId("cpmsg"), "garde-corps.dxf copié");
+});
 
 const reTheme = () => scene?.applyTheme();
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", reTheme);
@@ -184,7 +248,8 @@ void (async () => {
   const start = (id && (await store.get(id))) || (await store.list())[0] || null;
   openProject(start);
   if (start) void store.setCurrent(start.id);
-  else void projects.show();
+  if (sharedAtStart) await openShared(sharedAtStart);
+  else if (!start) void projects.show();
 })();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.
 // Le cadrage initial attend les polices, qui changent la largeur de la colonne de réglages.

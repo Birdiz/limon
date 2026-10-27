@@ -12,6 +12,7 @@ describe("résumés des sections", () => {
       tremie: "2 550 × 1 850",
       marches: "15 hauteurs de 180,0, automatique · 7 balancées",
       bois: "Chêne · marches 40 · contremarches 22",
+      gardecorps: "aucun",
     });
   });
 
@@ -22,6 +23,7 @@ describe("résumés des sections", () => {
     expect(s.tremie).toMatch(/^à calculer : /);
     expect(s.marches).toBe("16 hauteurs de 168,8");
     expect(s.bois).toBe("Chêne · marches 40, sans contremarches");
+    expect(sectionSummaries({ ...R.params, gc: "balustres" }, R).gardecorps).toBe("Balustres dans le chant");
   });
 
   it("se passe du calcul quand les réglages sont impossibles", () => {

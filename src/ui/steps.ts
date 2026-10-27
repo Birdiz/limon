@@ -3,13 +3,14 @@ import { SECTIONS, SECTION_TITLE, type Section } from "../core/summary";
 import { byId } from "./dom";
 
 const OPEN_KEY = "limon-sections";
-/** En mode complet, au premier passage : tout ouvert sauf le bois. */
+/** En mode complet, au premier passage : tout ouvert sauf le bois et le garde-corps. */
 const DEFAULT_OPEN: Record<Section, boolean> = {
   forme: true,
   dimensions: true,
   tremie: true,
   marches: true,
   bois: false,
+  gardecorps: false,
 };
 
 function loadOpen(): Record<Section, boolean> {

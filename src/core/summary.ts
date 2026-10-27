@@ -1,5 +1,5 @@
 import { fmt } from "./format";
-import type { Essence, Forme, Params } from "./params";
+import type { Essence, Forme, GardeCorps, Params, Pose } from "./params";
 import type { Stair, Status } from "./stair";
 
 export const FORME_LABEL: Record<Forme, string> = {
@@ -16,8 +16,15 @@ export const ESSENCE_LABEL: Record<Essence, string> = {
   noyer: "Noyer",
 };
 
+export const GC_LABEL: Record<GardeCorps, string> = {
+  aucun: "Aucun",
+  balustres: "Balustres",
+  lisses: "Lisses rampantes",
+};
+export const POSE_LABEL: Record<Pose, string> = { chant: "dans le chant", anglaise: "à l'anglaise" };
+
 /** Sections de réglage, dans l'ordre du pas à pas. */
-export const SECTIONS = ["forme", "dimensions", "tremie", "marches", "bois"] as const;
+export const SECTIONS = ["forme", "dimensions", "tremie", "marches", "bois", "gardecorps"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export const SECTION_TITLE: Record<Section, string> = {
@@ -26,6 +33,7 @@ export const SECTION_TITLE: Record<Section, string> = {
   tremie: "Trémie",
   marches: "Marches",
   bois: "Bois",
+  gardecorps: "Garde-corps",
 };
 
 /** Résumé d'une ligne de chaque section, lisible quand elle est repliée. */
@@ -43,6 +51,7 @@ export function sectionSummaries(p: Params, R: Stair | null): Record<Section, st
         ? "automatique"
         : `${p.n} hauteurs`,
     bois: `${ESSENCE_LABEL[p.ess]} · marches ${fmt(p.et)}${p.cm ? ` · contremarches ${fmt(p.ecm)}` : ", sans contremarches"}`,
+    gardecorps: p.gc === "aucun" ? "aucun" : `${GC_LABEL[p.gc]} ${POSE_LABEL[p.gcPose]}`,
   };
 }
 

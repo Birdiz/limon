@@ -27,7 +27,7 @@ for (const forme of formes) {
   }
   const r = compute(sanitizeParams({ ...base, forme }));
   if (!r.ok) {
-    console.error(`${forme} : ${r.errors.join(" ")}`);
+    console.error(`${forme} : ${r.errors.map((e) => e.message).join(" ")}`);
     failed = true;
     continue;
   }

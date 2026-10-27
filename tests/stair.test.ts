@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULTS, sanitizeParams } from "../src/core/params";
-import { ECHAPPEE, compute, pickN } from "../src/core/stair";
+import { DEFAULTS, sanitizeParams, type Params } from "../src/core/params";
+import { ECHAPPEE, comfortableRun, compute, pickN, type Stair } from "../src/core/stair";
 import { stairOf } from "./cases";
 
 describe("nombre de hauteurs", () => {
@@ -162,9 +162,25 @@ describe("validation", () => {
     const r = compute({ ...DEFAULTS, forme: "quart-d", W: 300, A: 200 });
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.errors).toContain("L'emmarchement doit faire au moins 400 mm.");
-      expect(r.errors).toContain("La longueur côté départ doit dépasser l'emmarchement.");
+      expect(r.errors).toContainEqual({ key: "W", message: "L'emmarchement doit faire au moins 400 mm." });
+      expect(r.errors).toContainEqual({ key: "A", message: "La longueur côté départ doit dépasser l'emmarchement." });
     }
+  });
+
+  it("rattache chaque erreur au champ à corriger", () => {
+    const r = compute({ ...DEFAULTS, H: 120 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.map((e) => e.key)).toEqual(["H", "ep"]);
+  });
+
+  it("demande un poteau plus large que le limon et des volées plus longues que lui", () => {
+    const thin = compute({ ...DEFAULTS, ps: 60 });
+    expect(thin.ok).toBe(false);
+    if (!thin.ok) expect(thin.errors.map((e) => e.key)).toEqual(["ps"]);
+    const big = compute({ ...DEFAULTS, ps: 900 });
+    expect(big.ok).toBe(false);
+    if (!big.ok) expect(big.errors.map((e) => e.key)).toEqual(["ps"]);
+    expect(compute({ ...DEFAULTS, forme: "droit", ps: 60 }).ok).toBe(true);
   });
 
   it("refuse un plancher plus épais que la hauteur le permet", () => {
@@ -180,5 +196,54 @@ describe("validation", () => {
     expect(p.cm).toBe(DEFAULTS.cm);
     expect(p.ess).toBe("noyer");
     expect(p).not.toHaveProperty("extra");
+  });
+});
+
+describe("corrections proposées", () => {
+  const fixes = (R: Stair) => R.notes.flatMap(([, , fix]) => (fix ? [fix.set] : []));
+  const applyAll = (over: Partial<Params>) => {
+    const R = stairOf(over);
+    return stairOf({ ...over, ...Object.assign({}, ...fixes(R)) });
+  };
+
+  it("ne propose rien quand tout est bon", () => {
+    expect(fixes(stairOf({ forme: "quart-d" }))).toEqual([]);
+    expect(fixes(stairOf({ forme: "droit" }))).toEqual([]);
+  });
+
+  it("trouve le reculement le plus proche qui rend l'escalier confortable", () => {
+    const run = comfortableRun(3200, 3650)!;
+    expect(run).toEqual({ Lw: 4360, n: 18 });
+    expect(comfortableRun(2700, 3650)).toEqual({ Lw: 3650, n: 15 });
+  });
+
+  it("corrige un escalier droit trop raide en un clic", () => {
+    const R = stairOf({ forme: "droit", H: 3200 });
+    expect(fixes(R)).toContainEqual({ L: 4360, nAuto: true });
+    const F = applyAll({ forme: "droit", H: 3200 });
+    expect([F.st.h, F.st.g, F.st.bl, F.st.pente]).toEqual(["ok", "ok", "ok", "ok"]);
+    expect(F.notes[0]![0]).toBe("ok");
+  });
+
+  it("allonge le côté départ d'un quart tournant et ajoute des marches balancées", () => {
+    const R = stairOf({ forme: "quart-d", H: 3200 });
+    expect(fixes(R)).toEqual([{ A: 3590, nAuto: true }, { mb: 8 }, { hl: 350 }]);
+    const F = applyAll({ forme: "quart-d", H: 3200 });
+    expect(Object.values(F.st).every((s) => s === "ok")).toBe(true);
+  });
+
+  it("propose de revenir au nombre de hauteurs automatique, une seule fois", () => {
+    const R = stairOf({ forme: "quart-d", nAuto: false, n: 12 });
+    expect(fixes(R).filter((f) => f.nAuto && Object.keys(f).length === 1)).toHaveLength(1);
+  });
+
+  it("propose la trémie qui donne l'échappée", () => {
+    const R = stairOf({ forme: "droit", L: 2400, tL: 1500 });
+    expect(fixes(R)).toContainEqual({ tL: R.tLmin });
+  });
+
+  it("propose de remonter le limon de jour en automatique", () => {
+    const R = stairOf({ forme: "quart-d", hljAuto: false, hlj: 380 });
+    expect(fixes(R)).toContainEqual({ hljAuto: true });
   });
 });

@@ -62,7 +62,7 @@
             <p class="hint">Les cotes prises sur le chantier, en millimètres.</p>
             <div class="row">
               <label for="H">Hauteur à monter<small>sol fini à sol fini</small></label>
-              <div class="num"><input id="H" type="number" step="5" min="500" /><span>mm</span></div>
+              <div class="num"><input id="H" type="number" step="5" min="300" /><span>mm</span></div>
             </div>
             <div class="row" data-show="droit">
               <label for="L">Reculement<small>du 1er nez au nez de palier</small></label>
@@ -78,7 +78,7 @@
             </div>
             <div class="row">
               <label for="W">Emmarchement<small>largeur entre limons</small></label>
-              <div class="num"><input id="W" type="number" step="10" min="500" /><span>mm</span></div>
+              <div class="num"><input id="W" type="number" step="10" min="400" /><span>mm</span></div>
             </div>
           </div>
         </details>
@@ -178,6 +178,45 @@
               <label for="el">Épaisseur de limon</label>
               <div class="num"><input id="el" type="number" step="1" min="20" /><span>mm</span></div>
             </div>
+            <div class="row" data-show="quart">
+              <label for="ps">Section du poteau<small>carrée, affleurant les limons côté marches</small></label>
+              <div class="num"><input id="ps" type="number" step="5" min="75" /><span>mm</span></div>
+            </div>
+          </div>
+        </details>
+        <details class="sec" data-step="gardecorps">
+          <summary><span class="sh">Garde-corps</span><span class="sum" id="sum-gardecorps"></span></summary>
+          <div class="sbody">
+            <p class="hint">
+              Côté jour, si l'escalier n'est pas entre deux murs. Choisissez « Aucun » s'il est posé à part.
+            </p>
+            <div class="row">
+              <label for="gc">Côté jour<small>main courante à 900 mm, écart libre de 110 mm au plus</small></label
+              ><select id="gc">
+                <option value="aucun">Aucun</option>
+                <option value="balustres">Balustres</option>
+                <option value="lisses">Lisses rampantes</option>
+              </select>
+            </div>
+            <div class="row" data-gc>
+              <label for="gcPose">Pose sur le limon</label
+              ><select id="gcPose">
+                <option value="chant">Dans le chant</option>
+                <option value="anglaise">À l'anglaise</option>
+              </select>
+            </div>
+            <div class="row" data-gc>
+              <label for="mcL">Largeur de main courante</label>
+              <div class="num"><input id="mcL" type="number" step="5" min="30" /><span>mm</span></div>
+            </div>
+            <div class="row" data-gc>
+              <label for="mcH">Hauteur de main courante</label>
+              <div class="num"><input id="mcH" type="number" step="5" min="30" /><span>mm</span></div>
+            </div>
+            <div class="row" data-gc>
+              <label for="bs">Section des balustres<small>carrée ; montants et lisses aussi</small></label>
+              <div class="num"><input id="bs" type="number" step="1" min="20" /><span>mm</span></div>
+            </div>
           </div>
         </details>
         <div class="stepper" id="stepper" hidden>
@@ -187,10 +226,16 @@
             ><button class="btn primary" id="stNext" type="button">Suivant</button>
           </div>
         </div>
-        <button class="btn" id="reset" type="button">Revenir à l'exemple</button>
+        <div class="actions sideacts" id="sideActs">
+          <button class="btn" id="share" type="button">Copier le lien du projet</button
+          ><button class="btn" id="reset" type="button">Revenir à l'exemple</button
+          ><span class="copied" id="sharemsg" hidden></span>
+        </div>
+        <textarea id="linkfb" hidden readonly aria-label="Lien du projet"></textarea>
       </aside>
 
       <main class="main">
+        <section class="printsum" id="printsum"></section>
         <section class="views">
           <div class="view">
             <div class="vhead">
@@ -206,7 +251,7 @@
             <div class="vhead">
               <h2>Plan</h2>
               <div class="legend">
-                <span><i></i>ligne de foulée</span><span><i class="bal"></i>marches balancées</span
+                <span><i></i>ligne de foulée</span><span data-show="quart"><i class="bal"></i>marches balancées</span
                 ><span><i class="tre"></i>trémie</span>
               </div>
             </div>
@@ -226,7 +271,8 @@
               <select id="ficheFmt" class="fmtsel">
                 <option value="pdf">Fiche PDF</option>
                 <option value="csv">Tableau CSV</option></select
-              ><button class="btn primary" id="ficheDl" type="button">Télécharger</button>
+              ><button class="btn primary" id="ficheDl" type="button">Télécharger</button
+              ><button class="btn" id="print" type="button">Imprimer la fiche d'atelier</button>
             </div>
           </div>
           <div class="tablewrap"><table id="table"></table></div>
@@ -261,6 +307,14 @@
                   <div class="num"><input id="hlj" type="number" step="5" min="150" /><span>mm</span></div>
                 </div>
                 <div class="row">
+                  <label for="pL">Longueur des plateaux<small>bois disponible, dans le fil</small></label>
+                  <div class="num"><input id="pL" type="number" step="100" min="500" /><span>mm</span></div>
+                </div>
+                <div class="row">
+                  <label for="pW">Largeur des plateaux<small>bois disponible</small></label>
+                  <div class="num"><input id="pW" type="number" step="10" min="100" /><span>mm</span></div>
+                </div>
+                <div class="row">
                   <label for="enc">Encastrement<small>marches et contremarches dans les limons</small></label>
                   <div class="num"><input id="enc" type="number" step="1" min="0" max="40" /><span>mm</span></div>
                 </div>
@@ -273,7 +327,8 @@
             <p class="disclaimer">
               Marches vues de dessus, nez en bas, encastrement compris. Contremarches vues de face, longueur hors tout.
               Limons développés, vus depuis la face côté marches et couchés dans le sens de la planche, avec les
-              logements à défoncer. Fichiers DXF R12 en millimètres.
+              logements à défoncer. Poteau du quart tournant : ses quatre faces, logements et mortaises des limons de
+              jour. Fichiers DXF R12 en millimètres.
             </p>
             <div class="notes" id="cncnotes"></div>
             <div class="cncgrid">
@@ -304,12 +359,33 @@
                 </div>
                 <div class="pv short" id="pvR"></div>
               </div>
+              <div class="view wide" id="pvGbox">
+                <div class="vhead">
+                  <h2>Garde-corps</h2>
+                  <div class="legend">
+                    <span><i class="lg-cut"></i>découpe</span><span><i class="lg-mor"></i>mortaise</span>
+                  </div>
+                </div>
+                <div class="pv short" id="pvG"></div>
+              </div>
+              <div class="view wide" id="pvPbox">
+                <div class="vhead">
+                  <h2>Poteau</h2>
+                  <div class="legend">
+                    <span><i class="lg-cut"></i>découpe</span><span><i class="lg-def"></i>défonce</span
+                    ><span><i class="lg-mor"></i>mortaise</span>
+                  </div>
+                </div>
+                <div class="pv short" id="pvP"></div>
+              </div>
             </div>
             <div class="tablewrap"><table id="parts"></table></div>
             <div class="actions">
               <button class="btn" id="cpT" type="button">Copier marches.dxf</button
               ><button class="btn" id="cpR" type="button">Copier contremarches.dxf</button
               ><button class="btn" id="cpB" type="button">Copier limons.dxf</button
+              ><button class="btn" id="cpP" type="button">Copier poteau.dxf</button
+              ><button class="btn" id="cpG" type="button">Copier garde-corps.dxf</button
               ><span class="copied" id="cpmsg" hidden></span>
             </div>
             <textarea id="dxffb" hidden readonly aria-label="Contenu DXF"></textarea>

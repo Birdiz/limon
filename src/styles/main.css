@@ -198,6 +198,18 @@ select {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.num input[aria-invalid="true"] {
+  border-color: var(--bad);
+}
+.fielderr {
+  margin: -4px 0 0;
+  color: var(--bad);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.row small.capped {
+  color: var(--warn);
+}
 .num input:disabled {
   color: var(--muted);
   background: transparent;
@@ -562,6 +574,12 @@ input[type="range"] {
 .note.ok::before {
   background: var(--ok);
 }
+.note .fix {
+  margin-left: 4px;
+  padding: 1px 8px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
 .disclaimer {
   color: var(--muted);
   font-size: 12.5px;
@@ -624,6 +642,12 @@ td:first-child {
 tr:last-child td {
   border-bottom: 0;
 }
+tfoot td {
+  border-top: 1px solid var(--rule);
+  font-family: var(--f-body);
+  color: var(--muted);
+  white-space: normal;
+}
 tr.bal td {
   background: var(--chalk-soft);
 }
@@ -680,6 +704,10 @@ td.low {
 .pv.short {
   height: clamp(200px, 30vh, 340px);
 }
+.pl-gc {
+  fill: none;
+  stroke: var(--chalk);
+}
 .cx-DECOUPE {
   fill: var(--panel);
   stroke: var(--ink);
@@ -694,6 +722,20 @@ td.low {
   stroke: var(--muted);
   stroke-dasharray: 4 3;
 }
+.cx-MORTAISE {
+  fill: var(--warn);
+  fill-opacity: 0.15;
+  stroke: var(--warn);
+}
+.cx-TENON {
+  fill: none;
+  stroke: var(--warn);
+  stroke-dasharray: 4 3;
+}
+.cx-PERCAGE {
+  fill: none;
+  stroke: var(--warn);
+}
 .cx-TEXTE {
   fill: var(--muted);
   font-family: var(--f-data);
@@ -706,6 +748,11 @@ td.low {
   height: 10px;
   border: 1px solid var(--chalk);
   background: var(--chalk-soft);
+}
+.legend i.lg-mor {
+  height: 10px;
+  border: 1px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
 }
 .legend i.lg-cm {
   border-top: 1.5px dashed var(--muted);
@@ -1007,5 +1054,83 @@ td.low {
     bottom: max(8px, env(safe-area-inset-bottom, 0px));
     z-index: 5;
     box-shadow: 0 6px 24px rgba(10, 14, 20, 0.25);
+  }
+}
+/* Fiche d'atelier imprimée : réglages, plan, contrôles, fiche des marches et débit, sur fond blanc */
+.printsum {
+  display: none;
+}
+@media print {
+  :root:root:root {
+    --paper: #fff;
+    --panel: #fff;
+    --ink: #000;
+    --muted: #444;
+    --rule: #999;
+    --chalk: #2b5db3;
+    --chalk-soft: rgba(43, 93, 179, 0.13);
+    --ok: #2e7d4f;
+    --warn: #a2650f;
+    --bad: #b42318;
+    color-scheme: light;
+  }
+  @page {
+    margin: 12mm;
+  }
+  body {
+    padding: 0;
+    font-size: 10pt;
+  }
+  .side,
+  .asm,
+  #cncIntro,
+  .btn,
+  .views > .view:first-child,
+  .cncgrid,
+  .copied,
+  textarea {
+    display: none !important;
+  }
+  .work,
+  .views {
+    display: block;
+  }
+  .views .canvas {
+    height: 110mm;
+  }
+  .printsum {
+    display: block;
+  }
+  .printsum h2 {
+    font-size: 14pt;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .printsum dl {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px 18px;
+    margin: 0;
+  }
+  .printsum dl div {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 1px dotted var(--rule);
+  }
+  .printsum dt {
+    color: var(--muted);
+  }
+  .printsum dd {
+    margin: 0;
+    font-family: var(--f-data);
+  }
+  .view,
+  .tile,
+  tr {
+    break-inside: avoid;
+  }
+  .sheet {
+    break-before: auto;
   }
 }
