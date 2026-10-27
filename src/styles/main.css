@@ -728,6 +728,9 @@ td.low {
   gap: 8px;
   min-width: 0;
 }
+.proj .btn {
+  white-space: nowrap;
+}
 .pjname {
   min-width: 0;
   width: 18rem;
@@ -787,7 +790,8 @@ td.low {
 }
 .plist {
   list-style: none;
-  margin: 0;
+  margin-inline: 0;
+  margin-bottom: 0;
   padding: 0;
   border: 1px solid var(--rule);
   border-radius: 6px;
@@ -995,4 +999,13 @@ td.low {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+@media (max-width: 920px) {
+  /* Téléphone : le pied du pas à pas reste sous le pouce. */
+  .stepper {
+    position: sticky;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    z-index: 5;
+    box-shadow: 0 6px 24px rgba(10, 14, 20, 0.25);
+  }
 }
