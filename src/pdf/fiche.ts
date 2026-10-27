@@ -1,3 +1,5 @@
+import { buildCNC } from "../cnc/build";
+import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist";
 import { fmt } from "../core/format";
 import { planShapes, type PlanRole } from "../core/plan-shapes";
 import type { Stair, Status } from "../core/stair";
@@ -20,6 +22,7 @@ const C = {
 const ST: Record<Status | "info", RGB> = { ok: C.ok, warn: C.warn, bad: C.bad, info: C.muted };
 
 const M = 42;
+const PAGES = 3;
 const CW = A4.w - 2 * M;
 
 const DISCLAIMER =
@@ -114,7 +117,7 @@ function frame(pg: Page, x: number, y: number, w: number, h: number, title: stri
   heading(pg, x + 10, y + 16, title);
 }
 
-/** Fiche de l'escalier : cotes, contrôles, plan et vue 3D, puis fiche des marches et bois. */
+/** Fiche de l'escalier : cotes, contrôles, plan et vue 3D ; bois et fiche des marches ; liste de débit. */
 export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   const p = R.params;
   const doc = new PdfDoc(o.nom);
@@ -208,7 +211,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     frame(pg, M, y, CW, boxH, "Plan");
     drawPlan(pg, R, M + 10, y + 26, CW - 20, boxH - 36);
   }
-  footer(pg, o.nom, 1, 2);
+  footer(pg, o.nom, 1, PAGES);
 
   /* ---------- Page 2 ---------- */
   const p2 = doc.page();
@@ -298,7 +301,60 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   } else p2.text(M, y + 16.5, "Cotes en millimètres.", { size: 8, color: C.muted });
 
   wrap(DISCLAIMER, 7.5, CW).forEach((ln, i) => p2.text(M, footY + 14 + i * 10, ln, { size: 7.5, color: C.muted }));
-  footer(p2, o.nom, 2, 2);
+  footer(p2, o.nom, 2, PAGES);
+
+  /* ---------- Page 3 ---------- */
+  const cnc = buildCNC(R);
+  const p3 = doc.page();
+  p3.text(M, 58, "Liste de débit", { size: 18, bold: true, color: C.ink });
+  p3.text(A4.w - M, 46, o.nom, { size: 8.5, color: C.muted, anchor: "end" });
+  const rows = cutRows(cnc, R);
+  const head = ["Pièce", "Qté", "Longueur", "Largeur", "Épaisseur"];
+  // Colonne des pièces large (noms du type « Marches 1, 2, 3 ») ; cotes alignées à droite.
+  const nameW = CW * 0.46,
+    numW = (CW - nameW) / 4;
+  const colX = (i: number) => (i === 0 ? M + 8 : M + nameW + numW * i - 8);
+  y = 82;
+  const rh = Math.min(15, (footY - y - 60) / (rows.length + 1));
+  const size = Math.min(9, rh * 0.62);
+  p3.rect(M, y, CW, rh, { fill: C.paper });
+  head.forEach((h, i) =>
+    p3.text(colX(i), y + rh * 0.68, h.toUpperCase(), {
+      size: 7,
+      bold: true,
+      color: C.muted,
+      anchor: i === 0 ? "start" : "end",
+    }),
+  );
+  y += rh;
+  for (const r of rows) {
+    const cells = [r.name, String(r.q), fmt(r.L), fmt(r.l), fmt(r.e)];
+    cells.forEach((c, i) =>
+      p3.text(colX(i), y + rh * 0.68, c, { size, color: C.ink, anchor: i === 0 ? "start" : "end" }),
+    );
+    p3.path(
+      [
+        [M, y + rh],
+        [M + CW, y + rh],
+      ],
+      { stroke: C.rule, width: 0.4 },
+    );
+    y += rh;
+  }
+  p3.rect(M, 82, CW, y - 82, { stroke: C.rule, width: 0.6 });
+  p3.text(M, y + 16, "Cotes brutes de débit en millimètres, longueur dans le fil.", { size: 8, color: C.muted });
+  y += 38;
+  p3.text(M, y, volumeText(cnc, R), { size: 9.5, bold: true, color: C.ink });
+  y += 22;
+  heading(p3, M, y, "Fabrication");
+  y += 16;
+  for (const [s, t] of [stringerFitNote(cnc.boardParts, R), ...stockNotes(cnc, R)]) {
+    const lines = wrap(t, 9.5, CW - 14);
+    p3.rect(M, y - 6.5, 5, 5, { fill: ST[s] });
+    lines.forEach((ln, i) => p3.text(M + 12, y + i * 12.5, ln, { size: 9.5, color: C.ink }));
+    y += lines.length * 12.5 + 3;
+  }
+  footer(p3, o.nom, 3, PAGES);
 
   return doc.bytes();
 }

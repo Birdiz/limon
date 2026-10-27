@@ -31,12 +31,14 @@ describe.each(Object.entries(CASES))("fiche %s", (name, over) => {
     expect(Buffer.from(pdf).equals(readFileSync(file))).toBe(true);
   });
 
-  it("écrit un PDF 1.4 de deux pages aux décalages justes", () => {
+  it("écrit un PDF 1.4 de trois pages aux décalages justes", () => {
     const s = latin1(pdf);
     expect(s.startsWith("%PDF-1.4\n%")).toBe(true);
-    expect(s.match(/\/Type \/Page /g)).toHaveLength(2);
+    expect(s.match(/\/Type \/Page /g)).toHaveLength(3);
     checkXref(pdf);
     expect(s).toContain("(FICHE DES MARCHES) Tj");
+    expect(s).toContain("(Liste de d\\351bit) Tj");
+    expect(s).toContain("(Volume brut d\\351bit\\351 : ");
   });
 });
 
@@ -56,8 +58,12 @@ describe("écrivain PDF", () => {
 
   it("encode les accents en WinAnsi", () => {
     const doc = new PdfDoc("x");
-    doc.page().text(0, 10, "Échappée 2 000 (°)", { size: 10 });
-    expect(latin1(doc.bytes())).toContain("(\\311chapp\\351e 2 000 \\(\\260\\))");
+    const pg = doc.page();
+    pg.text(0, 10, "Échappée 2\u202f000 (°)", { size: 10 });
+    pg.text(0, 30, "0,5 m³", { size: 10 });
+    const s = latin1(doc.bytes());
+    expect(s).toContain("(\\311chapp\\351e 2 000 \\(\\260\\))");
+    expect(s).toContain("(0,5 m\\263)");
   });
 
   it("mesure et coupe le texte", () => {

@@ -23,14 +23,7 @@ import { planSVG } from "./ui/plan";
 import { headlineHTML, notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
 import { ProjectsDialog } from "./ui/projects";
-import {
-  missingErrors,
-  readInputs,
-  settingsSummaryHTML,
-  showFieldErrors,
-  syncInputs,
-  writeInputs,
-} from "./ui/settings";
+import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
 import { LocalStore, newId } from "./ui/store";
 
@@ -65,7 +58,6 @@ function render(result: ComputeResult): void {
   byId("tiles").innerHTML = tilesHTML(R);
   byId("notes").innerHTML = notesHTML(R.notes);
   byId("headline").innerHTML = headlineHTML(R);
-  byId("printsum").innerHTML = settingsSummaryHTML();
   byId("table").innerHTML = treadsTableHTML(R);
   scene?.draw(R);
 
@@ -210,12 +202,6 @@ const confirmTight = (c: CNC): boolean =>
   window.confirm(
     "Des logements débordent sous le bord du limon : ces limons ne sont pas fabricables tels quels. Exporter quand même ?",
   );
-// La fiche d'atelier imprime la liste de débit : l'export CNC doit être calculé.
-byId("print").addEventListener("click", () => {
-  setCNC(true);
-  update();
-  window.print();
-});
 byId("dl").addEventListener("click", () => {
   if (!current?.ok || !cnc || !confirmTight(cnc)) return;
   downloadBytes(exportZip(current.stair, cnc), exportFilename(current.stair), "application/zip");

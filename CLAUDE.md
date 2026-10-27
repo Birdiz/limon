@@ -13,7 +13,7 @@ Outil d'escaliers pour un ébéniste et d'autres menuisiers. L'interface, les te
 
 - Projets (`Project` dans `src/core/project.ts`) derrière l'interface asynchrone `ProjectStore` (`src/ui/store.ts`), pour qu'un espace en ligne remplace un jour `LocalStore`. localStorage : `limon-projets` (liste), `limon-courant` (dernier ouvert), `limon-sections` (sections ouvertes en mode complet). L'ancienne clé `limon-v2` est reprise une fois comme « Mon escalier », sans être effacée. Fichier `.limon` : JSON `{ format: "limon-projet", version, projet }`. Un lien de projet (`#H=3200&…`, `src/core/share.ts`) ouvert dans la page devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert ; l'adresse suit les réglages du projet ouvert.
 - Réglages en six `<details>` (Forme, Dimensions, Trémie, Marches, Bois, Garde-corps ; ordre et titres dans `SECTIONS`, `src/core/summary.ts`), avec un résumé quand ils sont repliés. Mode guidé (`Steps`, `src/ui/steps.ts`) : une section à la fois, `mode` et `etape` enregistrés dans le projet, fiche et CNC masquées jusqu'à « Terminer ».
-- L'export CNC n'est calculé (`buildCNC`) que lorsque sa section est ouverte ; il contient les réglages d'assemblage (hauteurs de limon, plateaux disponibles, encastrement, jeu). La fiche d'atelier imprimée l'ouvre pour avoir la liste de débit.
+- L'export CNC n'est calculé (`buildCNC`) que lorsque sa section est ouverte ; il contient les réglages d'assemblage (hauteurs de limon, plateaux disponibles, encastrement, jeu).
 
 ## Géométrie (voir `compute(p)` dans `src/core/stair.ts`)
 
@@ -38,7 +38,7 @@ Outil d'escaliers pour un ébéniste et d'autres menuisiers. L'interface, les te
 
 ## Fiche PDF (voir `fichePDF` dans `src/pdf/fiche.ts`)
 
-- PDF 1.4 écrit à la main (`PdfDoc`, `src/pdf/pdf.ts`) : Helvetica standard en WinAnsiEncoding, chasses AFM codées en dur, pas de compression. Deux pages A4 : cotes, contrôles (`checks`, partagés avec les tuiles), remarques, plan et vue 3D ; puis bois, assemblage et fiche des marches.
+- PDF 1.4 écrit à la main (`PdfDoc`, `src/pdf/pdf.ts`) : Helvetica standard en WinAnsiEncoding, chasses AFM codées en dur, pas de compression. Trois pages A4 : cotes, contrôles (`checks`, partagés avec les tuiles), remarques, plan et vue 3D ; bois, assemblage et fiche des marches ; liste de débit, volume et alertes de fabrication (`src/cnc/cutlist.ts`, partagé avec le panneau CNC). C'est la seule fiche imprimable.
 - Le plan vient de `planShapes` (`src/core/plan-shapes.ts`), commun au SVG de l'écran et au PDF. La vue 3D est capturée par `Scene3D.snapshot()` en thème clair.
 
 ## Tests

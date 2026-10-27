@@ -32,6 +32,7 @@ const EXTRA: Record<string, [code: number, reg: number, bold: number]> = {
   œ: [0x9c, 944, 944],
   Œ: [0x8c, 1000, 1000],
   "²": [0xb2, 333, 333],
+  "³": [0xb3, 333, 333],
 };
 
 /** Code WinAnsi et chasse d'un caractère ; les espaces insécables deviennent des espaces. */
