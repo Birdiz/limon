@@ -1,26 +1,12 @@
 import { fmt } from "../core/format";
-import type { Note, Stair, Status } from "../core/stair";
+import type { Note, Stair } from "../core/stair";
+import { STATUS_LABEL, checks, type Check } from "../core/summary";
 
-const STATUS: Record<Status, string> = { ok: "Bon", warn: "Limite", bad: "Hors norme" };
-
-const tile = (k: string, v: string, unit: string, sub: string, s: Status | null) =>
-  `<div class="tile"><span class="k">${k}</span><span class="v">${v}<small>${unit}</small></span><span class="s"><span>${sub}</span>${s ? `<span class="chip ${s}">${STATUS[s]}</span>` : ""}</span></div>`;
+const tile = ({ k, v, unit, sub, s }: Check) =>
+  `<div class="tile"><span class="k">${k}</span><span class="v">${v}<small>${unit}</small></span><span class="s"><span>${sub}</span>${s ? `<span class="chip ${s}">${STATUS_LABEL[s]}</span>` : ""}</span></div>`;
 
 /** Tuiles de synthèse sous les vues. */
-export function tilesHTML(R: Stair): string {
-  return [
-    tile("Hauteur de marche", fmt(R.h, 1), "mm", `${R.n} hauteurs`, R.st.h),
-    tile("Giron", fmt(R.g, 1), "mm", `${R.n - 1} marches · foulée`, R.st.g),
-    tile("Blondel 2h + g", fmt(R.blondel), "mm", "cible 600 à 640", R.st.bl),
-    tile("Pente", fmt(R.pente, 1), "°", `foulée ${fmt(R.Lw)} mm`, R.st.pente),
-    R.ech
-      ? tile("Échappée", fmt(R.ech.c), "mm", `sur la marche ${R.ech.j}`, R.st.ech)
-      : tile("Échappée", "Libre", "", "tout sous la trémie", R.st.ech),
-    R.bal
-      ? tile("Giron mini au jour", fmt(R.gInMin), "mm", `${R.bal.m} balancées`, R.st.gIn)
-      : tile("Reculement", fmt(R.L), "mm", `emmarchement ${fmt(R.W)}`, null),
-  ].join("");
-}
+export const tilesHTML = (R: Stair): string => checks(R).map(tile).join("");
 
 /** Notes ; une correction proposée devient un bouton qui renvoie l'indice de sa note (data-fix). */
 export const notesHTML = (notes: readonly Note[]): string =>

@@ -149,7 +149,10 @@ select {
 .side {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+}
+.side > .stepper,
+.side > #reset {
+  margin-top: 14px;
 }
 .group {
   display: flex;
@@ -652,16 +655,6 @@ td.low {
   color: var(--warn);
   font-weight: 500;
 }
-#csvfb {
-  width: 100%;
-  height: 120px;
-  font-family: var(--f-data);
-  font-size: 12px;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 8px;
-}
 .copied {
   font-size: 13px;
   color: var(--ok);
@@ -775,79 +768,291 @@ td.low {
   padding: 8px;
 }
 
-/* Fiche d'atelier imprimée : réglages, plan, contrôles, fiche des marches et débit, sur fond blanc */
-.printsum {
+/* Projets */
+.proj {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.proj .btn {
+  white-space: nowrap;
+}
+.pjname {
+  min-width: 0;
+  width: 18rem;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font-family: var(--f-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+.pjname:hover,
+.pjname:focus {
+  border-color: var(--rule);
+  background: var(--panel);
+}
+.btn.danger:hover {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+.dlg {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 18px 20px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.dlg::backdrop {
+  background: rgba(10, 14, 20, 0.45);
+}
+.dlg > * + * {
+  margin-top: 14px;
+}
+.newp {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.newp label {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.newp input {
+  padding: 6px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+}
+.plist {
+  list-style: none;
+  margin-inline: 0;
+  margin-bottom: 0;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.plist li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.plist li:last-child {
+  border-bottom: 0;
+}
+.plist li.cur {
+  box-shadow: inset 3px 0 0 var(--chalk);
+}
+.plist li.empty {
+  color: var(--muted);
+  font-size: 14px;
+}
+.plist b {
+  display: block;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.plist small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.pjbtns {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.pjcur {
+  font-size: 12.5px;
+  color: var(--chalk);
+  padding-inline: 6px;
+}
+@media (max-width: 600px) {
+  .dlg {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+  .pjname {
+    width: 100%;
+  }
+}
+
+/* Sections de réglage */
+.sec {
+  border-bottom: 1px solid var(--rule);
+}
+.sec summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 22px 8px 0;
+  cursor: pointer;
+  list-style: none;
+  position: relative;
+}
+.sec summary::-webkit-details-marker {
   display: none;
 }
-@media print {
-  :root:root:root {
-    --paper: #fff;
-    --panel: #fff;
-    --ink: #000;
-    --muted: #444;
-    --rule: #999;
-    --chalk: #2b5db3;
-    --chalk-soft: rgba(43, 93, 179, 0.13);
-    --ok: #2e7d4f;
-    --warn: #a2650f;
-    --bad: #b42318;
-    color-scheme: light;
-  }
-  @page {
-    margin: 12mm;
-  }
-  body {
-    padding: 0;
-    font-size: 10pt;
-  }
-  .side,
-  .btn,
-  .views > .view:first-child,
-  .cncgrid,
-  .copied,
-  textarea {
-    display: none !important;
-  }
-  .work,
-  .views {
-    display: block;
-  }
-  .views .canvas {
-    height: 110mm;
-  }
-  .printsum {
-    display: block;
-  }
-  .printsum h2 {
-    font-size: 14pt;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
-  .printsum dl {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 2px 18px;
-    margin: 0;
-  }
-  .printsum dl div {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    border-bottom: 1px dotted var(--rule);
-  }
-  .printsum dt {
-    color: var(--muted);
-  }
-  .printsum dd {
-    margin: 0;
-    font-family: var(--f-data);
-  }
-  .view,
-  .tile,
-  tr {
-    break-inside: avoid;
-  }
-  .sheet {
-    break-before: auto;
+.sec summary::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  top: 14px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+.sec[open] summary::after {
+  transform: rotate(-135deg);
+  top: 17px;
+}
+.sh {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.sec summary:hover .sh {
+  color: var(--chalk);
+}
+.sum {
+  font-family: var(--f-data);
+  font-size: 12.5px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.sec[open] .sum {
+  display: none;
+}
+.sbody {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 2px 0 14px;
+}
+.sub {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 4px;
+}
+.sub h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.hint {
+  display: none;
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.guided .hint {
+  display: block;
+}
+.guided .sec summary::after {
+  display: none;
+}
+.guided .sec.done .sh::before {
+  content: "✓ ";
+  color: var(--ok);
+}
+.guided .sec:not(.done) summary {
+  cursor: default;
+}
+.guided #sheetBox,
+.guided #cnc,
+.guided #reset {
+  display: none;
+}
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.stxt {
+  font-size: 13px;
+  color: var(--muted);
+}
+.stepper .actions {
+  justify-content: space-between;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  border-color: var(--rule);
+  color: inherit;
+}
+
+/* Export CNC à la demande */
+.cncbody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.asm {
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.asmgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 9px 28px;
+}
+
+/* Fiche des marches */
+.fmtsel {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 920px) {
+  /* Téléphone : le pied du pas à pas reste sous le pouce. */
+  .stepper {
+    position: sticky;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    z-index: 5;
+    box-shadow: 0 6px 24px rgba(10, 14, 20, 0.25);
   }
 }

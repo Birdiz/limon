@@ -11,27 +11,27 @@ import { buildCNC, tightBoards, type CNC } from "./cnc/build";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { DEFAULTS, type Params } from "./core/params";
+import { NOM_PAR_DEFAUT, fileBase, newProject, type Project } from "./core/project";
 import { paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
+import { fichePDF } from "./pdf/fiche";
 import { compute, type ComputeResult } from "./core/stair";
+import { SECTIONS, sectionSummaries } from "./core/summary";
 import { cutListHTML, previewSVG, stockFitHTML, stringerFitHTML } from "./ui/cnc-panel";
 import { byId, copyText, downloadBytes, flash } from "./ui/dom";
 import { planSVG } from "./ui/plan";
 import { headlineHTML, notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
-import {
-  loadParams,
-  missingErrors,
-  readInputs,
-  saveParams,
-  settingsSummaryHTML,
-  showFieldErrors,
-  syncInputs,
-  writeInputs,
-} from "./ui/settings";
+import { ProjectsDialog } from "./ui/projects";
+import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
+import { Steps } from "./ui/steps";
+import { LocalStore, newId } from "./ui/store";
 
-// Un lien de projet l'emporte sur les réglages enregistrés dans le navigateur.
-let params: Params = paramsFromHash(location.hash) ?? loadParams();
+const store = new LocalStore();
+// Lu avant le premier calcul, qui réécrit l'adresse.
+const sharedAtStart = paramsFromHash(location.hash);
+let project: Project | null = null;
+let params: Params = { ...DEFAULTS };
 let current: ComputeResult | null = null;
 let cnc: CNC | null = null;
 let scene: Scene3D | null = null;
@@ -58,11 +58,13 @@ function render(result: ComputeResult): void {
   byId("tiles").innerHTML = tilesHTML(R);
   byId("notes").innerHTML = notesHTML(R.notes);
   byId("headline").innerHTML = headlineHTML(R);
-  byId("printsum").innerHTML = settingsSummaryHTML();
   byId("table").innerHTML = treadsTableHTML(R);
+  scene?.draw(R);
 
-  cnc = buildCNC(R);
   byId("cnc").hidden = false;
+  // L'export CNC n'est calculé que lorsque sa section est ouverte.
+  cnc = byId("cncBody").hidden ? null : buildCNC(R);
+  if (!cnc) return;
   byId("pvT").innerHTML = previewSVG(cnc.treadEnts, "Aperçu des marches à découper");
   byId("pvB").innerHTML = previewSVG(cnc.boardEnts, "Aperçu des limons développés");
   byId("pvRbox").hidden = byId("cpR").hidden = !R.params.cm;
@@ -73,19 +75,23 @@ function render(result: ComputeResult): void {
   byId("pvG").innerHTML = cnc.rail ? previewSVG(cnc.rail.ents, "Aperçu des pièces du garde-corps") : "";
   byId("cncnotes").innerHTML = stringerFitHTML(cnc.boardParts, R) + stockFitHTML(cnc, R);
   byId("parts").innerHTML = cutListHTML(cnc, R);
-  scene?.draw(R);
 }
 
 function update(): void {
   queued = false;
   const read = readInputs(params);
   params = read.params;
-  saveParams(params);
+  if (project && JSON.stringify(params) !== JSON.stringify(project.params)) {
+    project = { ...project, params, modifie: Date.now() };
+    void store.save(project);
+  }
   const hash = paramsToHash(params);
   if (location.hash.slice(1) !== hash) history.replaceState(null, "", hash ? `#${hash}` : location.pathname);
   current = compute(params);
   syncInputs(params, current.ok ? current.stair : null);
   showFieldErrors([...missingErrors(params, read.missing), ...(current.ok ? [] : current.errors)]);
+  const sums = sectionSummaries(params, current.ok ? current.stair : null);
+  SECTIONS.forEach((k) => (byId(`sum-${k}`).textContent = sums[k]));
   render(current);
 }
 
@@ -96,10 +102,52 @@ function schedule(): void {
   requestAnimationFrame(update);
 }
 
+/** Ouvre un projet ; null quand il n'en reste aucun (le dialogue des projets reste alors affiché). */
+function openProject(p: Project | null): void {
+  project = p;
+  params = p ? { ...p.params } : { ...DEFAULTS };
+  byId<HTMLInputElement>("pjName").value = p?.nom ?? "";
+  writeInputs(params);
+  steps.apply(p?.mode ?? "complet", p?.etape ?? 0);
+  setCNC(false);
+  update();
+}
+
+const steps = new Steps((mode, etape) => {
+  if (!project) return;
+  project = { ...project, mode, etape };
+  void store.save(project);
+});
+
+/** Ouvre ou replie l'export CNC. */
+function setCNC(on: boolean): void {
+  byId("cncBody").hidden = byId("dl").hidden = byId("cncClose").hidden = !on;
+  byId("cncIntro").hidden = byId("cncOpen").hidden = on;
+}
+byId("cncOpen").addEventListener("click", () => {
+  setCNC(true);
+  update();
+});
+byId("cncClose").addEventListener("click", () => {
+  setCNC(false);
+  update();
+});
+
+const projects = new ProjectsDialog(store, { current: () => project, open: openProject });
+byId("pjOpen").addEventListener("click", () => void projects.show());
+byId<HTMLInputElement>("pjName").addEventListener("change", (e) => {
+  const el = e.target as HTMLInputElement;
+  if (!project) return;
+  project = { ...project, nom: el.value.trim() || NOM_PAR_DEFAUT, modifie: Date.now() };
+  el.value = project.nom;
+  void store.save(project);
+});
+
 /* ---------- Événements ---------- */
-const side = document.querySelector<HTMLElement>(".side")!;
-side.addEventListener("input", schedule);
-side.addEventListener("change", schedule);
+for (const el of [document.querySelector<HTMLElement>(".side")!, byId("cncBody")]) {
+  el.addEventListener("input", schedule);
+  el.addEventListener("change", schedule);
+}
 byId("reset").addEventListener("click", () => {
   params = { ...DEFAULTS };
   writeInputs(params);
@@ -113,12 +161,17 @@ byId("notes").addEventListener("click", (ev) => {
   writeInputs(params);
   schedule();
 });
+/** Un lien de projet devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert. */
+async function openShared(p: Params): Promise<void> {
+  if (project && JSON.stringify(p) === JSON.stringify(project.params)) return;
+  const q = newProject(newId(), "Projet reçu par lien", "complet", Date.now(), p);
+  await store.save(q);
+  await store.setCurrent(q.id);
+  openProject(q);
+}
 window.addEventListener("hashchange", () => {
   const p = paramsFromHash(location.hash);
-  if (!p) return;
-  params = p;
-  writeInputs(params);
-  schedule();
+  if (p) void openShared(p);
 });
 byId("share").addEventListener("click", async () => {
   if (await copyText(location.href, byId<HTMLTextAreaElement>("linkfb"))) flash(byId("sharemsg"), "Lien copié");
@@ -126,10 +179,22 @@ byId("share").addEventListener("click", async () => {
 byId("v3d").addEventListener("click", () => scene?.viewPerspective());
 byId("vtop").addEventListener("click", () => scene?.viewTop());
 
-byId("copy").addEventListener("click", async () => {
+byId("ficheDl").addEventListener("click", () => {
   if (!current?.ok) return;
-  if (await copyText(treadsCSV(current.stair), byId<HTMLTextAreaElement>("csvfb")))
-    flash(byId("copied"), "Fiche copiée", false, 1800);
+  const base = fileBase(project?.nom ?? NOM_PAR_DEFAUT);
+  if (byId<HTMLSelectElement>("ficheFmt").value === "csv")
+    downloadBytes(new TextEncoder().encode("\ufeff" + treadsCSV(current.stair)), `${base} - marches.csv`, "text/csv");
+  else {
+    const vue3d = scene?.snapshot() ?? undefined;
+    const date = new Date().toLocaleDateString("fr-FR");
+    const nom = project?.nom ?? NOM_PAR_DEFAUT;
+    downloadBytes(
+      fichePDF(current.stair, { nom, date, ...(vue3d ? { vue3d } : {}) }),
+      `${base}.pdf`,
+      "application/pdf",
+    );
+  }
+  flash(byId("ficheMsg"), "Fiche enregistrée");
 });
 /** Confirmation avant d'exporter des limons dont les logements débordent sous le bord. */
 const confirmTight = (c: CNC): boolean =>
@@ -137,7 +202,6 @@ const confirmTight = (c: CNC): boolean =>
   window.confirm(
     "Des logements débordent sous le bord du limon : ces limons ne sont pas fabricables tels quels. Exporter quand même ?",
   );
-byId("print").addEventListener("click", () => window.print());
 byId("dl").addEventListener("click", () => {
   if (!current?.ok || !cnc || !confirmTight(cnc)) return;
   downloadBytes(exportZip(current.stair, cnc), exportFilename(current.stair), "application/zip");
@@ -165,6 +229,14 @@ new MutationObserver(reTheme).observe(document.documentElement, { attributes: tr
 /* ---------- Démarrage ---------- */
 writeInputs(params);
 update();
+void (async () => {
+  const id = await store.currentId();
+  const start = (id && (await store.get(id))) || (await store.list())[0] || null;
+  openProject(start);
+  if (start) void store.setCurrent(start.id);
+  if (sharedAtStart) await openShared(sharedAtStart);
+  else if (!start) void projects.show();
+})();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.
 // Le cadrage initial attend les polices, qui changent la largeur de la colonne de réglages.
 Promise.all([import("./ui/scene3d"), document.fonts.ready])

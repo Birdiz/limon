@@ -1,7 +1,7 @@
-import { oversize, stockVolume, tightBoards, type BoardPart, type CNC, type TreadPart } from "../cnc/build";
+import type { BoardPart, CNC } from "../cnc/build";
+import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist";
 import type { Entity } from "../cnc/entities";
-import { ceil10, fmt } from "../core/format";
-import { DENSITE } from "../core/params";
+import { fmt } from "../core/format";
 import type { Stair } from "../core/stair";
 import { V, bbox, type Pt, type Vertex } from "../core/vec";
 
@@ -53,102 +53,22 @@ export function previewSVG(ents: readonly Entity[], label: string): string {
 
 /** Alerte si des logements débordent sous le bord d'un limon. */
 export function stringerFitHTML(boards: readonly BoardPart[], R: Stair): string {
-  const tight = tightBoards(boards);
-  const fixes = [
-    R.hl < R.needM - 0.5 && `passez la hauteur de limon à ${fmt(ceil10(R.needM))} mm`,
-    R.quart && R.hlj < R.needJ - 0.5 && `passez le limon de jour à ${fmt(R.hljAuto)} mm`,
-  ].filter(Boolean);
-  return tight.length
-    ? `<div class="note warn">Des logements débordent sous le bord du limon (${tight.map((b) => b.name.toLowerCase()).join(", ")}) : ${fixes.join(" et ")}.</div>`
-    : `<div class="note ok">Tous les logements tiennent dans les limons, avec au moins 20 mm de bois dessous${R.quart ? ` (limon de jour de ${fmt(R.hlj)} mm)` : ""}.</div>`;
+  const [st, t] = stringerFitNote(boards, R);
+  return `<div class="note ${st}">${t}</div>`;
 }
 
 /** Alerte si des pièces dépassent les plateaux disponibles. */
 export function stockFitHTML(cnc: CNC, R: Stair): string {
-  const { pL, pW } = R.params;
-  const big = oversize(cnc, pL, pW);
-  const plateau = `plateau de ${fmt(pL)} × ${fmt(pW)} mm`;
-  const list = (ps: readonly TreadPart[]) => ps.map((q) => q.j).join(", ");
-  const notes: string[] = [];
-  const glued = (ps: readonly TreadPart[], one: string, many: string) => {
-    const wide = ps.filter((q) => q.l > pW + 0.5),
-      long = ps.filter((q) => q.L > pL + 0.5);
-    if (wide.length)
-      notes.push(
-        `${wide.length > 1 ? many : one} ${list(wide)} plus ${one === "Marche" ? "profonde" : "haute"}${wide.length > 1 ? "s" : ""} que le plateau (jusqu'à ${fmt(Math.ceil(Math.max(...wide.map((q) => q.l))))} mm pour ${fmt(pW)}) : à reconstituer en lames collées, fil le long du nez.`,
-      );
-    if (long.length)
-      notes.push(
-        `${long.length > 1 ? many : one} ${list(long)} plus longue${long.length > 1 ? "s" : ""} que le plateau (jusqu'à ${fmt(Math.ceil(Math.max(...long.map((q) => q.L))))} mm pour ${fmt(pL)}).`,
-      );
-  };
-  glued(big.treads, "Marche", "Marches");
-  glued(big.risers, "Contremarche", "Contremarches");
-  big.boards.forEach((b) =>
-    notes.push(
-      `${b.name.charAt(0)}${b.name.slice(1).toLowerCase()} (${fmt(Math.ceil(b.L))} × ${fmt(Math.ceil(b.l))} mm) plus grand que le ${plateau} : à abouter ou à débiter dans un plateau plus grand.`,
-    ),
-  );
-  return notes.length
-    ? notes.map((t) => `<div class="note warn">${t}</div>`).join("")
-    : `<div class="note ok">Toutes les pièces tiennent dans un ${plateau}.</div>`;
-}
-
-interface CutRow {
-  name: string;
-  q: number;
-  L: number;
-  l: number;
-  e: number;
-}
-
-/** Pièces identiques (au mm près) regroupées sur une ligne. */
-function group(list: readonly TreadPart[], one: string, many: string, e: number): CutRow[] {
-  const m = new Map<string, { L: number; l: number; js: number[] }>();
-  list.forEach((it) => {
-    const k = `${Math.ceil(it.L)}x${Math.ceil(it.l)}`;
-    let g = m.get(k);
-    if (!g) m.set(k, (g = { L: Math.ceil(it.L), l: Math.ceil(it.l), js: [] }));
-    g.js.push(it.j);
-  });
-  return [...m.values()].map((g) => ({
-    name: `${g.js.length > 1 ? many : one} ${g.js.join(", ")}`,
-    L: g.L,
-    l: g.l,
-    q: g.js.length,
-    e,
-  }));
+  return stockNotes(cnc, R)
+    .map(([st, t]) => `<div class="note ${st}">${t}</div>`)
+    .join("");
 }
 
 /** Liste de débit : limons, marches, contremarches, garde-corps, poteau. */
 export function cutListHTML(cnc: CNC, R: Stair): string {
-  const p = R.params;
-  const rows: CutRow[] = [
-    ...cnc.boardParts.map((b) => ({
-      name: b.name.charAt(0) + b.name.slice(1).toLowerCase(),
-      L: Math.ceil(b.L),
-      l: Math.ceil(b.l),
-      e: p.el,
-      q: 1,
-    })),
-    ...group(cnc.treadParts, "Marche", "Marches", p.et),
-    ...group(cnc.riserParts, "Contremarche", "Contremarches", p.ecm),
-    ...(cnc.rail
-      ? [
-          ...cnc.rail.handrailParts.map((q) => ({ name: q.name, q: 1, L: Math.ceil(q.L), l: p.mcH, e: p.mcL })),
-          ...(R.rail?.type === "balustres"
-            ? group(cnc.rail.postParts, "Balustre", "Balustres", p.bs)
-            : group(cnc.rail.postParts, "Montant", "Montants", p.bs)),
-          ...group(cnc.rail.railParts, "Lisse", "Lisses", p.bs),
-        ]
-      : []),
-    ...(cnc.postPart
-      ? [{ name: "Poteau", q: 1, L: Math.ceil(cnc.postPart.L), l: cnc.postPart.l, e: cnc.postPart.e }]
-      : []),
-  ];
   return (
     "<thead><tr><th>Pièce</th><th>Qté</th><th>Longueur</th><th>Largeur</th><th>Épaisseur</th></tr></thead><tbody>" +
-    rows
+    cutRows(cnc, R)
       .map(
         (r) => `<tr><td>${r.name}</td><td>${r.q}</td><td>${fmt(r.L)}</td><td>${fmt(r.l)}</td><td>${fmt(r.e)}</td></tr>`,
       )
@@ -156,13 +76,4 @@ export function cutListHTML(cnc: CNC, R: Stair): string {
     "</tbody>" +
     `<tfoot><tr><td colspan="5">${volumeText(cnc, R)}</td></tr></tfoot>`
   );
-}
-
-const ESSENCE_LABEL = { chene: "chêne", hetre: "hêtre", frene: "frêne", sapin: "sapin", noyer: "noyer" } as const;
-
-/** Volume brut et poids approximatif selon l'essence. */
-export function volumeText(cnc: CNC, R: Stair): string {
-  const v = stockVolume(cnc, R),
-    ess = R.params.ess;
-  return `Volume brut débité : ${fmt(v, 3)} m³ de ${ESSENCE_LABEL[ess]}, soit environ ${fmt(Math.round((v * DENSITE[ess]) / 5) * 5)} kg (${fmt(DENSITE[ess])} kg/m³).`;
 }

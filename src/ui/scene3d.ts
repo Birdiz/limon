@@ -198,6 +198,23 @@ export class Scene3D {
     else this.render();
   }
 
+  /** Capture JPEG de la vue, rendue dans le thème clair pour l'impression ; le thème est rétabli aussitôt. */
+  snapshot(): { data: Uint8Array; w: number; h: number } | null {
+    if (!this.last) return null;
+    const root = document.documentElement,
+      prev = root.getAttribute("data-theme");
+    root.setAttribute("data-theme", "light");
+    this.applyTheme();
+    const url = this.renderer.domElement.toDataURL("image/jpeg", 0.9);
+    if (prev === null) root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", prev);
+    this.applyTheme();
+    const bin = atob(url.slice(url.indexOf(",") + 1));
+    const data = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const { width: w, height: h } = this.renderer.domElement;
+    return w && h ? { data, w, h } : null;
+  }
+
   private resize(): void {
     const w = this.host.clientWidth,
       h = this.host.clientHeight;

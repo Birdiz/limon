@@ -18,209 +18,215 @@
         <span class="mark">Li<i>m</i>on</span>
         <span class="tag">Calcul d'escaliers bois · prototype</span>
       </div>
+      <div class="proj">
+        <input id="pjName" class="pjname" type="text" maxlength="80" aria-label="Nom du projet" />
+        <button class="btn" id="pjOpen" type="button">Mes projets</button>
+      </div>
       <div class="headline" id="headline"></div>
     </header>
 
     <div class="work">
       <aside class="side">
-        <div class="group">
-          <h3>Forme</h3>
-          <div class="shapes" role="radiogroup" aria-label="Forme de l'escalier">
-            <input type="radio" name="forme" id="f-droit" value="droit" />
-            <label for="f-droit"
-              ><svg viewBox="0 0 34 34">
-                <rect x="11" y="3" width="12" height="28" />
-                <path d="M11 9h12M11 15h12M11 21h12M11 27h12" /></svg
-              >Droit</label
+        <details class="sec" data-step="forme" open>
+          <summary><span class="sh">Forme</span><span class="sum" id="sum-forme"></span></summary>
+          <div class="sbody">
+            <p class="hint">Choisissez la forme de l'escalier. Le plan et la 3D suivent chaque réglage.</p>
+            <div class="shapes" role="radiogroup" aria-label="Forme de l'escalier">
+              <input type="radio" name="forme" id="f-droit" value="droit" />
+              <label for="f-droit"
+                ><svg viewBox="0 0 34 34">
+                  <rect x="11" y="3" width="12" height="28" />
+                  <path d="M11 9h12M11 15h12M11 21h12M11 27h12" /></svg
+                >Droit</label
+              >
+              <input type="radio" name="forme" id="f-qg" value="quart-g" />
+              <label for="f-qg"
+                ><svg viewBox="0 0 34 34">
+                  <path d="M20 31V3H3v12h7v16z" />
+                  <path d="M10 26h10M10 21h10M10 15l10-4M8 15l4-12M3 9h7" /></svg
+                >Quart tournant gauche</label
+              >
+              <input type="radio" name="forme" id="f-qd" value="quart-d" />
+              <label for="f-qd"
+                ><svg viewBox="0 0 34 34">
+                  <path d="M14 31V3h17v12h-7v16z" />
+                  <path d="M14 26h10M14 21h10M24 15l-10-4M26 15l-4-12M31 9h-7" /></svg
+                >Quart tournant droit</label
+              >
+            </div>
+          </div>
+        </details>
+        <details class="sec" data-step="dimensions" open>
+          <summary><span class="sh">Dimensions</span><span class="sum" id="sum-dimensions"></span></summary>
+          <div class="sbody">
+            <p class="hint">Les cotes prises sur le chantier, en millimètres.</p>
+            <div class="row">
+              <label for="H">Hauteur à monter<small>sol fini à sol fini</small></label>
+              <div class="num"><input id="H" type="number" step="5" min="300" /><span>mm</span></div>
+            </div>
+            <div class="row" data-show="droit">
+              <label for="L">Reculement<small>du 1er nez au nez de palier</small></label>
+              <div class="num"><input id="L" type="number" step="10" min="500" /><span>mm</span></div>
+            </div>
+            <div class="row" data-show="quart">
+              <label for="A">Longueur côté départ<small>côté extérieur, hors limon</small></label>
+              <div class="num"><input id="A" type="number" step="10" min="500" /><span>mm</span></div>
+            </div>
+            <div class="row" data-show="quart">
+              <label for="B">Longueur côté arrivée<small>côté extérieur, hors limon</small></label>
+              <div class="num"><input id="B" type="number" step="10" min="500" /><span>mm</span></div>
+            </div>
+            <div class="row">
+              <label for="W">Emmarchement<small>largeur entre limons</small></label>
+              <div class="num"><input id="W" type="number" step="10" min="400" /><span>mm</span></div>
+            </div>
+          </div>
+        </details>
+        <details class="sec" data-step="tremie" open>
+          <summary><span class="sh">Trémie</span><span class="sum" id="sum-tremie"></span></summary>
+          <div class="sbody">
+            <p class="hint">
+              L'ouverture dans le plancher du haut. Si elle n'est pas encore faite, Limon calcule la plus petite qui
+              laisse 2 m d'échappée.
+            </p>
+            <label class="check"
+              ><input type="checkbox" id="tAuto" /> je ne la connais pas : Limon calcule la trémie minimale</label
             >
-            <input type="radio" name="forme" id="f-qg" value="quart-g" />
-            <label for="f-qg"
-              ><svg viewBox="0 0 34 34">
-                <path d="M20 31V3H3v12h7v16z" />
-                <path d="M10 26h10M10 21h10M10 15l10-4M8 15l4-12M3 9h7" /></svg
-              >Quart tournant gauche</label
-            >
-            <input type="radio" name="forme" id="f-qd" value="quart-d" />
-            <label for="f-qd"
-              ><svg viewBox="0 0 34 34">
-                <path d="M14 31V3h17v12h-7v16z" />
-                <path d="M14 26h10M14 21h10M24 15l-10-4M26 15l-4-12M31 9h-7" /></svg
-              >Quart tournant droit</label
-            >
-          </div>
-        </div>
-
-        <div class="group">
-          <h3>Dimensions</h3>
-          <div class="row">
-            <label for="H">Hauteur à monter<small>sol fini à sol fini</small></label>
-            <div class="num"><input id="H" type="number" step="5" min="300" /><span>mm</span></div>
-          </div>
-          <div class="row" data-show="droit">
-            <label for="L">Reculement<small>du 1er nez au nez de palier</small></label>
-            <div class="num"><input id="L" type="number" step="10" min="500" /><span>mm</span></div>
-          </div>
-          <div class="row" data-show="quart">
-            <label for="A">Longueur côté départ<small>côté extérieur, hors limon</small></label>
-            <div class="num"><input id="A" type="number" step="10" min="500" /><span>mm</span></div>
-          </div>
-          <div class="row" data-show="quart">
-            <label for="B">Longueur côté arrivée<small>côté extérieur, hors limon</small></label>
-            <div class="num"><input id="B" type="number" step="10" min="500" /><span>mm</span></div>
-          </div>
-          <div class="row">
-            <label for="W">Emmarchement<small>largeur entre limons</small></label>
-            <div class="num"><input id="W" type="number" step="10" min="400" /><span>mm</span></div>
-          </div>
-        </div>
-
-        <div class="group">
-          <h3>Trémie</h3>
-          <div class="row" data-show="droit">
-            <label for="tL">Longueur de trémie<small>depuis le bord du palier</small></label>
-            <div class="num"><input id="tL" type="number" step="10" min="0" /><span>mm</span></div>
-          </div>
-          <div class="row" data-show="quart">
-            <label for="tX">Trémie côté arrivée<small>depuis le bord du palier</small></label>
-            <div class="num"><input id="tX" type="number" step="10" min="0" /><span>mm</span></div>
-          </div>
-          <div class="row" data-show="quart">
-            <label for="tY">Trémie côté départ<small>depuis le mur face à la montée</small></label>
-            <div class="num"><input id="tY" type="number" step="10" min="0" /><span>mm</span></div>
-          </div>
-          <div class="row">
-            <label for="ep">Épaisseur du plancher<small>sol fini à sous-face du plafond</small></label>
-            <div class="num"><input id="ep" type="number" step="5" min="0" /><span>mm</span></div>
-          </div>
-        </div>
-
-        <div class="group">
-          <h3>Calcul</h3>
-          <div class="row">
-            <div>
-              <label for="n">Nombre de hauteurs</label
-              ><label class="check"><input type="checkbox" id="nAuto" /> automatique</label>
+            <div class="row" data-show="droit">
+              <label for="tL">Longueur de trémie<small>depuis le bord du palier</small></label>
+              <div class="num"><input id="tL" type="number" step="10" min="0" /><span>mm</span></div>
             </div>
-            <div class="num nounit"><input id="n" type="number" step="1" min="3" max="40" /></div>
-          </div>
-          <div class="row">
-            <div>
-              <label for="f">Ligne de foulée<small>distance depuis le jour</small></label
-              ><label class="check"><input type="checkbox" id="fAuto" /> automatique</label>
+            <div class="row" data-show="quart">
+              <label for="tX">Trémie côté arrivée<small>depuis le bord du palier</small></label>
+              <div class="num"><input id="tX" type="number" step="10" min="0" /><span>mm</span></div>
             </div>
-            <div class="num"><input id="f" type="number" step="10" min="100" /><span>mm</span></div>
-          </div>
-        </div>
-
-        <div class="group" data-show="quart">
-          <h3>Balancement</h3>
-          <div class="row">
-            <label for="mb">Marches balancées<small>marches touchées par le tournant</small></label>
-            <div class="num nounit"><input id="mb" type="number" step="1" min="2" max="12" /></div>
-          </div>
-          <div class="row">
-            <label for="prog">Progressivité<small id="progTxt">0 % = girons égaux au jour</small></label
-            ><input id="prog" type="range" min="0" max="100" step="5" />
-          </div>
-        </div>
-
-        <div class="group">
-          <h3>Bois</h3>
-          <div class="row">
-            <label for="ess">Essence</label
-            ><select id="ess">
-              <option value="chene">Chêne</option>
-              <option value="hetre">Hêtre</option>
-              <option value="frene">Frêne</option>
-              <option value="sapin">Sapin</option>
-              <option value="noyer">Noyer</option>
-            </select>
-          </div>
-          <div class="row">
-            <label for="et">Épaisseur de marche</label>
-            <div class="num"><input id="et" type="number" step="1" min="18" /><span>mm</span></div>
-          </div>
-          <div class="row">
-            <label for="deb">Débord de nez<small>recouvrement</small></label>
-            <div class="num"><input id="deb" type="number" step="1" min="0" /><span>mm</span></div>
-          </div>
-          <div class="row">
-            <label for="rn">Rayon du nez<small>arrondi dessus et dessous, 0 = vif</small></label>
-            <div class="num"><input id="rn" type="number" step="1" min="0" /><span>mm</span></div>
-          </div>
-          <div class="row">
-            <div>
-              <label for="ecm">Contremarches</label><label class="check"><input type="checkbox" id="cm" /> avec</label>
+            <div class="row" data-show="quart">
+              <label for="tY">Trémie côté départ<small>depuis le mur face à la montée</small></label>
+              <div class="num"><input id="tY" type="number" step="10" min="0" /><span>mm</span></div>
             </div>
-            <div class="num"><input id="ecm" type="number" step="1" min="10" /><span>mm</span></div>
-          </div>
-          <div class="row">
-            <label for="el">Épaisseur de limon</label>
-            <div class="num"><input id="el" type="number" step="1" min="20" /><span>mm</span></div>
-          </div>
-          <div class="row">
-            <label for="hl">Hauteur de limon<small data-show="quart">limon de mur</small></label>
-            <div class="num"><input id="hl" type="number" step="5" min="150" /><span>mm</span></div>
-          </div>
-          <div class="row" data-show="quart">
-            <div>
-              <label for="hlj">Hauteur du limon de jour</label
-              ><label class="check"><input type="checkbox" id="hljAuto" /> automatique</label>
+            <div class="row">
+              <label for="ep">Épaisseur du plancher<small>sol fini à sous-face du plafond</small></label>
+              <div class="num"><input id="ep" type="number" step="5" min="0" /><span>mm</span></div>
             </div>
-            <div class="num"><input id="hlj" type="number" step="5" min="150" /><span>mm</span></div>
           </div>
-          <div class="row" data-show="quart">
-            <label for="ps">Section du poteau<small>carrée, affleurant les limons côté marches</small></label>
-            <div class="num"><input id="ps" type="number" step="5" min="75" /><span>mm</span></div>
+        </details>
+        <details class="sec" data-step="marches" open>
+          <summary><span class="sh">Marches</span><span class="sum" id="sum-marches"></span></summary>
+          <div class="sbody">
+            <p class="hint">Limon choisit le nombre de marches et la ligne de foulée. Ne les changez que si besoin.</p>
+            <div class="row">
+              <div>
+                <label for="n">Nombre de hauteurs</label
+                ><label class="check"><input type="checkbox" id="nAuto" /> automatique</label>
+              </div>
+              <div class="num nounit"><input id="n" type="number" step="1" min="3" max="40" /></div>
+            </div>
+            <div class="row">
+              <div>
+                <label for="f">Ligne de foulée<small>distance depuis le jour</small></label
+                ><label class="check"><input type="checkbox" id="fAuto" /> automatique</label>
+              </div>
+              <div class="num"><input id="f" type="number" step="10" min="100" /><span>mm</span></div>
+            </div>
+            <div class="sub" data-show="quart">
+              <h4>Balancement</h4>
+              <div class="row">
+                <label for="mb">Marches balancées<small>marches touchées par le tournant</small></label>
+                <div class="num nounit"><input id="mb" type="number" step="1" min="2" max="12" /></div>
+              </div>
+              <div class="row">
+                <label for="prog">Progressivité<small id="progTxt">0 % = girons égaux au jour</small></label
+                ><input id="prog" type="range" min="0" max="100" step="5" />
+              </div>
+            </div>
           </div>
-          <div class="row">
-            <label for="pL">Longueur des plateaux<small>bois disponible, dans le fil</small></label>
-            <div class="num"><input id="pL" type="number" step="100" min="500" /><span>mm</span></div>
+        </details>
+        <details class="sec" data-step="bois">
+          <summary><span class="sh">Bois</span><span class="sum" id="sum-bois"></span></summary>
+          <div class="sbody">
+            <p class="hint">Essence et épaisseurs. Les valeurs proposées conviennent à la plupart des escaliers.</p>
+            <div class="row">
+              <label for="ess">Essence</label
+              ><select id="ess">
+                <option value="chene">Chêne</option>
+                <option value="hetre">Hêtre</option>
+                <option value="frene">Frêne</option>
+                <option value="sapin">Sapin</option>
+                <option value="noyer">Noyer</option>
+              </select>
+            </div>
+            <div class="row">
+              <label for="et">Épaisseur de marche</label>
+              <div class="num"><input id="et" type="number" step="1" min="18" /><span>mm</span></div>
+            </div>
+            <div class="row">
+              <label for="deb">Débord de nez<small>recouvrement</small></label>
+              <div class="num"><input id="deb" type="number" step="1" min="0" /><span>mm</span></div>
+            </div>
+            <div class="row">
+              <label for="rn">Rayon du nez<small>arrondi dessus et dessous, 0 = vif</small></label>
+              <div class="num"><input id="rn" type="number" step="1" min="0" /><span>mm</span></div>
+            </div>
+            <div class="row">
+              <div>
+                <label for="ecm">Contremarches</label
+                ><label class="check"><input type="checkbox" id="cm" /> avec</label>
+              </div>
+              <div class="num"><input id="ecm" type="number" step="1" min="10" /><span>mm</span></div>
+            </div>
+            <div class="row">
+              <label for="el">Épaisseur de limon</label>
+              <div class="num"><input id="el" type="number" step="1" min="20" /><span>mm</span></div>
+            </div>
+            <div class="row" data-show="quart">
+              <label for="ps">Section du poteau<small>carrée, affleurant les limons côté marches</small></label>
+              <div class="num"><input id="ps" type="number" step="5" min="75" /><span>mm</span></div>
+            </div>
           </div>
-          <div class="row">
-            <label for="pW">Largeur des plateaux<small>bois disponible</small></label>
-            <div class="num"><input id="pW" type="number" step="10" min="100" /><span>mm</span></div>
+        </details>
+        <details class="sec" data-step="gardecorps">
+          <summary><span class="sh">Garde-corps</span><span class="sum" id="sum-gardecorps"></span></summary>
+          <div class="sbody">
+            <p class="hint">
+              Côté jour, si l'escalier n'est pas entre deux murs. Choisissez « Aucun » s'il est posé à part.
+            </p>
+            <div class="row">
+              <label for="gc">Côté jour<small>main courante à 900 mm, écart libre de 110 mm au plus</small></label
+              ><select id="gc">
+                <option value="aucun">Aucun</option>
+                <option value="balustres">Balustres</option>
+                <option value="lisses">Lisses rampantes</option>
+              </select>
+            </div>
+            <div class="row" data-gc>
+              <label for="gcPose">Pose sur le limon</label
+              ><select id="gcPose">
+                <option value="chant">Dans le chant</option>
+                <option value="anglaise">À l'anglaise</option>
+              </select>
+            </div>
+            <div class="row" data-gc>
+              <label for="mcL">Largeur de main courante</label>
+              <div class="num"><input id="mcL" type="number" step="5" min="30" /><span>mm</span></div>
+            </div>
+            <div class="row" data-gc>
+              <label for="mcH">Hauteur de main courante</label>
+              <div class="num"><input id="mcH" type="number" step="5" min="30" /><span>mm</span></div>
+            </div>
+            <div class="row" data-gc>
+              <label for="bs">Section des balustres<small>carrée ; montants et lisses aussi</small></label>
+              <div class="num"><input id="bs" type="number" step="1" min="20" /><span>mm</span></div>
+            </div>
           </div>
-          <div class="row">
-            <label for="enc">Encastrement<small>marches et contremarches dans les limons</small></label>
-            <div class="num"><input id="enc" type="number" step="1" min="0" max="40" /><span>mm</span></div>
-          </div>
-          <div class="row">
-            <label for="jeu">Jeu d'assemblage<small>par côté, sur les logements</small></label>
-            <div class="num"><input id="jeu" type="number" step="0.1" min="0" max="5" /><span>mm</span></div>
+        </details>
+        <div class="stepper" id="stepper" hidden>
+          <span class="stxt" id="stepTxt"></span>
+          <div class="actions">
+            <button class="btn" id="stPrev" type="button">Précédent</button
+            ><button class="btn primary" id="stNext" type="button">Suivant</button>
           </div>
         </div>
-        <div class="group">
-          <h3>Garde-corps</h3>
-          <div class="row">
-            <label for="gc">Côté jour<small>main courante à 900 mm, écart libre de 110 mm au plus</small></label
-            ><select id="gc">
-              <option value="aucun">Aucun</option>
-              <option value="balustres">Balustres</option>
-              <option value="lisses">Lisses rampantes</option>
-            </select>
-          </div>
-          <div class="row" data-gc>
-            <label for="gcPose">Pose sur le limon</label
-            ><select id="gcPose">
-              <option value="chant">Dans le chant</option>
-              <option value="anglaise">À l'anglaise</option>
-            </select>
-          </div>
-          <div class="row" data-gc>
-            <label for="mcL">Largeur de main courante</label>
-            <div class="num"><input id="mcL" type="number" step="5" min="30" /><span>mm</span></div>
-          </div>
-          <div class="row" data-gc>
-            <label for="mcH">Hauteur de main courante</label>
-            <div class="num"><input id="mcH" type="number" step="5" min="30" /><span>mm</span></div>
-          </div>
-          <div class="row" data-gc>
-            <label for="bs">Section des balustres<small>carrée ; montants et lisses aussi</small></label>
-            <div class="num"><input id="bs" type="number" step="1" min="20" /><span>mm</span></div>
-          </div>
-        </div>
-        <div class="actions">
+        <div class="actions sideacts" id="sideActs">
           <button class="btn" id="share" type="button">Copier le lien du projet</button
           ><button class="btn" id="reset" type="button">Revenir à l'exemple</button
           ><span class="copied" id="sharemsg" hidden></span>
@@ -229,7 +235,6 @@
       </aside>
 
       <main class="main">
-        <section class="printsum" id="printsum"></section>
         <section class="views">
           <div class="view">
             <div class="vhead">
@@ -256,17 +261,19 @@
         <section class="tiles" id="tiles" aria-live="polite"></section>
         <section class="notes" id="notes"></section>
 
-        <section class="sheet">
+        <section class="sheet" id="sheetBox">
           <div class="shead">
             <h2>Fiche des marches</h2>
-            <div style="display: flex; gap: 10px; align-items: baseline">
-              <span class="copied" id="copied" hidden>Fiche copiée</span
-              ><button class="btn" id="copy" type="button">Copier la fiche (CSV)</button
-              ><button class="btn" id="print" type="button">Imprimer la fiche d'atelier</button>
+            <div class="actions">
+              <span class="copied" id="ficheMsg" hidden></span>
+              <label class="visually-hidden" for="ficheFmt">Format de la fiche</label>
+              <select id="ficheFmt" class="fmtsel">
+                <option value="pdf">Fiche PDF</option>
+                <option value="csv">Tableau CSV</option></select
+              ><button class="btn primary" id="ficheDl" type="button">Télécharger</button>
             </div>
           </div>
           <div class="tablewrap"><table id="table"></table></div>
-          <textarea id="csvfb" hidden readonly aria-label="Fiche au format CSV"></textarea>
         </section>
 
         <section class="sheet" id="cnc">
@@ -274,81 +281,145 @@
             <h2>Export CNC</h2>
             <div class="actions">
               <span class="copied" id="dlmsg" hidden></span
-              ><button class="btn primary" id="dl" type="button">Télécharger les DXF (.zip)</button>
+              ><button class="btn primary" id="cncOpen" type="button">Préparer l'export CNC</button
+              ><button class="btn primary" id="dl" type="button" hidden>Télécharger les DXF (.zip)</button
+              ><button class="btn" id="cncClose" type="button" hidden>Replier</button>
             </div>
           </div>
-          <p class="disclaimer">
-            Marches vues de dessus, nez en bas, encastrement compris. Contremarches vues de face, longueur hors tout.
-            Limons développés, vus depuis la face côté marches et couchés dans le sens de la planche, avec les logements
-            à défoncer. Poteau du quart tournant : ses quatre faces, logements et mortaises des limons de jour. Fichiers
-            DXF R12 en millimètres.
+          <p class="disclaimer" id="cncIntro">
+            Fichiers DXF pour la machine : marches, contremarches et limons avec leurs logements, calculés à la demande.
           </p>
-          <div class="notes" id="cncnotes"></div>
-          <div class="cncgrid">
-            <div class="view">
-              <div class="vhead">
-                <h2>Marches</h2>
-                <div class="legend">
-                  <span><i class="lg-cut"></i>découpe</span><span><i class="lg-cm"></i>contremarche</span>
+          <div class="cncbody" id="cncBody" hidden>
+            <div class="group asm">
+              <h3>Assemblage</h3>
+              <div class="asmgrid">
+                <div class="row">
+                  <label for="hl">Hauteur de limon<small data-show="quart">limon de mur</small></label>
+                  <div class="num"><input id="hl" type="number" step="5" min="150" /><span>mm</span></div>
+                </div>
+                <div class="row" data-show="quart">
+                  <div>
+                    <label for="hlj">Hauteur du limon de jour</label
+                    ><label class="check"><input type="checkbox" id="hljAuto" /> automatique</label>
+                  </div>
+                  <div class="num"><input id="hlj" type="number" step="5" min="150" /><span>mm</span></div>
+                </div>
+                <div class="row">
+                  <label for="pL">Longueur des plateaux<small>bois disponible, dans le fil</small></label>
+                  <div class="num"><input id="pL" type="number" step="100" min="500" /><span>mm</span></div>
+                </div>
+                <div class="row">
+                  <label for="pW">Largeur des plateaux<small>bois disponible</small></label>
+                  <div class="num"><input id="pW" type="number" step="10" min="100" /><span>mm</span></div>
+                </div>
+                <div class="row">
+                  <label for="enc">Encastrement<small>marches et contremarches dans les limons</small></label>
+                  <div class="num"><input id="enc" type="number" step="1" min="0" max="40" /><span>mm</span></div>
+                </div>
+                <div class="row">
+                  <label for="jeu">Jeu d'assemblage<small>par côté, sur les logements</small></label>
+                  <div class="num"><input id="jeu" type="number" step="0.1" min="0" max="5" /><span>mm</span></div>
                 </div>
               </div>
-              <div class="pv" id="pvT"></div>
             </div>
-            <div class="view">
-              <div class="vhead">
-                <h2>Limons</h2>
-                <div class="legend">
-                  <span><i class="lg-cut"></i>découpe</span><span><i class="lg-def"></i>défonce</span>
+            <p class="disclaimer">
+              Marches vues de dessus, nez en bas, encastrement compris. Contremarches vues de face, longueur hors tout.
+              Limons développés, vus depuis la face côté marches et couchés dans le sens de la planche, avec les
+              logements à défoncer. Poteau du quart tournant : ses quatre faces, logements et mortaises des limons de
+              jour. Fichiers DXF R12 en millimètres.
+            </p>
+            <div class="notes" id="cncnotes"></div>
+            <div class="cncgrid">
+              <div class="view">
+                <div class="vhead">
+                  <h2>Marches</h2>
+                  <div class="legend">
+                    <span><i class="lg-cut"></i>découpe</span><span><i class="lg-cm"></i>contremarche</span>
+                  </div>
                 </div>
+                <div class="pv" id="pvT"></div>
               </div>
-              <div class="pv" id="pvB"></div>
-            </div>
-            <div class="view wide" id="pvRbox">
-              <div class="vhead">
-                <h2>Contremarches</h2>
-                <div class="legend">
-                  <span><i class="lg-cut"></i>découpe</span>
+              <div class="view">
+                <div class="vhead">
+                  <h2>Limons</h2>
+                  <div class="legend">
+                    <span><i class="lg-cut"></i>découpe</span><span><i class="lg-def"></i>défonce</span>
+                  </div>
                 </div>
+                <div class="pv" id="pvB"></div>
               </div>
-              <div class="pv short" id="pvR"></div>
-            </div>
-            <div class="view wide" id="pvGbox">
-              <div class="vhead">
-                <h2>Garde-corps</h2>
-                <div class="legend">
-                  <span><i class="lg-cut"></i>découpe</span><span><i class="lg-mor"></i>mortaise</span>
+              <div class="view wide" id="pvRbox">
+                <div class="vhead">
+                  <h2>Contremarches</h2>
+                  <div class="legend">
+                    <span><i class="lg-cut"></i>découpe</span>
+                  </div>
                 </div>
+                <div class="pv short" id="pvR"></div>
               </div>
-              <div class="pv short" id="pvG"></div>
-            </div>
-            <div class="view wide" id="pvPbox">
-              <div class="vhead">
-                <h2>Poteau</h2>
-                <div class="legend">
-                  <span><i class="lg-cut"></i>découpe</span><span><i class="lg-def"></i>défonce</span
-                  ><span><i class="lg-mor"></i>mortaise</span>
+              <div class="view wide" id="pvGbox">
+                <div class="vhead">
+                  <h2>Garde-corps</h2>
+                  <div class="legend">
+                    <span><i class="lg-cut"></i>découpe</span><span><i class="lg-mor"></i>mortaise</span>
+                  </div>
                 </div>
+                <div class="pv short" id="pvG"></div>
               </div>
-              <div class="pv short" id="pvP"></div>
+              <div class="view wide" id="pvPbox">
+                <div class="vhead">
+                  <h2>Poteau</h2>
+                  <div class="legend">
+                    <span><i class="lg-cut"></i>découpe</span><span><i class="lg-def"></i>défonce</span
+                    ><span><i class="lg-mor"></i>mortaise</span>
+                  </div>
+                </div>
+                <div class="pv short" id="pvP"></div>
+              </div>
             </div>
+            <div class="tablewrap"><table id="parts"></table></div>
+            <div class="actions">
+              <button class="btn" id="cpT" type="button">Copier marches.dxf</button
+              ><button class="btn" id="cpR" type="button">Copier contremarches.dxf</button
+              ><button class="btn" id="cpB" type="button">Copier limons.dxf</button
+              ><button class="btn" id="cpP" type="button">Copier poteau.dxf</button
+              ><button class="btn" id="cpG" type="button">Copier garde-corps.dxf</button
+              ><span class="copied" id="cpmsg" hidden></span>
+            </div>
+            <textarea id="dxffb" hidden readonly aria-label="Contenu DXF"></textarea>
           </div>
-          <div class="tablewrap"><table id="parts"></table></div>
-          <div class="actions">
-            <button class="btn" id="cpT" type="button">Copier marches.dxf</button
-            ><button class="btn" id="cpR" type="button">Copier contremarches.dxf</button
-            ><button class="btn" id="cpB" type="button">Copier limons.dxf</button
-            ><button class="btn" id="cpP" type="button">Copier poteau.dxf</button
-            ><button class="btn" id="cpG" type="button">Copier garde-corps.dxf</button
-            ><span class="copied" id="cpmsg" hidden></span>
-          </div>
-          <textarea id="dxffb" hidden readonly aria-label="Contenu DXF"></textarea>
-          <p class="disclaimer">
-            Girons mesurés de nez à nez. Repères de confort usuels (Blondel 600 à 640 mm, hauteur 160 à 185 mm, giron
-            d'au moins 240 mm, échappée d'au moins 2 000 mm et jamais sous 1 900 mm) : à confronter au NF DTU 36.3 et
-            aux exigences du chantier avant fabrication.
-          </p>
         </section>
+        <p class="disclaimer">
+          Girons mesurés de nez à nez. Repères de confort usuels (Blondel 600 à 640 mm, hauteur 160 à 185 mm, giron d'au
+          moins 240 mm, échappée d'au moins 2 000 mm et jamais sous 1 900 mm) : à confronter au NF DTU 36.3 et aux
+          exigences du chantier avant fabrication.
+        </p>
       </main>
     </div>
+
+    <dialog id="projets" class="dlg" aria-labelledby="pjTitle">
+      <div class="shead">
+        <h2 id="pjTitle">Mes projets</h2>
+        <button class="btn" id="pjClose" type="button">Fermer</button>
+      </div>
+      <div class="newp">
+        <label for="pjNom">Nouveau projet</label>
+        <input id="pjNom" type="text" maxlength="80" placeholder="Escalier Dupont" />
+        <div class="actions">
+          <button class="btn primary" id="pjGuide" type="button">Nouveau projet pas à pas</button
+          ><button class="btn" id="pjFull" type="button">Nouveau projet complet</button>
+        </div>
+      </div>
+      <ul class="plist" id="pjList"></ul>
+      <div class="actions">
+        <button class="btn" id="pjImport" type="button">Ouvrir un fichier .limon</button
+        ><button class="btn" id="pjExport" type="button">Enregistrer ce projet en fichier .limon</button
+        ><span class="copied" id="pjMsg" hidden></span>
+      </div>
+      <input type="file" id="pjFile" accept=".limon,application/json" hidden />
+      <p class="disclaimer">
+        Les projets sont gardés dans ce navigateur. Enregistrez-les en fichier pour les retrouver sur un autre appareil.
+      </p>
+    </dialog>
   </body>
 </html>

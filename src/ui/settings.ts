@@ -2,7 +2,6 @@ import { fmt } from "../core/format";
 import {
   BOOLEAN_KEYS,
   NUMERIC_KEYS,
-  sanitizeParams,
   type Essence,
   type Forme,
   type GardeCorps,
@@ -12,24 +11,6 @@ import {
 } from "../core/params";
 import type { InputError, Stair } from "../core/stair";
 import { byId } from "./dom";
-
-const STORAGE_KEY = "limon-v2";
-
-export function loadParams(): Params {
-  try {
-    return sanitizeParams(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"));
-  } catch {
-    return sanitizeParams(null);
-  }
-}
-
-export function saveParams(p: Params): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
-  } catch {
-    // Stockage indisponible (navigation privée) : les réglages ne survivent pas au rechargement.
-  }
-}
 
 const input = (id: string) => byId<HTMLInputElement>(id);
 
@@ -90,26 +71,6 @@ export function showFieldErrors(errors: readonly InputError[]): void {
   });
 }
 
-/** Réglages visibles du formulaire, pour la fiche imprimée (la colonne de réglages n'est pas imprimée). */
-export function settingsSummaryHTML(): string {
-  const forme = document.querySelector<HTMLInputElement>('input[name="forme"]:checked');
-  const rows = [...document.querySelectorAll<HTMLElement>(".side .row")]
-    .filter((row) => !row.closest("[hidden]"))
-    .map((row) => {
-      const name = row.querySelector("label")!.childNodes[0]!.textContent!.trim();
-      const ctl = row.querySelector<HTMLInputElement | HTMLSelectElement>("select, input:not([type=checkbox])")!;
-      const check = row.querySelector<HTMLInputElement>("input[type=checkbox]");
-      let v =
-        ctl instanceof HTMLSelectElement
-          ? ctl.selectedOptions[0]!.text
-          : `${ctl.value}${ctl.type === "range" ? " %" : ctl.nextElementSibling ? ` ${ctl.nextElementSibling.textContent}` : ""}`;
-      if (check?.id === "cm" && !check.checked) v = "sans";
-      else if (check?.checked && check.id !== "cm") v += " (auto)";
-      return `<div><dt>${name}</dt><dd>${v}</dd></div>`;
-    });
-  return `<h2>Escalier ${forme ? forme.labels![0]!.textContent!.replace(/\s+/g, " ").trim().toLowerCase() : ""}</h2><dl>${rows.join("")}</dl>`;
-}
-
 /** Champs propres à la forme, champs automatiques grisés et valeurs calculées affichées. */
 export function syncInputs(p: Params, stair: Stair | null): void {
   const quart = p.forme !== "droit";
@@ -121,10 +82,12 @@ export function syncInputs(p: Params, stair: Stair | null): void {
   input("f").disabled = p.fAuto;
   input("hlj").disabled = p.hljAuto;
   input("ecm").disabled = !p.cm;
+  for (const k of ["tL", "tX", "tY"] as const) input(k).disabled = p.tAuto;
   if (stair) {
     if (p.nAuto) input("n").value = String(stair.n);
     if (p.fAuto) input("f").value = String(Math.round(stair.f));
     if (p.hljAuto && stair.quart) input("hlj").value = String(stair.hljAuto);
+    if (p.tAuto) for (const k of ["tL", "tX", "tY"] as const) input(k).value = String(Math.round(stair.treDims[k]));
   }
   const bal = stair?.bal;
   const capped = bal && bal.pr + 0.01 < bal.want;
