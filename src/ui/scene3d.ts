@@ -203,15 +203,19 @@ export class Scene3D {
     if (!this.last) return null;
     const root = document.documentElement,
       prev = root.getAttribute("data-theme");
+    // Vue masquée (téléphone, autre onglet) : on rend à une taille fixe le temps de la capture.
+    const hidden = !this.host.clientWidth || !this.host.clientHeight;
+    if (hidden) this.setViewSize(960, 640);
     root.setAttribute("data-theme", "light");
     this.applyTheme();
     const url = this.renderer.domElement.toDataURL("image/jpeg", 0.9);
+    const { width: w, height: h } = this.renderer.domElement;
     if (prev === null) root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", prev);
     this.applyTheme();
+    if (hidden) this.setViewSize(this.host.clientWidth || 300, this.host.clientHeight || 150);
     const bin = atob(url.slice(url.indexOf(",") + 1));
     const data = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    const { width: w, height: h } = this.renderer.domElement;
     return w && h ? { data, w, h } : null;
   }
 
@@ -219,10 +223,14 @@ export class Scene3D {
     const w = this.host.clientWidth,
       h = this.host.clientHeight;
     if (!w || !h) return;
+    this.setViewSize(w, h);
+    this.render();
+  }
+
+  private setViewSize(w: number, h: number): void {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.render();
   }
 
   private render(): void {
