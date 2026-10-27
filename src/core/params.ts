@@ -42,6 +42,8 @@ export interface Params {
   hljAuto: boolean;
   /** Hauteur du limon de jour (quart tournant). */
   hlj: number;
+  /** Trémie à calculer : la plus petite qui donne l'échappée visée. */
+  tAuto: boolean;
   /** Longueur de trémie (droit). */
   tL: number;
   /** Trémie côté arrivée (quart). */
@@ -79,6 +81,7 @@ export const DEFAULTS: Readonly<Params> = {
   hl: 340,
   hljAuto: true,
   hlj: 470,
+  tAuto: false,
   tL: 3200,
   tX: 1850,
   tY: 2550,
@@ -116,7 +119,7 @@ export const NUMERIC_KEYS = [
 ] as const satisfies readonly (keyof Params)[];
 export type NumericKey = (typeof NUMERIC_KEYS)[number];
 
-export const BOOLEAN_KEYS = ["fAuto", "nAuto", "hljAuto", "cm"] as const satisfies readonly (keyof Params)[];
+export const BOOLEAN_KEYS = ["fAuto", "nAuto", "hljAuto", "cm", "tAuto"] as const satisfies readonly (keyof Params)[];
 
 /** Fusionne des réglages enregistrés (non fiables) avec les valeurs par défaut, champ par champ. */
 export function sanitizeParams(raw: unknown): Params {

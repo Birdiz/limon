@@ -53,10 +53,12 @@ export function syncInputs(p: Params, stair: Stair | null): void {
   input("f").disabled = p.fAuto;
   input("hlj").disabled = p.hljAuto;
   input("ecm").disabled = !p.cm;
+  for (const k of ["tL", "tX", "tY"] as const) input(k).disabled = p.tAuto;
   if (stair) {
     if (p.nAuto) input("n").value = String(stair.n);
     if (p.fAuto) input("f").value = String(Math.round(stair.f));
     if (p.hljAuto && stair.quart) input("hlj").value = String(stair.hljAuto);
+    if (p.tAuto) for (const k of ["tL", "tX", "tY"] as const) input(k).value = String(Math.round(stair.treDims[k]));
   }
   byId("progTxt").textContent = `${p.prog} % · 0 % = girons égaux au jour`;
 }

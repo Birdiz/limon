@@ -145,6 +145,10 @@ export interface Stair {
   newel: { c: Pt; size: number; h: number } | null;
   slab: Rect;
   tre: Rect;
+  /** Trémie calculée plutôt que saisie. */
+  tAuto: boolean;
+  /** Cotes de la trémie retenue, saisies ou calculées. */
+  treDims: { tL: number; tX: number; tY: number };
   /** Hauteur de la sous-face du plancher. */
   ceil: number;
   ech: Headroom | null;
@@ -443,9 +447,10 @@ export function compute(p: Params): ComputeResult {
   const slab: Rect = quart
     ? { x0: -el - 300, x1: B + 900, y0: -400, y1: A + el + 300 }
     : { x0: -el - 300, x1: W + el + 300, y0: -400, y1: L + 900 };
-  const tre: Rect = quart
-    ? { x0: Math.max(-el, B - p.tX), x1: B, y0: Math.max(-300, A + el - p.tY), y1: A + el }
-    : { x0: -el, x1: W + el, y0: Math.max(-300, L - p.tL), y1: L };
+  const treOf = (tL: number, tX: number, tY: number): Rect =>
+    quart
+      ? { x0: Math.max(-el, B - tX), x1: B, y0: Math.max(-300, A + el - tY), y1: A + el }
+      : { x0: -el, x1: W + el, y0: Math.max(-300, L - tL), y1: L };
   // Échappée : distance verticale entre la ligne des nez et la sous-face du plancher, sur toute la largeur.
   const ceil = H - p.ep;
   const headroom = (t: Rect): Headroom | null => {
@@ -483,6 +488,15 @@ export function compute(p: Params): ComputeResult {
     }
     return ceil10(hi);
   };
+  // Trémie à calculer : la plus courte qui suffit ; en quart tournant, sur tout le côté arrivée.
+  const treDims = { tL: p.tL, tX: p.tX, tY: p.tY };
+  if (p.tAuto) {
+    if (quart) {
+      treDims.tX = B + el;
+      treDims.tY = minOpening((v) => treOf(0, treDims.tX, v), A + el + 300) ?? A + el + 300;
+    } else treDims.tL = minOpening((v) => treOf(v, 0, 0), L + 300) ?? L + 300;
+  }
+  const tre = treOf(treDims.tL, treDims.tX, treDims.tY);
   const ech = headroom(tre);
   const tLmin = quart ? null : minOpening((v) => ({ ...tre, y0: Math.max(-300, L - v) }), L + 300);
   const tYmin = quart ? minOpening((v) => ({ ...tre, y0: Math.max(-300, A + el - v) }), A + el + 300) : null;
@@ -554,6 +568,13 @@ export function compute(p: Params): ComputeResult {
       st.ech,
       `Échappée de ${fmt(ech.c)} mm au-dessus de la marche ${ech.j}${fixes ? ` : pour 2 000 mm, ${fixes}` : ""}.`,
     ]);
+  } else if (p.tAuto) {
+    N.push([
+      "info",
+      quart
+        ? `Trémie à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté départ, sur tout le côté arrivée (${fmt(treDims.tX)} mm).`
+        : `Trémie à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tL)} mm de long.`,
+    ]);
   } else if (quart ? tYmin != null : tLmin != null) {
     N.push([
       "info",
@@ -602,6 +623,8 @@ export function compute(p: Params): ComputeResult {
       newel,
       slab,
       tre,
+      tAuto: p.tAuto,
+      treDims,
       ceil,
       ech,
       tLmin,

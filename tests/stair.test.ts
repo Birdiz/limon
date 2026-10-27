@@ -50,6 +50,31 @@ describe("escalier droit", () => {
   });
 });
 
+describe("trémie à calculer", () => {
+  const free = (R: ReturnType<typeof stairOf>) => R.ech === null || R.ech.c >= ECHAPPEE;
+
+  it("prend la plus courte trémie qui donne l'échappée (droit)", () => {
+    const R = stairOf({ forme: "droit", tAuto: true });
+    expect(R.tAuto).toBe(true);
+    expect(free(R)).toBe(true);
+    expect(free(stairOf({ forme: "droit", tL: R.treDims.tL - 10 }))).toBe(false);
+    expect(R.notes.some(([s, t]) => s === "info" && t.startsWith("Trémie à prévoir"))).toBe(true);
+  });
+
+  it("ouvre tout le côté arrivée et cherche le côté départ (quart tournant)", () => {
+    const R = stairOf({ forme: "quart-d", tAuto: true });
+    expect(R.treDims.tX).toBe(R.B + R.params.el);
+    expect(R.tre.x0).toBe(-R.params.el);
+    expect(free(R)).toBe(true);
+    expect(free(stairOf({ forme: "quart-d", tX: R.treDims.tX, tY: R.treDims.tY - 10 }))).toBe(false);
+  });
+
+  it("garde la trémie saisie sinon", () => {
+    const R = stairOf({ forme: "droit" });
+    expect(R.treDims).toEqual({ tL: DEFAULTS.tL, tX: DEFAULTS.tX, tY: DEFAULTS.tY });
+  });
+});
+
 describe("quart tournant", () => {
   const D = stairOf({ forme: "quart-d" });
   const G = stairOf({ forme: "quart-g" });
