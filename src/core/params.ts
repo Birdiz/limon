@@ -54,6 +54,10 @@ export interface Params {
   enc: number;
   /** Jeu d'assemblage par côté, sur les logements. */
   jeu: number;
+  /** Longueur des plateaux disponibles, dans le fil. */
+  pL: number;
+  /** Largeur des plateaux disponibles. */
+  pW: number;
 }
 
 export const DEFAULTS: Readonly<Params> = {
@@ -85,10 +89,15 @@ export const DEFAULTS: Readonly<Params> = {
   ep: 200,
   enc: 15,
   jeu: 0.5,
+  pL: 5000,
+  pW: 600,
 };
 
 export const FORMES: readonly Forme[] = ["droit", "quart-g", "quart-d"];
 export const ESSENCES: readonly Essence[] = ["chene", "hetre", "frene", "sapin", "noyer"];
+
+/** Masse volumique moyenne à 12 % d'humidité, en kg/m³ (ordre de grandeur pour le poids). */
+export const DENSITE: Record<Essence, number> = { chene: 710, hetre: 720, frene: 700, sapin: 450, noyer: 650 };
 
 export const NUMERIC_KEYS = [
   "H",
@@ -113,6 +122,8 @@ export const NUMERIC_KEYS = [
   "ep",
   "enc",
   "jeu",
+  "pL",
+  "pW",
 ] as const satisfies readonly (keyof Params)[];
 export type NumericKey = (typeof NUMERIC_KEYS)[number];
 

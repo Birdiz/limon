@@ -11,9 +11,10 @@ import { buildCNC, tightBoards, type CNC } from "./cnc/build";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { DEFAULTS, type Params } from "./core/params";
+import { paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
 import { compute, type ComputeResult } from "./core/stair";
-import { cutListHTML, previewSVG, stringerFitHTML } from "./ui/cnc-panel";
+import { cutListHTML, previewSVG, stockFitHTML, stringerFitHTML } from "./ui/cnc-panel";
 import { byId, copyText, downloadBytes, flash } from "./ui/dom";
 import { planSVG } from "./ui/plan";
 import { headlineHTML, notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
@@ -23,12 +24,14 @@ import {
   missingErrors,
   readInputs,
   saveParams,
+  settingsSummaryHTML,
   showFieldErrors,
   syncInputs,
   writeInputs,
 } from "./ui/settings";
 
-let params: Params = loadParams();
+// Un lien de projet l'emporte sur les réglages enregistrés dans le navigateur.
+let params: Params = paramsFromHash(location.hash) ?? loadParams();
 let current: ComputeResult | null = null;
 let cnc: CNC | null = null;
 let scene: Scene3D | null = null;
@@ -55,6 +58,7 @@ function render(result: ComputeResult): void {
   byId("tiles").innerHTML = tilesHTML(R);
   byId("notes").innerHTML = notesHTML(R.notes);
   byId("headline").innerHTML = headlineHTML(R);
+  byId("printsum").innerHTML = settingsSummaryHTML();
   byId("table").innerHTML = treadsTableHTML(R);
 
   cnc = buildCNC(R);
@@ -63,7 +67,7 @@ function render(result: ComputeResult): void {
   byId("pvB").innerHTML = previewSVG(cnc.boardEnts, "Aperçu des limons développés");
   byId("pvRbox").hidden = byId("cpR").hidden = !R.params.cm;
   byId("pvR").innerHTML = previewSVG(cnc.riserEnts, "Aperçu des contremarches à découper");
-  byId("cncnotes").innerHTML = stringerFitHTML(cnc.boardParts, R);
+  byId("cncnotes").innerHTML = stringerFitHTML(cnc.boardParts, R) + stockFitHTML(cnc, R);
   byId("parts").innerHTML = cutListHTML(cnc, R);
   scene?.draw(R);
 }
@@ -73,6 +77,8 @@ function update(): void {
   const read = readInputs(params);
   params = read.params;
   saveParams(params);
+  const hash = paramsToHash(params);
+  if (location.hash.slice(1) !== hash) history.replaceState(null, "", hash ? `#${hash}` : location.pathname);
   current = compute(params);
   syncInputs(params, current.ok ? current.stair : null);
   showFieldErrors([...missingErrors(params, read.missing), ...(current.ok ? [] : current.errors)]);
@@ -95,6 +101,24 @@ byId("reset").addEventListener("click", () => {
   writeInputs(params);
   schedule();
 });
+byId("notes").addEventListener("click", (ev) => {
+  const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>("button[data-fix]");
+  const fix = btn && current?.ok ? current.stair.notes[Number(btn.dataset.fix)]?.[2] : undefined;
+  if (!fix) return;
+  params = { ...params, ...fix.set };
+  writeInputs(params);
+  schedule();
+});
+window.addEventListener("hashchange", () => {
+  const p = paramsFromHash(location.hash);
+  if (!p) return;
+  params = p;
+  writeInputs(params);
+  schedule();
+});
+byId("share").addEventListener("click", async () => {
+  if (await copyText(location.href, byId<HTMLTextAreaElement>("linkfb"))) flash(byId("sharemsg"), "Lien copié");
+});
 byId("v3d").addEventListener("click", () => scene?.viewPerspective());
 byId("vtop").addEventListener("click", () => scene?.viewTop());
 
@@ -109,6 +133,7 @@ const confirmTight = (c: CNC): boolean =>
   window.confirm(
     "Des logements débordent sous le bord du limon : ces limons ne sont pas fabricables tels quels. Exporter quand même ?",
   );
+byId("print").addEventListener("click", () => window.print());
 byId("dl").addEventListener("click", () => {
   if (!current?.ok || !cnc || !confirmTight(cnc)) return;
   downloadBytes(exportZip(current.stair, cnc), exportFilename(current.stair), "application/zip");

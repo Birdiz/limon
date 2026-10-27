@@ -1,6 +1,7 @@
-import { tightBoards, type BoardPart, type CNC, type TreadPart } from "../cnc/build";
+import { oversize, stockVolume, tightBoards, type BoardPart, type CNC, type TreadPart } from "../cnc/build";
 import type { Entity } from "../cnc/entities";
 import { ceil10, fmt } from "../core/format";
+import { DENSITE } from "../core/params";
 import type { Stair } from "../core/stair";
 import { V, bbox, type Pt, type Vertex } from "../core/vec";
 
@@ -54,6 +55,37 @@ export function stringerFitHTML(boards: readonly BoardPart[], R: Stair): string 
     : `<div class="note ok">Tous les logements tiennent dans les limons, avec au moins 20 mm de bois dessous${R.quart ? ` (limon de jour de ${fmt(R.hlj)} mm)` : ""}.</div>`;
 }
 
+/** Alerte si des pièces dépassent les plateaux disponibles. */
+export function stockFitHTML(cnc: CNC, R: Stair): string {
+  const { pL, pW } = R.params;
+  const big = oversize(cnc, pL, pW);
+  const plateau = `plateau de ${fmt(pL)} × ${fmt(pW)} mm`;
+  const list = (ps: readonly TreadPart[]) => ps.map((q) => q.j).join(", ");
+  const notes: string[] = [];
+  const glued = (ps: readonly TreadPart[], one: string, many: string) => {
+    const wide = ps.filter((q) => q.l > pW + 0.5),
+      long = ps.filter((q) => q.L > pL + 0.5);
+    if (wide.length)
+      notes.push(
+        `${wide.length > 1 ? many : one} ${list(wide)} plus ${one === "Marche" ? "profonde" : "haute"}${wide.length > 1 ? "s" : ""} que le plateau (jusqu'à ${fmt(Math.ceil(Math.max(...wide.map((q) => q.l))))} mm pour ${fmt(pW)}) : à reconstituer en lames collées, fil le long du nez.`,
+      );
+    if (long.length)
+      notes.push(
+        `${long.length > 1 ? many : one} ${list(long)} plus longue${long.length > 1 ? "s" : ""} que le plateau (jusqu'à ${fmt(Math.ceil(Math.max(...long.map((q) => q.L))))} mm pour ${fmt(pL)}).`,
+      );
+  };
+  glued(big.treads, "Marche", "Marches");
+  glued(big.risers, "Contremarche", "Contremarches");
+  big.boards.forEach((b) =>
+    notes.push(
+      `${b.name.charAt(0)}${b.name.slice(1).toLowerCase()} (${fmt(Math.ceil(b.L))} × ${fmt(Math.ceil(b.l))} mm) plus grand que le ${plateau} : à abouter ou à débiter dans un plateau plus grand.`,
+    ),
+  );
+  return notes.length
+    ? notes.map((t) => `<div class="note warn">${t}</div>`).join("")
+    : `<div class="note ok">Toutes les pièces tiennent dans un ${plateau}.</div>`;
+}
+
 interface CutRow {
   name: string;
   q: number;
@@ -101,6 +133,16 @@ export function cutListHTML(cnc: CNC, R: Stair): string {
         (r) => `<tr><td>${r.name}</td><td>${r.q}</td><td>${fmt(r.L)}</td><td>${fmt(r.l)}</td><td>${fmt(r.e)}</td></tr>`,
       )
       .join("") +
-    "</tbody>"
+    "</tbody>" +
+    `<tfoot><tr><td colspan="5">${volumeText(cnc, R)}</td></tr></tfoot>`
   );
+}
+
+const ESSENCE_LABEL = { chene: "chêne", hetre: "hêtre", frene: "frêne", sapin: "sapin", noyer: "noyer" } as const;
+
+/** Volume brut et poids approximatif selon l'essence. */
+export function volumeText(cnc: CNC, R: Stair): string {
+  const v = stockVolume(cnc, R),
+    ess = R.params.ess;
+  return `Volume brut débité : ${fmt(v, 3)} m³ de ${ESSENCE_LABEL[ess]}, soit environ ${fmt(Math.round((v * DENSITE[ess]) / 5) * 5)} kg (${fmt(DENSITE[ess])} kg/m³).`;
 }

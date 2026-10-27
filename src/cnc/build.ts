@@ -32,6 +32,25 @@ export interface BoardPart {
 /** Limons dont des logements débordent sous le bord : moins de 20 mm de bois sous le plus bas. */
 export const tightBoards = (boards: readonly BoardPart[]): BoardPart[] => boards.filter((b) => b.need > b.hl + 0.5);
 
+type Piece = Pick<TreadPart, "L" | "l">;
+
+/** Pièces plus grandes qu'un plateau de pL (dans le fil) sur pW. */
+export function oversize(cnc: CNC, pL: number, pW: number) {
+  const big = (q: Piece) => q.L > pL + 0.5 || q.l > pW + 0.5;
+  return {
+    treads: cnc.treadParts.filter(big),
+    risers: cnc.riserParts.filter(big),
+    boards: cnc.boardParts.filter(big),
+  };
+}
+
+/** Volume brut débité, en m³ : rectangle de débit de chaque pièce × son épaisseur. */
+export function stockVolume(cnc: CNC, R: Stair): number {
+  const p = R.params;
+  const sum = (list: readonly Piece[], e: number) => list.reduce((v, q) => v + q.L * q.l * e, 0);
+  return (sum(cnc.boardParts, p.el) + sum(cnc.treadParts, p.et) + sum(cnc.riserParts, p.ecm)) / 1e9;
+}
+
 export interface CNC {
   treadEnts: Entity[];
   riserEnts: Entity[];

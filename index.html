@@ -170,6 +170,14 @@
             <div class="num"><input id="hlj" type="number" step="5" min="150" /><span>mm</span></div>
           </div>
           <div class="row">
+            <label for="pL">Longueur des plateaux<small>bois disponible, dans le fil</small></label>
+            <div class="num"><input id="pL" type="number" step="100" min="500" /><span>mm</span></div>
+          </div>
+          <div class="row">
+            <label for="pW">Largeur des plateaux<small>bois disponible</small></label>
+            <div class="num"><input id="pW" type="number" step="10" min="100" /><span>mm</span></div>
+          </div>
+          <div class="row">
             <label for="enc">Encastrement<small>marches et contremarches dans les limons</small></label>
             <div class="num"><input id="enc" type="number" step="1" min="0" max="40" /><span>mm</span></div>
           </div>
@@ -178,10 +186,16 @@
             <div class="num"><input id="jeu" type="number" step="0.1" min="0" max="5" /><span>mm</span></div>
           </div>
         </div>
-        <button class="btn" id="reset" type="button">Revenir à l'exemple</button>
+        <div class="actions">
+          <button class="btn" id="share" type="button">Copier le lien du projet</button
+          ><button class="btn" id="reset" type="button">Revenir à l'exemple</button
+          ><span class="copied" id="sharemsg" hidden></span>
+        </div>
+        <textarea id="linkfb" hidden readonly aria-label="Lien du projet"></textarea>
       </aside>
 
       <main class="main">
+        <section class="printsum" id="printsum"></section>
         <section class="views">
           <div class="view">
             <div class="vhead">
@@ -213,7 +227,8 @@
             <h2>Fiche des marches</h2>
             <div style="display: flex; gap: 10px; align-items: baseline">
               <span class="copied" id="copied" hidden>Fiche copiée</span
-              ><button class="btn" id="copy" type="button">Copier la fiche (CSV)</button>
+              ><button class="btn" id="copy" type="button">Copier la fiche (CSV)</button
+              ><button class="btn" id="print" type="button">Imprimer la fiche d'atelier</button>
             </div>
           </div>
           <div class="tablewrap"><table id="table"></table></div>

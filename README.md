@@ -6,6 +6,9 @@ Calcul et dessin d'escaliers en bois pour menuisiers, sur le web : escalier droi
 
 - **Calcul** : nombre de hauteurs automatique (Blondel 2h + g ≈ 630 mm), ligne de foulée, balancement des marches dans le quart tournant.
 - **Trémie et échappée** : contrôle de la hauteur libre sous le plancher (alerte sous 2 000 mm, erreur sous 1 900 mm) et trémie minimale.
+- **Corrections chiffrées** : quand une règle n'est pas tenue, l'outil propose la valeur qui la rétablit (reculement ou longueur côté départ, marches balancées, hauteur de limon, trémie), applicable d'un clic.
+- **Débit** : alerte quand une pièce dépasse les plateaux disponibles, volume brut et poids selon l'essence.
+- **Lien de projet et fiche d'atelier** : les réglages qui diffèrent de l'exemple vont dans l'adresse de la page (après le `#`) ; la fiche d'atelier s'imprime avec les réglages, le plan, les contrôles et la liste de débit.
 - **Plan et 3D** : plan coté en SVG, vue 3D Three.js avec limons, poteau, marches et contremarches.
 - **Export CNC** : zip contenant `marches.dxf`, `limons.dxf`, `contremarches.dxf` (si l'escalier en a), la fiche des marches en CSV et une notice.
   - Nez arrondi et jeu d'assemblage réglables ; le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.

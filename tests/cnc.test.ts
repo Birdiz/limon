@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCNC, tightBoards } from "../src/cnc/build";
+import { buildCNC, oversize, stockVolume, tightBoards } from "../src/cnc/build";
 import { toDXF } from "../src/cnc/dxf";
 import { exportFiles, exportFilename, readme } from "../src/cnc/package";
 import { treadsCSV } from "../src/core/sheet";
@@ -66,5 +66,29 @@ describe("logements sous le bord du limon", () => {
   it("repère les limons de mur trop étroits pour des marches plus hautes", () => {
     const tight = tightBoards(buildCNC(stairOf({ forme: "quart-d", H: 3200 })).boardParts);
     expect(tight.map((b) => b.name)).toEqual(["LIMON DE MUR 1/2", "LIMON DE MUR 2/2"]);
+  });
+});
+
+describe("plateaux et volume", () => {
+  it("fait tenir l'exemple dans les plateaux par défaut", () => {
+    for (const forme of ["droit", "quart-g", "quart-d"] as const) {
+      const R = stairOf({ forme });
+      expect(oversize(buildCNC(R), R.params.pL, R.params.pW)).toEqual({ treads: [], risers: [], boards: [] });
+    }
+  });
+
+  it("repère les marches trop profondes et les limons trop longs", () => {
+    const big = oversize(buildCNC(stairOf({ forme: "quart-d" })), 3000, 520);
+    expect(big.treads.map((q) => q.j)).toEqual([9]);
+    expect(big.risers).toEqual([]);
+    expect(big.boards.map((b) => b.name)).toEqual(["LIMON DE MUR 1/2"]);
+  });
+
+  it("additionne le volume brut de chaque pièce", () => {
+    // Escalier droit : 2 limons 4 567 × 280 × 45, 14 marches 880 × 313 × 40, 15 contremarches 880 × 140 × 22.
+    const R = stairOf({ forme: "droit" });
+    expect(stockVolume(buildCNC(R), R)).toBeCloseTo(0.31, 2);
+    const sans = stairOf({ forme: "droit", cm: false });
+    expect(stockVolume(buildCNC(sans), sans)).toBeLessThan(0.28);
   });
 });

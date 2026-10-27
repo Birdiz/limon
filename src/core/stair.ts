@@ -9,7 +9,12 @@ import { V, clamp, interp, type Pt, type Vertex } from "./vec";
 
 export type Status = "ok" | "warn" | "bad";
 export type NoteLevel = Status | "info";
-export type Note = [NoteLevel, string];
+/** Correction proposée avec une note : réglages à appliquer d'un clic. */
+export interface Fix {
+  set: Partial<Params>;
+  label: string;
+}
+export type Note = [level: NoteLevel, text: string, fix?: Fix | undefined];
 
 /** Ligne de nez k : du point Q sur le jour, par le point P de la ligne de foulée, jusqu'au point O sur le limon extérieur. */
 export interface NoseLine {
@@ -171,6 +176,33 @@ export const ECHAPPEE = 2000;
 /** Hauteur du bord haut des limons au-dessus de la ligne des nez. */
 export const LIFT = 50;
 
+/** Statuts de confort d'une hauteur de marche h et d'un giron g. */
+export function comfortStatus(h: number, g: number): Pick<Stair["st"], "h" | "g" | "bl" | "pente"> {
+  const blondel = 2 * h + g,
+    pente = (Math.atan2(h, g) * 180) / Math.PI;
+  return {
+    h: h > 200 ? "bad" : h > 185 || h < 155 ? "warn" : "ok",
+    g: g < 210 ? "bad" : g < 240 || g > 320 ? "warn" : "ok",
+    bl: blondel < 580 || blondel > 660 ? "bad" : blondel < 600 || blondel > 640 ? "warn" : "ok",
+    pente: pente > 45 ? "bad" : pente > 38 ? "warn" : "ok",
+  };
+}
+
+const comfortable = (H: number, Lw: number, n: number) =>
+  Object.values(comfortStatus(H / n, Lw / (n - 1))).every((s) => s === "ok");
+
+/** Longueur de ligne de foulée confortable la plus proche de Lw (pas de 10 mm, la plus courte à égalité),
+    avec le nombre de hauteurs imposé ou, à défaut, celui du calcul automatique. */
+export function comfortableRun(H: number, Lw: number, nFixed?: number): { Lw: number; n: number } | null {
+  for (let d = 0; d <= 6000; d += 10)
+    for (const v of d ? [Lw - d, Lw + d] : [Lw]) {
+      if (v < 500) continue;
+      const n = nFixed ?? pickN(H, v);
+      if (comfortable(H, v, n)) return { Lw: v, n };
+    }
+  return null;
+}
+
 /** Nombre de hauteurs qui approche le mieux Blondel (2h + g ≈ 630 mm) dans les plages de confort. */
 export function pickN(H: number, Lw: number): number {
   let best: { n: number; score: number } | null = null;
@@ -204,7 +236,35 @@ function validate(p: Params, quart: boolean): InputError[] {
   return errors;
 }
 
-export function compute(p: Params): ComputeResult {
+/** Réglage de longueur qui rend la hauteur et le giron confortables : texte de la note et correction. */
+function runFix(p: Params, quart: boolean, Lw: number, n: number, nAuto: number): [string, Fix] | null {
+  if (!p.nAuto && comfortable(p.H, Lw, nAuto))
+    return [
+      `Le calcul automatique (${nAuto} hauteurs) rend l'escalier confortable sans changer les longueurs.`,
+      { set: { nAuto: true }, label: "Revenir en automatique" },
+    ];
+  const run = (!p.nAuto && comfortableRun(p.H, Lw, n)) || comfortableRun(p.H, Lw);
+  if (!run) return null;
+  const d = run.Lw - Lw;
+  const detail = `soit ${run.n} hauteurs de ${fmt(p.H / run.n, 1)} mm et un giron de ${fmt(run.Lw / (run.n - 1), 1)} mm`;
+  const auto = run.n !== n ? { nAuto: true } : {};
+  if (!quart)
+    return [
+      `Reculement conseillé : ${fmt(run.Lw)} mm, ${detail}.`,
+      { set: { L: run.Lw, ...auto }, label: `Passer à ${fmt(run.Lw)} mm` },
+    ];
+  // En quart tournant, la ligne de foulée suit la longueur côté départ (ou côté arrivée si le départ est trop court).
+  const key = p.A + d > p.W + 1 ? "A" : "B";
+  const v = p[key] + d;
+  if (!(v > p.W + 1)) return null;
+  return [
+    `Longueur côté ${key === "A" ? "départ" : "arrivée"} conseillée : ${fmt(v)} mm, ${detail}.`,
+    { set: { [key]: v, ...auto }, label: `Passer à ${fmt(v)} mm` },
+  ];
+}
+
+/** Calcule l'escalier ; suggest ajoute aux notes les corrections chiffrées (calculs supplémentaires). */
+export function compute(p: Params, suggest = true): ComputeResult {
   const quart = p.forme !== "droit";
   const errors = validate(p, quart);
   if (errors.length) return { ok: false, errors };
@@ -507,10 +567,7 @@ export function compute(p: Params): ComputeResult {
   const blondel = 2 * h + g;
   const pente = (Math.atan2(h, g) * 180) / Math.PI;
   const st: Stair["st"] = {
-    h: h > 200 ? "bad" : h > 185 || h < 155 ? "warn" : "ok",
-    g: g < 210 ? "bad" : g < 240 || g > 320 ? "warn" : "ok",
-    bl: blondel < 580 || blondel > 660 ? "bad" : blondel < 600 || blondel > 640 ? "warn" : "ok",
-    pente: pente > 45 ? "bad" : pente > 38 ? "warn" : "ok",
+    ...comfortStatus(h, g),
     gIn: gInMin < 60 ? "bad" : gInMin < 100 ? "warn" : "ok",
     ech: !ech ? "ok" : ech.c < 1900 ? "bad" : ech.c < ECHAPPEE ? "warn" : "ok",
   };
@@ -531,8 +588,23 @@ export function compute(p: Params): ComputeResult {
     ]);
   if (st.bl !== "ok") N.push([st.bl, `Loi de Blondel hors plage : 2h + g = ${fmt(blondel)} mm, visez 600 à 640 mm.`]);
   if (st.pente !== "ok") N.push([st.pente, `Escalier raide (${fmt(pente, 1)}°).`]);
-  if (quart && st.gIn !== "ok")
-    N.push([st.gIn, `Giron côté jour de ${fmt(gInMin)} mm seulement : augmentez le nombre de marches balancées.`]);
+  if (suggest && [st.h, st.g, st.bl, st.pente].some((s) => s !== "ok")) {
+    const fix = runFix(p, quart, Lw, n, nAuto);
+    if (fix) N.push(["info", fix[0], fix[1]]);
+  }
+  if (quart && st.gIn !== "ok") {
+    // Plus petit nombre de marches balancées qui garde 100 mm au jour.
+    let mb: number | null = null;
+    for (let m = p.mb + 1; suggest && m <= 12 && mb == null; m++) {
+      const r = compute({ ...p, mb: m }, false);
+      if (r.ok && r.stair.gInMin >= 100) mb = m;
+    }
+    N.push([
+      st.gIn,
+      `Giron côté jour de ${fmt(gInMin)} mm seulement : augmentez le nombre de marches balancées${mb ? ` (${mb} suffisent)` : ""}.`,
+      mb ? { set: { mb }, label: `Passer à ${mb}` } : undefined,
+    ]);
+  }
   if (bal && bal.extended) N.push(["warn", `Balancement étendu à ${bal.m} marches pour couvrir tout le tournant.`]);
   if (bal && bal.pr + 0.01 < bal.want)
     N.push(["warn", `Progressivité limitée à ${fmt(bal.pr * 100)} % pour garder au moins 100 mm au jour.`]);
@@ -547,11 +619,13 @@ export function compute(p: Params): ComputeResult {
     N.push([
       "warn",
       `Limon${quart ? " de mur" : ""} trop étroit : ${fmt(hl)} mm pour des marches de ${fmt(h)} mm, prévoyez au moins ${fmt(ceil10(needM))} mm pour garder 20 mm de bois sous les logements.`,
+      { set: { hl: ceil10(needM) }, label: `Passer à ${fmt(ceil10(needM))} mm` },
     ]);
   if (quart && hlj < needJ - 0.5)
     N.push([
       "warn",
       `Limon de jour trop étroit : ${fmt(hlj)} mm, les logements du tournant demandent au moins ${fmt(hljAuto)} mm.`,
+      { set: { hljAuto: true }, label: `Passer à ${fmt(hljAuto)} mm` },
     ]);
   if (ech && st.ech !== "ok") {
     const fixes = quart
@@ -564,9 +638,19 @@ export function compute(p: Params): ComputeResult {
       : tLmin != null
         ? `allongez la trémie à ${fmt(tLmin)} mm`
         : "";
+    const set: Partial<Params> | null = quart
+      ? tYmin != null
+        ? { tY: tYmin }
+        : tXmin != null
+          ? { tX: tXmin }
+          : null
+      : tLmin != null
+        ? { tL: tLmin }
+        : null;
     N.push([
       st.ech,
       `Échappée de ${fmt(ech.c)} mm au-dessus de la marche ${ech.j}${fixes ? ` : pour 2 000 mm, ${fixes}` : ""}.`,
+      set ? { set, label: `Passer à ${fmt(Object.values(set)[0] as number)} mm` } : undefined,
     ]);
   } else if (quart ? tYmin != null : tLmin != null) {
     N.push([
@@ -576,7 +660,12 @@ export function compute(p: Params): ComputeResult {
         : `Trémie minimale pour 2 000 mm d'échappée : ${fmt(tLmin!)} mm de long.`,
     ]);
   }
-  if (!p.nAuto && n !== nAuto) N.push(["info", `Le calcul automatique proposerait ${nAuto} hauteurs.`]);
+  if (!p.nAuto && n !== nAuto && !N.some((x) => x[2]?.set.nAuto))
+    N.push([
+      "info",
+      `Le calcul automatique proposerait ${nAuto} hauteurs.`,
+      { set: { nAuto: true }, label: "Revenir en automatique" },
+    ]);
   if (!N.some((x) => x[0] === "warn" || x[0] === "bad"))
     N.unshift(["ok", "Toutes les règles de confort sont respectées."]);
 

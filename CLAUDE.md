@@ -7,11 +7,11 @@ Outil d'escaliers pour un ébéniste et d'autres menuisiers. L'interface, les te
 - TypeScript strict (`noUncheckedIndexedAccess` : `!` sur les accès d'index garantis par la géométrie), Vite, Vitest, ESLint, Prettier. Pas de framework d'interface.
 - `src/core` et `src/cnc` restent purs (pas de DOM) : ils tournent dans Node pour les tests et `scripts/export.ts`. Le DOM et Three.js vivent dans `src/ui`.
 - `npm run check` avant tout commit. Le site est statique (`npm run build` → `dist/`, chemins relatifs).
-- Polices auto-hébergées via `@fontsource` (sous-ensembles latin). Couleurs en jetons sur `:root` dans `src/styles/main.css`, thème sombre inclus. localStorage `limon-v2` pour les réglages du visiteur, relus par `sanitizeParams`.
+- Polices auto-hébergées via `@fontsource` (sous-ensembles latin). Couleurs en jetons sur `:root` dans `src/styles/main.css`, thème sombre inclus. localStorage `limon-v2` pour les réglages du visiteur, relus par `sanitizeParams` ; un lien de projet (`#H=3200&…`, `src/core/share.ts`) l'emporte au chargement.
 
 ## Géométrie (voir `compute(p)` dans `src/core/stair.ts`)
 
-- `compute` renvoie `{ ok: true, stair }` ou `{ ok: false, errors }`. `stair.params` garde les réglages utilisés.
+- `compute` renvoie `{ ok: true, stair }` ou `{ ok: false, errors }` (chaque erreur désigne si possible le champ fautif). `stair.params` garde les réglages utilisés. Une note peut porter une correction (`Fix`, appliquée d'un clic) ; `compute(p, false)` saute leur recherche.
 - Repère du plan : départ en y = 0, côté mur en x = 0, côté jour en x = W. Le quart tournant est calculé à droite ; le gauche est un miroir (`scale.x = -1` en 3D, x → −x dans le plan).
 - Polylignes paramétrées par abscisse curviligne, segments d'extrémité prolongés : `makePoly`, `polyAt`, `polyPath`, `polyCut` (`src/core/poly.ts`).
 - Lignes de nez : du point Q côté jour, par le point P sur la ligne de foulée, jusqu'au côté mur. `nr` est la normale vers le haut de l'escalier.
