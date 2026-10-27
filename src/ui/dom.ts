@@ -47,3 +47,7 @@ export function downloadBytes(data: Uint8Array<ArrayBuffer>, filename: string, t
 
 export const cssVar = (name: string): string =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/** Texte saisi par l'utilisateur, à insérer dans du HTML. */
+export const esc = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);

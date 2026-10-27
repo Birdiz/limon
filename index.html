@@ -18,6 +18,10 @@
         <span class="mark">Li<i>m</i>on</span>
         <span class="tag">Calcul d'escaliers bois · prototype</span>
       </div>
+      <div class="proj">
+        <input id="pjName" class="pjname" type="text" maxlength="80" aria-label="Nom du projet" />
+        <button class="btn" id="pjOpen" type="button">Mes projets</button>
+      </div>
       <div class="headline" id="headline"></div>
     </header>
 
@@ -282,5 +286,30 @@
         </section>
       </main>
     </div>
+
+    <dialog id="projets" class="dlg" aria-labelledby="pjTitle">
+      <div class="shead">
+        <h2 id="pjTitle">Mes projets</h2>
+        <button class="btn" id="pjClose" type="button">Fermer</button>
+      </div>
+      <div class="newp">
+        <label for="pjNom">Nouveau projet</label>
+        <input id="pjNom" type="text" maxlength="80" placeholder="Escalier Dupont" />
+        <div class="actions">
+          <button class="btn primary" id="pjGuide" type="button">Nouveau projet pas à pas</button
+          ><button class="btn" id="pjFull" type="button">Nouveau projet complet</button>
+        </div>
+      </div>
+      <ul class="plist" id="pjList"></ul>
+      <div class="actions">
+        <button class="btn" id="pjImport" type="button">Ouvrir un fichier .limon</button
+        ><button class="btn" id="pjExport" type="button">Enregistrer ce projet en fichier .limon</button
+        ><span class="copied" id="pjMsg" hidden></span>
+      </div>
+      <input type="file" id="pjFile" accept=".limon,application/json" hidden />
+      <p class="disclaimer">
+        Les projets sont gardés dans ce navigateur. Enregistrez-les en fichier pour les retrouver sur un autre appareil.
+      </p>
+    </dialog>
   </body>
 </html>

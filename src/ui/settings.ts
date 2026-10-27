@@ -1,24 +1,6 @@
-import { BOOLEAN_KEYS, NUMERIC_KEYS, sanitizeParams, type Essence, type Forme, type Params } from "../core/params";
+import { BOOLEAN_KEYS, NUMERIC_KEYS, type Essence, type Forme, type Params } from "../core/params";
 import type { Stair } from "../core/stair";
 import { byId } from "./dom";
-
-const STORAGE_KEY = "limon-v2";
-
-export function loadParams(): Params {
-  try {
-    return sanitizeParams(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"));
-  } catch {
-    return sanitizeParams(null);
-  }
-}
-
-export function saveParams(p: Params): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
-  } catch {
-    // Stockage indisponible (navigation privée) : les réglages ne survivent pas au rechargement.
-  }
-}
 
 const input = (id: string) => byId<HTMLInputElement>(id);
 

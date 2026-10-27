@@ -727,3 +727,127 @@ td.low {
   border-radius: 4px;
   padding: 8px;
 }
+
+/* Projets */
+.proj {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.pjname {
+  min-width: 0;
+  width: 18rem;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font-family: var(--f-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+.pjname:hover,
+.pjname:focus {
+  border-color: var(--rule);
+  background: var(--panel);
+}
+.btn.danger:hover {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+.dlg {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 18px 20px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.dlg::backdrop {
+  background: rgba(10, 14, 20, 0.45);
+}
+.dlg > * + * {
+  margin-top: 14px;
+}
+.newp {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.newp label {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.newp input {
+  padding: 6px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+}
+.plist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.plist li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.plist li:last-child {
+  border-bottom: 0;
+}
+.plist li.cur {
+  box-shadow: inset 3px 0 0 var(--chalk);
+}
+.plist li.empty {
+  color: var(--muted);
+  font-size: 14px;
+}
+.plist b {
+  display: block;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.plist small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.pjbtns {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.pjcur {
+  font-size: 12.5px;
+  color: var(--chalk);
+  padding-inline: 6px;
+}
+@media (max-width: 600px) {
+  .dlg {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+  .pjname {
+    width: 100%;
+  }
+}
