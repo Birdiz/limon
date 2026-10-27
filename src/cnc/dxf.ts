@@ -1,4 +1,4 @@
-import { LAYERS, type Entity } from "./entities";
+import { EXTRA_LAYERS, LAYERS, type Entity } from "./entities";
 
 /** Texte réduit à l'ASCII imprimable : le DXF R12 ne connaît pas l'UTF-8. */
 export const ascii = (s: string): string =>
@@ -12,6 +12,7 @@ export function toDXF(ents: readonly Entity[]): string {
   const out: string[] = [];
   const g = (c: number, v: string | number) => out.push(String(c).padStart(3, " "), String(v));
   const n = (v: number) => v.toFixed(3);
+  const layers = [...LAYERS, ...EXTRA_LAYERS.filter(([name]) => ents.some((e) => e.layer === name))];
   g(0, "SECTION");
   g(2, "HEADER");
   g(9, "$ACADVER");
@@ -34,8 +35,8 @@ export function toDXF(ents: readonly Entity[]): string {
   g(0, "ENDTAB");
   g(0, "TABLE");
   g(2, "LAYER");
-  g(70, LAYERS.length);
-  LAYERS.forEach(([name, col]) => {
+  g(70, layers.length);
+  layers.forEach(([name, col]) => {
     g(0, "LAYER");
     g(2, name);
     g(70, 0);
@@ -65,6 +66,13 @@ export function toDXF(ents: readonly Entity[]): string {
       });
       g(0, "SEQEND");
       g(8, e.layer);
+    } else if (e.kind === "circle") {
+      g(0, "CIRCLE");
+      g(8, e.layer);
+      g(10, n(e.x));
+      g(20, n(e.y));
+      g(30, "0.0");
+      g(40, n(e.r));
     } else {
       g(0, "TEXT");
       g(8, e.layer);

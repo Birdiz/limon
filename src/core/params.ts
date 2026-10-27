@@ -42,6 +42,8 @@ export interface Params {
   hljAuto: boolean;
   /** Hauteur du limon de jour (quart tournant). */
   hlj: number;
+  /** Section du poteau (quart tournant), carrée. */
+  ps: number;
   /** Longueur de trémie (droit). */
   tL: number;
   /** Trémie côté arrivée (quart). */
@@ -83,6 +85,7 @@ export const DEFAULTS: Readonly<Params> = {
   hl: 340,
   hljAuto: true,
   hlj: 470,
+  ps: 100,
   tL: 3200,
   tX: 1850,
   tY: 2550,
@@ -116,6 +119,7 @@ export const NUMERIC_KEYS = [
   "el",
   "hl",
   "hlj",
+  "ps",
   "tL",
   "tX",
   "tY",

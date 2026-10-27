@@ -28,7 +28,13 @@ export function bulgePts(pts: readonly Vertex[]): Vertex[] {
 /** Aperçu SVG d'un jeu d'entités DXF (y vers le haut). */
 export function previewSVG(ents: readonly Entity[], label: string): string {
   const pts: Vertex[] = [];
-  ents.forEach((e) => (e.kind === "poly" ? pts.push(...e.pts) : pts.push([e.x, e.y + e.h])));
+  ents.forEach((e) =>
+    e.kind === "poly"
+      ? pts.push(...e.pts)
+      : e.kind === "circle"
+        ? pts.push([e.x - e.r, e.y - e.r], [e.x + e.r, e.y + e.r])
+        : pts.push([e.x, e.y + e.h]),
+  );
   if (!pts.length) return "";
   const b = bbox(pts),
     pad = Math.max(b.x1 - b.x0, b.y1 - b.y0) * 0.03;
@@ -37,7 +43,9 @@ export function previewSVG(ents: readonly Entity[], label: string): string {
     .map((e) =>
       e.kind === "poly"
         ? `<polygon class="cx-${e.layer}" vector-effect="non-scaling-stroke" points="${bulgePts(e.pts).map(P2).join(" ")}"/>`
-        : `<text class="cx-TEXTE" x="${e.x.toFixed(1)}" y="${(-e.y).toFixed(1)}" font-size="${e.h}" ${e.center ? 'text-anchor="middle" dominant-baseline="central"' : e.right ? 'text-anchor="end"' : ""}>${e.s}</text>`,
+        : e.kind === "circle"
+          ? `<circle class="cx-${e.layer}" vector-effect="non-scaling-stroke" cx="${e.x.toFixed(1)}" cy="${(-e.y).toFixed(1)}" r="${e.r}"/>`
+          : `<text class="cx-TEXTE" x="${e.x.toFixed(1)}" y="${(-e.y).toFixed(1)}" font-size="${e.h}" ${e.center ? 'text-anchor="middle" dominant-baseline="central"' : e.right ? 'text-anchor="end"' : ""}>${e.s}</text>`,
     )
     .join("");
   return `<svg viewBox="${b.x0 - pad} ${-b.y1 - pad} ${b.x1 - b.x0 + 2 * pad} ${b.y1 - b.y0 + 2 * pad}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${label}">${body}</svg>`;
@@ -112,7 +120,7 @@ function group(list: readonly TreadPart[], one: string, many: string, e: number)
   }));
 }
 
-/** Liste de débit : limons, marches, contremarches. */
+/** Liste de débit : limons, marches, contremarches, poteau. */
 export function cutListHTML(cnc: CNC, R: Stair): string {
   const p = R.params;
   const rows: CutRow[] = [
@@ -125,6 +133,9 @@ export function cutListHTML(cnc: CNC, R: Stair): string {
     })),
     ...group(cnc.treadParts, "Marche", "Marches", p.et),
     ...group(cnc.riserParts, "Contremarche", "Contremarches", p.ecm),
+    ...(cnc.postPart
+      ? [{ name: "Poteau", q: 1, L: Math.ceil(cnc.postPart.L), l: cnc.postPart.l, e: cnc.postPart.e }]
+      : []),
   ];
   return (
     "<thead><tr><th>Pièce</th><th>Qté</th><th>Longueur</th><th>Largeur</th><th>Épaisseur</th></tr></thead><tbody>" +

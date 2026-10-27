@@ -725,6 +725,20 @@ td.low {
   stroke: var(--muted);
   stroke-dasharray: 4 3;
 }
+.cx-MORTAISE {
+  fill: var(--warn);
+  fill-opacity: 0.15;
+  stroke: var(--warn);
+}
+.cx-TENON {
+  fill: none;
+  stroke: var(--warn);
+  stroke-dasharray: 4 3;
+}
+.cx-PERCAGE {
+  fill: none;
+  stroke: var(--warn);
+}
 .cx-TEXTE {
   fill: var(--muted);
   font-family: var(--f-data);
@@ -737,6 +751,11 @@ td.low {
   height: 10px;
   border: 1px solid var(--chalk);
   background: var(--chalk-soft);
+}
+.legend i.lg-mor {
+  height: 10px;
+  border: 1px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
 }
 .legend i.lg-cm {
   border-top: 1.5px dashed var(--muted);

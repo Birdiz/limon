@@ -169,6 +169,10 @@
             </div>
             <div class="num"><input id="hlj" type="number" step="5" min="150" /><span>mm</span></div>
           </div>
+          <div class="row" data-show="quart">
+            <label for="ps">Section du poteau<small>carrée, affleurant les limons côté marches</small></label>
+            <div class="num"><input id="ps" type="number" step="5" min="75" /><span>mm</span></div>
+          </div>
           <div class="row">
             <label for="pL">Longueur des plateaux<small>bois disponible, dans le fil</small></label>
             <div class="num"><input id="pL" type="number" step="100" min="500" /><span>mm</span></div>
@@ -246,7 +250,8 @@
           <p class="disclaimer">
             Marches vues de dessus, nez en bas, encastrement compris. Contremarches vues de face, longueur hors tout.
             Limons développés, vus depuis la face côté marches et couchés dans le sens de la planche, avec les logements
-            à défoncer. Fichiers DXF R12 en millimètres.
+            à défoncer. Poteau du quart tournant : ses quatre faces, logements et mortaises des limons de jour. Fichiers
+            DXF R12 en millimètres.
           </p>
           <div class="notes" id="cncnotes"></div>
           <div class="cncgrid">
@@ -277,12 +282,23 @@
               </div>
               <div class="pv short" id="pvR"></div>
             </div>
+            <div class="view wide" id="pvPbox">
+              <div class="vhead">
+                <h2>Poteau</h2>
+                <div class="legend">
+                  <span><i class="lg-cut"></i>découpe</span><span><i class="lg-def"></i>défonce</span
+                  ><span><i class="lg-mor"></i>mortaise</span>
+                </div>
+              </div>
+              <div class="pv short" id="pvP"></div>
+            </div>
           </div>
           <div class="tablewrap"><table id="parts"></table></div>
           <div class="actions">
             <button class="btn" id="cpT" type="button">Copier marches.dxf</button
             ><button class="btn" id="cpR" type="button">Copier contremarches.dxf</button
             ><button class="btn" id="cpB" type="button">Copier limons.dxf</button
+            ><button class="btn" id="cpP" type="button">Copier poteau.dxf</button
             ><span class="copied" id="cpmsg" hidden></span>
           </div>
           <textarea id="dxffb" hidden readonly aria-label="Contenu DXF"></textarea>

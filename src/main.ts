@@ -67,6 +67,8 @@ function render(result: ComputeResult): void {
   byId("pvB").innerHTML = previewSVG(cnc.boardEnts, "Aperçu des limons développés");
   byId("pvRbox").hidden = byId("cpR").hidden = !R.params.cm;
   byId("pvR").innerHTML = previewSVG(cnc.riserEnts, "Aperçu des contremarches à découper");
+  byId("pvPbox").hidden = byId("cpP").hidden = !R.newel;
+  byId("pvP").innerHTML = previewSVG(cnc.postEnts, "Aperçu des faces du poteau");
   byId("cncnotes").innerHTML = stringerFitHTML(cnc.boardParts, R) + stockFitHTML(cnc, R);
   byId("parts").innerHTML = cutListHTML(cnc, R);
   scene?.draw(R);
@@ -139,7 +141,7 @@ byId("dl").addEventListener("click", () => {
   downloadBytes(exportZip(current.stair, cnc), exportFilename(current.stair), "application/zip");
   flash(byId("dlmsg"), "Archive enregistrée");
 });
-const copyDXF = async (which: "treadEnts" | "riserEnts" | "boardEnts", label: string) => {
+const copyDXF = async (which: "treadEnts" | "riserEnts" | "boardEnts" | "postEnts", label: string) => {
   if (!cnc || (which === "boardEnts" && !confirmTight(cnc))) return;
   const text = toDXF(cnc[which]);
   if (await copyText(text, byId<HTMLTextAreaElement>("dxffb"))) flash(byId("cpmsg"), `${label} copié`);
@@ -147,6 +149,7 @@ const copyDXF = async (which: "treadEnts" | "riserEnts" | "boardEnts", label: st
 byId("cpT").addEventListener("click", () => copyDXF("treadEnts", "marches.dxf"));
 byId("cpR").addEventListener("click", () => copyDXF("riserEnts", "contremarches.dxf"));
 byId("cpB").addEventListener("click", () => copyDXF("boardEnts", "limons.dxf"));
+byId("cpP").addEventListener("click", () => copyDXF("postEnts", "poteau.dxf"));
 
 const reTheme = () => scene?.applyTheme();
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", reTheme);

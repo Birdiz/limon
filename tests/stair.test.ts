@@ -148,6 +148,16 @@ describe("validation", () => {
     if (!r.ok) expect(r.errors.map((e) => e.key)).toEqual(["H", "ep"]);
   });
 
+  it("demande un poteau plus large que le limon et des volées plus longues que lui", () => {
+    const thin = compute({ ...DEFAULTS, ps: 60 });
+    expect(thin.ok).toBe(false);
+    if (!thin.ok) expect(thin.errors.map((e) => e.key)).toEqual(["ps"]);
+    const big = compute({ ...DEFAULTS, ps: 900 });
+    expect(big.ok).toBe(false);
+    if (!big.ok) expect(big.errors.map((e) => e.key)).toEqual(["ps"]);
+    expect(compute({ ...DEFAULTS, forme: "droit", ps: 60 }).ok).toBe(true);
+  });
+
   it("refuse un plancher plus épais que la hauteur le permet", () => {
     const r = compute({ ...DEFAULTS, ep: 2300 });
     expect(r.ok).toBe(false);

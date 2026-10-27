@@ -1,5 +1,5 @@
 import { fmt } from "../core/format";
-import type { Stair } from "../core/stair";
+import { PERCAGE, TENON, type Stair } from "../core/stair";
 import { treadsCSV } from "../core/sheet";
 import { buildCNC, type CNC } from "./build";
 import { toDXF } from "./dxf";
@@ -37,11 +37,33 @@ export function readme(R: Stair): string {
       "  DECOUPE     contour du limon",
       `  DEFONCE     logements des marches et contremarches, profondeur ${p.enc} mm,`,
       `              jeu de ${fmt(p.jeu, 1)} mm par côté compris${R.rn > 0 ? ", bout avant arrondi comme le nez (arcs)" : ""}`,
+      ...(R.quart
+        ? [
+            "  TENON       tenon des limons de jour dans le poteau : enlever les joues de part et d'autre",
+            `              (épaisseurs sous le nom de la pièce), épaulements de ${TENON.epaul} mm en haut et en bas`,
+            `  PERCAGE     limon de mur 1/2 : perçages D${PERCAGE} traversants dans la partie qui reçoit`,
+            "              le bout du limon de mur 2/2 (about vissé ou boulonné)",
+          ]
+        : []),
       "  TEXTE       nom de la pièce et cotes brutes",
       "",
+      ...(R.newel
+        ? [
+            `poteau.dxf : poteau de ${R.newel.size} x ${R.newel.size} mm, du sol à ${fmt(R.newel.h)} mm, affleurant les limons de jour`,
+            "  côté marches. Ses quatre faces vues de l'extérieur, couchées pied à gauche, dans l'ordre du tour :",
+            "  l'arête basse d'une face est l'arête haute de la suivante.",
+            "  DECOUPE     contour de la face (débit à la longueur)",
+            `  DEFONCE     logements des marches et contremarches, profondeur ${p.enc} mm, jeu compris`,
+            "  MORTAISE    mortaise de chaque limon de jour, profondeur indiquée sur la face, jeu compris",
+            "  TEXTE       numéro et rôle de chaque face",
+            "",
+          ]
+        : []),
       "fiche-marches.csv : girons et longueurs de nez de chaque marche.",
       "",
-      "À vérifier avant usinage : sens des pièces, assemblage des limons sur le poteau et au palier.",
+      R.quart
+        ? "À vérifier avant usinage : sens des pièces, fixation des limons au sol et au plancher haut."
+        : "À vérifier avant usinage : sens des pièces, assemblage des limons sur le poteau et au palier.",
     ].join("\r\n") + "\r\n"
   );
 }
@@ -52,6 +74,7 @@ export function exportFiles(R: Stair, cnc: CNC = buildCNC(R)): ZipFile[] {
     { name: "marches.dxf", data: toDXF(cnc.treadEnts) },
     { name: "limons.dxf", data: toDXF(cnc.boardEnts) },
     ...(R.params.cm ? [{ name: "contremarches.dxf", data: toDXF(cnc.riserEnts) }] : []),
+    ...(R.newel ? [{ name: "poteau.dxf", data: toDXF(cnc.postEnts) }] : []),
     { name: "fiche-marches.csv", data: "\ufeff" + treadsCSV(R) },
     { name: "LISEZMOI.txt", data: readme(R) },
   ];

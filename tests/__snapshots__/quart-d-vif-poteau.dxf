@@ -1,0 +1,826 @@
+  0
+SECTION
+  2
+HEADER
+  9
+$ACADVER
+  1
+AC1009
+  9
+$INSUNITS
+ 70
+4
+  0
+ENDSEC
+  0
+SECTION
+  2
+TABLES
+  0
+TABLE
+  2
+LTYPE
+ 70
+1
+  0
+LTYPE
+  2
+CONTINUOUS
+ 70
+0
+  3
+Solid line
+ 72
+65
+ 73
+0
+ 40
+0.0
+  0
+ENDTAB
+  0
+TABLE
+  2
+LAYER
+ 70
+6
+  0
+LAYER
+  2
+DECOUPE
+ 70
+0
+ 62
+7
+  6
+CONTINUOUS
+  0
+LAYER
+  2
+DEFONCE
+ 70
+0
+ 62
+1
+  6
+CONTINUOUS
+  0
+LAYER
+  2
+CM_DESSUS
+ 70
+0
+ 62
+5
+  6
+CONTINUOUS
+  0
+LAYER
+  2
+CM_DESSOUS
+ 70
+0
+ 62
+4
+  6
+CONTINUOUS
+  0
+LAYER
+  2
+TEXTE
+ 70
+0
+ 62
+3
+  6
+CONTINUOUS
+  0
+LAYER
+  2
+MORTAISE
+ 70
+0
+ 62
+2
+  6
+CONTINUOUS
+  0
+ENDTAB
+  0
+ENDSEC
+  0
+SECTION
+  2
+ENTITIES
+  0
+TEXT
+  8
+TEXTE
+ 10
+0.000
+ 20
+210.000
+ 30
+0.0
+ 40
+45.000
+  1
+POTEAU 2040 x 100 x 100 - faces vues de l'exterieur, pied a gauche, dans l'ordre du tour
+  0
+POLYLINE
+  8
+DECOUPE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+0.000
+ 20
+0.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+2040.000
+ 20
+0.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+2040.000
+ 20
+100.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+0.000
+ 20
+100.000
+ 30
+0.0
+  0
+SEQEND
+  8
+DECOUPE
+  0
+POLYLINE
+  8
+DEFONCE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1400.000
+ 20
+0.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1400.000
+ 20
+73.589
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1440.000
+ 20
+73.589
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1440.000
+ 20
+0.000
+ 30
+0.0
+  0
+SEQEND
+  8
+DEFONCE
+  0
+POLYLINE
+  8
+DEFONCE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1580.000
+ 20
+14.828
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1580.000
+ 20
+100.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1620.000
+ 20
+100.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1620.000
+ 20
+14.828
+ 30
+0.0
+  0
+SEQEND
+  8
+DEFONCE
+  0
+POLYLINE
+  8
+DEFONCE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1440.000
+ 20
+46.140
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1440.000
+ 20
+73.589
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1580.000
+ 20
+73.589
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1580.000
+ 20
+46.140
+ 30
+0.0
+  0
+SEQEND
+  8
+DEFONCE
+  0
+TEXT
+  8
+TEXTE
+ 10
+0.000
+ 20
+130.000
+ 30
+0.0
+ 40
+30.000
+  1
+FACE 1/4 - cote marches, volee de depart - defonce 15 mm, jeu 0,0 mm
+  0
+POLYLINE
+  8
+DECOUPE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+0.000
+ 20
+-250.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+2040.000
+ 20
+-250.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+2040.000
+ 20
+-150.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+0.000
+ 20
+-150.000
+ 30
+0.0
+  0
+SEQEND
+  8
+DECOUPE
+  0
+POLYLINE
+  8
+MORTAISE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+MORTAISE
+ 10
+1258.441
+ 20
+-172.500
+ 30
+0.0
+  0
+VERTEX
+  8
+MORTAISE
+ 10
+1258.441
+ 20
+-187.500
+ 30
+0.0
+  0
+VERTEX
+  8
+MORTAISE
+ 10
+1620.615
+ 20
+-187.500
+ 30
+0.0
+  0
+VERTEX
+  8
+MORTAISE
+ 10
+1620.615
+ 20
+-172.500
+ 30
+0.0
+  0
+SEQEND
+  8
+MORTAISE
+  0
+TEXT
+  8
+TEXTE
+ 10
+0.000
+ 20
+-120.000
+ 30
+0.0
+ 40
+30.000
+  1
+FACE 2/4 - mortaise du LIMON DE JOUR 1/2 - profondeur 42,0 mm, jeu 0,0 mm
+  0
+POLYLINE
+  8
+DECOUPE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+0.000
+ 20
+-500.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+2040.000
+ 20
+-500.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+2040.000
+ 20
+-400.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+0.000
+ 20
+-400.000
+ 30
+0.0
+  0
+SEQEND
+  8
+DECOUPE
+  0
+POLYLINE
+  8
+MORTAISE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+MORTAISE
+ 10
+1491.893
+ 20
+-477.500
+ 30
+0.0
+  0
+VERTEX
+  8
+MORTAISE
+ 10
+1491.893
+ 20
+-462.500
+ 30
+0.0
+  0
+VERTEX
+  8
+MORTAISE
+ 10
+1836.066
+ 20
+-462.500
+ 30
+0.0
+  0
+VERTEX
+  8
+MORTAISE
+ 10
+1836.066
+ 20
+-477.500
+ 30
+0.0
+  0
+SEQEND
+  8
+MORTAISE
+  0
+TEXT
+  8
+TEXTE
+ 10
+0.000
+ 20
+-370.000
+ 30
+0.0
+ 40
+30.000
+  1
+FACE 3/4 - mortaise du LIMON DE JOUR 2/2 - profondeur 42,0 mm, jeu 0,0 mm
+  0
+POLYLINE
+  8
+DECOUPE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+0.000
+ 20
+-750.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+2040.000
+ 20
+-750.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+2040.000
+ 20
+-650.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DECOUPE
+ 10
+0.000
+ 20
+-650.000
+ 30
+0.0
+  0
+SEQEND
+  8
+DECOUPE
+  0
+POLYLINE
+  8
+DEFONCE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1580.000
+ 20
+-750.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1580.000
+ 20
+-650.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1620.000
+ 20
+-650.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1620.000
+ 20
+-750.000
+ 30
+0.0
+  0
+SEQEND
+  8
+DEFONCE
+  0
+POLYLINE
+  8
+DEFONCE
+ 66
+1
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+ 70
+1
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1760.000
+ 20
+-699.763
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1760.000
+ 20
+-650.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1800.000
+ 20
+-650.000
+ 30
+0.0
+  0
+VERTEX
+  8
+DEFONCE
+ 10
+1800.000
+ 20
+-699.763
+ 30
+0.0
+  0
+SEQEND
+  8
+DEFONCE
+  0
+TEXT
+  8
+TEXTE
+ 10
+0.000
+ 20
+-620.000
+ 30
+0.0
+ 40
+30.000
+  1
+FACE 4/4 - cote marches, volee d'arrivee - defonce 15 mm, jeu 0,0 mm
+  0
+ENDSEC
+  0
+EOF

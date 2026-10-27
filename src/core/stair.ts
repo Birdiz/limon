@@ -74,6 +74,17 @@ export interface StringerGeom {
   sHi: number;
 }
 
+/** Tenon au bout d'un limon de jour, dans le plan du limon : de u0 à u1 (l'un des deux est l'épaulement),
+    de z0 à z1, et de t0 à t1 dans l'épaisseur depuis la face côté marches. */
+export interface Tenon {
+  u0: number;
+  u1: number;
+  z0: number;
+  z1: number;
+  t0: number;
+  t1: number;
+}
+
 export interface StringerPiece extends StringerGeom {
   /** Logements, dans le plan du limon. */
   pockets: Vertex[][];
@@ -81,6 +92,32 @@ export interface StringerPiece extends StringerGeom {
   need: number;
   /** Hauteur retenue pour cette pièce. */
   hl: number;
+  /** Tenon dans le poteau (limons de jour du quart tournant). */
+  tenon: Tenon | null;
+  /** Perçages traversants (u, z) pour visser ou boulonner l'about du limon de mur suivant. */
+  holes: Pt[];
+}
+
+/** Face du poteau : normale sortante n, abscisse u le long de la face (o + dir·u, de u0 à u1). */
+export interface NewelFace {
+  n: Pt;
+  o: Pt;
+  dir: Pt;
+  u0: number;
+  u1: number;
+  /** Logements des marches et contremarches (u, z), sur les faces côté marches. */
+  pockets: Vertex[][];
+  /** Mortaise du tronçon de limon de jour idx, sur sa face d'entrée. */
+  mortises: { idx: number; pts: Pt[]; depth: number }[];
+}
+
+/** Poteau du quart tournant, du sol à h, affleurant les faces des limons de jour côté marches. */
+export interface Newel {
+  c: Pt;
+  size: number;
+  h: number;
+  /** Les quatre faces dans l'ordre du tour, en commençant par la face côté marches de la volée de départ. */
+  faces: NewelFace[];
 }
 
 export interface Rect {
@@ -147,7 +184,7 @@ export interface Stair {
   hljAuto: number;
   needJ: number;
   needM: number;
-  newel: { c: Pt; size: number; h: number } | null;
+  newel: Newel | null;
   slab: Rect;
   tre: Rect;
   /** Hauteur de la sous-face du plancher. */
@@ -175,6 +212,11 @@ export type ComputeResult = { ok: true; stair: Stair } | { ok: false; errors: In
 export const ECHAPPEE = 2000;
 /** Hauteur du bord haut des limons au-dessus de la ligne des nez. */
 export const LIFT = 50;
+/** Assemblage des limons de jour dans le poteau : longueur de tenon visée, épaulements haut et bas,
+    fond de mortaise au-delà du tenon. Tête du poteau au-dessus du limon le plus haut. */
+export const TENON = { long: 40, epaul: 30, fond: 2, tete: 100 } as const;
+/** Diamètre des perçages de l'about des limons de mur. */
+export const PERCAGE = 10;
 
 /** Statuts de confort d'une hauteur de marche h et d'un giron g. */
 export function comfortStatus(h: number, g: number): Pick<Stair["st"], "h" | "g" | "bl" | "pente"> {
@@ -231,6 +273,10 @@ function validate(p: Params, quart: boolean): InputError[] {
     if (!(p.A > W + 1)) err("A", "La longueur côté départ doit dépasser l'emmarchement.");
     if (!(p.B > W + 1)) err("B", "La longueur côté arrivée doit dépasser l'emmarchement.");
   } else if (!(p.L >= 500)) err("L", "Le reculement doit faire au moins 500 mm.");
+  if (quart && !(p.ps >= p.el + 30))
+    err("ps", "La section du poteau doit dépasser l'épaisseur de limon d'au moins 30 mm.");
+  else if (quart && p.A > W + 1 && p.B > W + 1 && !(Math.min(p.A, p.B) - W >= p.ps + 100))
+    err("ps", "Le poteau doit laisser au moins 100 mm de limon de jour de chaque côté : réduisez sa section.");
   if (!(p.ep >= 0 && p.ep < H - 500))
     err("ep", "L'épaisseur du plancher doit rester inférieure à la hauteur à monter moins 500 mm.");
   return errors;
@@ -455,9 +501,13 @@ export function compute(p: Params, suggest = true): ComputeResult {
       lines.map((l) => (l.k + 1) * h + LIFT),
       v,
     );
+  // Poteau affleurant les faces côté marches, au coin du jour : les limons de jour s'arrêtent sur ses faces.
+  const ps = p.ps,
+    sK = A - W;
   const pieces = (P: Poly, arr: number[], zf: (v: number) => number, isOuter: boolean): StringerGeom[] => {
     const out: StringerGeom[] = [],
-      N = P.pts.length;
+      N = P.pts.length,
+      post = quart && !isOuter ? ps : 0;
     for (let i = 0; i < N - 1; i++) {
       const a = P.pts[i]!,
         dir = V.norm(V.sub(P.pts[i + 1]!, a)),
@@ -465,8 +515,8 @@ export function compute(p: Params, suggest = true): ComputeResult {
       const s0 = P.cum[i]!,
         s1 = P.cum[i + 1]!,
         segL = s1 - s0;
-      const lo = i === 0 ? Math.min(s0, arr[0]!) : s0;
-      const hi = i === N - 2 ? Math.max(s1, arr[arr.length - 1]!) : s1;
+      const lo = i === 0 ? Math.min(s0, arr[0]!) : s0 + post;
+      const hi = i === N - 2 ? Math.max(s1, arr[arr.length - 1]!) : s1 - post;
       const ss = [lo, ...arr.filter((v) => v > lo + 1e-6 && v < hi - 1e-6), hi];
       const prof = ss.map((v): Pt => [v - s0, zf(v)]);
       if (isOuter && i < N - 2) prof.push([segL + el, zf(s1)]);
@@ -480,8 +530,8 @@ export function compute(p: Params, suggest = true): ComputeResult {
         idx: i,
         count: N - 1,
         a,
-        sLo: i === 0 ? -Infinity : s0,
-        sHi: i === N - 2 ? Infinity : s1,
+        sLo: i === 0 ? -Infinity : s0 + post,
+        sHi: i === N - 2 ? Infinity : s1 - post,
       });
     }
     return out;
@@ -500,9 +550,28 @@ export function compute(p: Params, suggest = true): ComputeResult {
       true,
     ),
   ];
+  // Faces du poteau côté marches, traitées comme des bouts de limon pour y loger marches et contremarches.
+  const newelTop = quart ? ceil10(Math.max(zIn(sK - ps), zIn(sK + ps)) + TENON.tete) : 0;
+  const face = (a: Pt, dir: Pt, u0: number, sLo: number): StringerGeom => ({
+    origin: a,
+    dir,
+    rn: [dir[1], -dir[0]],
+    prof: [
+      [u0, newelTop],
+      [u0 + ps, newelTop],
+    ],
+    width: ps,
+    side: "in",
+    idx: 0,
+    count: 1,
+    a,
+    sLo,
+    sHi: sLo + ps,
+  });
+  const postFaces = quart ? [face([W, 0], [0, 1], sK - ps, sK - ps), face([W, sK], [1, 0], 0, sK)] : [];
   // Logements de chaque limon et hauteur qui garde 20 mm de bois sous le plus bas.
   // Le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.
-  const geo = { inner, outer, lines, treads, risers, stringers: geoms };
+  const geo = { inner, outer, lines, treads, risers, stringers: [...geoms, ...postFaces] };
   const isJour = (sp: StringerGeom) => quart && sp.side === "in";
   const pk = stringerPockets(geo, p, cncFrame(geo, p));
   const withPockets = geoms.map((sp, i) => ({ ...sp, ...pk[i]! }));
@@ -510,9 +579,70 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const needM = Math.max(0, ...withPockets.filter((sp) => !isJour(sp)).map((sp) => sp.need));
   const hljAuto = Math.max(150, ceil10(needJ));
   const hlj = quart ? (p.hljAuto ? hljAuto : p.hlj) : hl;
-  const stringers: StringerPiece[] = withPockets.map((sp) => ({ ...sp, hl: isJour(sp) ? hlj : hl }));
-  const newelSize = Math.max(90, el * 2);
-  const newel = quart ? { c: [W + el / 2, A - W - el / 2] as Pt, size: newelSize, h: zIn(T1) + 120 } : null;
+  // Tenon centré dans le bois laissé derrière les logements, pour que sa mortaise n'y débouche pas.
+  // Il s'arrête avant la mortaise de l'autre limon, sur la face voisine du poteau.
+  const jeu = Math.max(0, p.jeu);
+  const tt = Math.max(6, Math.round((el - p.enc) / 2)),
+    t0 = Math.max(0, p.enc + (el - p.enc - tt) / 2),
+    t1 = t0 + tt,
+    tl = Math.min(TENON.long, ps - t1 - 5);
+  const tenonOf = (sp: StringerGeom, hs: number): Tenon => {
+    const sh = sp.idx === 0 ? sp.prof[sp.prof.length - 1]![0] : sp.prof[0]![0],
+      far = sp.idx === 0 ? sh + tl : sh - tl;
+    const top = (u: number) => zIn(inner.cum[sp.idx]! + u),
+      bot = (u: number) => Math.max(0, top(u) - hs);
+    return {
+      u0: Math.min(sh, far),
+      u1: Math.max(sh, far),
+      z0: Math.max(bot(sh), bot(far)) + TENON.epaul,
+      z1: Math.min(top(sh), top(far)) - TENON.epaul,
+      t0,
+      t1,
+    };
+  };
+  // About des limons de mur : le tronçon 1 dépasse de son épaisseur et reçoit le bout du 2, vissé ou boulonné.
+  // Perçages au milieu du bois laissé derrière les logements, pour rester loin de ceux de la marche d'angle.
+  const holesOf = (sp: StringerGeom): Pt[] => {
+    if (!quart || sp.side !== "out" || sp.idx !== 0) return [];
+    const zt = zOut(outer.cum[1]!),
+      zb = Math.max(0, zt - hl),
+      u = outer.cum[1]! - outer.cum[0]! + (p.enc + jeu + el) / 2;
+    return [
+      [u, zb + (zt - zb) / 3],
+      [u, zb + ((zt - zb) * 2) / 3],
+    ];
+  };
+  const stringers: StringerPiece[] = withPockets.map((sp) => {
+    const hs = isJour(sp) ? hlj : hl;
+    return { ...sp, hl: hs, tenon: isJour(sp) ? tenonOf(sp, hs) : null, holes: holesOf(sp) };
+  });
+  // Poteau : faces dans l'ordre du tour (vu de dessus, sens trigonométrique pour le quart droit).
+  const mortise = (idx: number) => {
+    const t = stringers.find((sp) => isJour(sp) && sp.idx === idx)!.tenon!;
+    return {
+      idx,
+      depth: t.u1 - t.u0 + TENON.fond,
+      pts: [
+        [t.t0 - jeu, t.z0 - jeu],
+        [t.t1 + jeu, t.z0 - jeu],
+        [t.t1 + jeu, t.z1 + jeu],
+        [t.t0 - jeu, t.z1 + jeu],
+      ] as Pt[],
+    };
+  };
+  const newel: Newel | null = quart
+    ? {
+        c: [W + ps / 2, sK - ps / 2],
+        size: ps,
+        h: newelTop,
+        faces: [
+          { n: [-1, 0], o: [W, 0], dir: [0, 1], u0: sK - ps, u1: sK, pockets: pk[geoms.length]!.pockets, mortises: [] },
+          { n: [0, -1], o: [W, sK - ps], dir: [1, 0], u0: 0, u1: ps, pockets: [], mortises: [mortise(0)] },
+          { n: [1, 0], o: [W + ps, sK], dir: [0, -1], u0: 0, u1: ps, pockets: [], mortises: [mortise(1)] },
+          { n: [0, 1], o: [W, sK], dir: [1, 0], u0: 0, u1: ps, pockets: pk[geoms.length + 1]!.pockets, mortises: [] },
+        ],
+      }
+    : null;
   // Plancher haut et trémie (rectangle adossé au bord du palier ; en quart tournant, aussi au mur face à la montée).
   const slab: Rect = quart
     ? { x0: -el - 300, x1: B + 900, y0: -400, y1: A + el + 300 }

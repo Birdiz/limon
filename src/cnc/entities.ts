@@ -1,6 +1,6 @@
 import type { Vertex } from "../core/vec";
 
-export type Layer = "DECOUPE" | "DEFONCE" | "CM_DESSUS" | "CM_DESSOUS" | "TEXTE";
+export type Layer = "DECOUPE" | "DEFONCE" | "CM_DESSUS" | "CM_DESSOUS" | "TEXTE" | "TENON" | "MORTAISE" | "PERCAGE";
 
 /** Calques DXF et leur couleur ACI. */
 export const LAYERS: readonly [Layer, number][] = [
@@ -9,6 +9,13 @@ export const LAYERS: readonly [Layer, number][] = [
   ["CM_DESSUS", 5],
   ["CM_DESSOUS", 4],
   ["TEXTE", 3],
+];
+
+/** Calques de l'assemblage au poteau, déclarés seulement dans les fichiers qui s'en servent. */
+export const EXTRA_LAYERS: readonly [Layer, number][] = [
+  ["TENON", 6],
+  ["MORTAISE", 2],
+  ["PERCAGE", 30],
 ];
 
 export interface PolyEntity {
@@ -31,4 +38,12 @@ export interface TextEntity {
   right?: boolean;
 }
 
-export type Entity = PolyEntity | TextEntity;
+export interface CircleEntity {
+  kind: "circle";
+  layer: Layer;
+  x: number;
+  y: number;
+  r: number;
+}
+
+export type Entity = PolyEntity | TextEntity | CircleEntity;
