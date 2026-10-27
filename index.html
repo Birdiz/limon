@@ -62,23 +62,33 @@
             <p class="hint">Les cotes prises sur le chantier, en millimètres.</p>
             <div class="row">
               <label for="H">Hauteur à monter<small>sol fini à sol fini</small></label>
-              <div class="num"><input id="H" type="number" step="5" min="300" /><span>mm</span></div>
+              <div class="num">
+                <input id="H" type="number" inputmode="numeric" step="5" min="300" /><span>mm</span>
+              </div>
             </div>
             <div class="row" data-show="droit">
               <label for="L">Reculement<small>du 1er nez au nez de palier</small></label>
-              <div class="num"><input id="L" type="number" step="10" min="500" /><span>mm</span></div>
+              <div class="num">
+                <input id="L" type="number" inputmode="numeric" step="10" min="500" /><span>mm</span>
+              </div>
             </div>
             <div class="row" data-show="quart">
               <label for="A">Longueur côté départ<small>côté extérieur, hors limon</small></label>
-              <div class="num"><input id="A" type="number" step="10" min="500" /><span>mm</span></div>
+              <div class="num">
+                <input id="A" type="number" inputmode="numeric" step="10" min="500" /><span>mm</span>
+              </div>
             </div>
             <div class="row" data-show="quart">
               <label for="B">Longueur côté arrivée<small>côté extérieur, hors limon</small></label>
-              <div class="num"><input id="B" type="number" step="10" min="500" /><span>mm</span></div>
+              <div class="num">
+                <input id="B" type="number" inputmode="numeric" step="10" min="500" /><span>mm</span>
+              </div>
             </div>
             <div class="row">
               <label for="W">Emmarchement<small>largeur entre limons</small></label>
-              <div class="num"><input id="W" type="number" step="10" min="400" /><span>mm</span></div>
+              <div class="num">
+                <input id="W" type="number" inputmode="numeric" step="10" min="400" /><span>mm</span>
+              </div>
             </div>
           </div>
         </details>
@@ -94,19 +104,25 @@
             >
             <div class="row" data-show="droit">
               <label for="tL">Longueur de trémie<small>depuis le bord du palier</small></label>
-              <div class="num"><input id="tL" type="number" step="10" min="0" /><span>mm</span></div>
+              <div class="num">
+                <input id="tL" type="number" inputmode="numeric" step="10" min="0" /><span>mm</span>
+              </div>
             </div>
             <div class="row" data-show="quart">
               <label for="tX">Trémie côté arrivée<small>depuis le bord du palier</small></label>
-              <div class="num"><input id="tX" type="number" step="10" min="0" /><span>mm</span></div>
+              <div class="num">
+                <input id="tX" type="number" inputmode="numeric" step="10" min="0" /><span>mm</span>
+              </div>
             </div>
             <div class="row" data-show="quart">
               <label for="tY">Trémie côté départ<small>depuis le mur face à la montée</small></label>
-              <div class="num"><input id="tY" type="number" step="10" min="0" /><span>mm</span></div>
+              <div class="num">
+                <input id="tY" type="number" inputmode="numeric" step="10" min="0" /><span>mm</span>
+              </div>
             </div>
             <div class="row">
               <label for="ep">Épaisseur du plancher<small>sol fini à sous-face du plafond</small></label>
-              <div class="num"><input id="ep" type="number" step="5" min="0" /><span>mm</span></div>
+              <div class="num"><input id="ep" type="number" inputmode="numeric" step="5" min="0" /><span>mm</span></div>
             </div>
           </div>
         </details>
@@ -119,20 +135,24 @@
                 <label for="n">Nombre de hauteurs</label
                 ><label class="check"><input type="checkbox" id="nAuto" /> automatique</label>
               </div>
-              <div class="num nounit"><input id="n" type="number" step="1" min="3" max="40" /></div>
+              <div class="num nounit"><input id="n" type="number" inputmode="numeric" step="1" min="3" max="40" /></div>
             </div>
             <div class="row">
               <div>
                 <label for="f">Ligne de foulée<small>distance depuis le jour</small></label
                 ><label class="check"><input type="checkbox" id="fAuto" /> automatique</label>
               </div>
-              <div class="num"><input id="f" type="number" step="10" min="100" /><span>mm</span></div>
+              <div class="num">
+                <input id="f" type="number" inputmode="numeric" step="10" min="100" /><span>mm</span>
+              </div>
             </div>
             <div class="sub" data-show="quart">
               <h4>Balancement</h4>
               <div class="row">
                 <label for="mb">Marches balancées<small>marches touchées par le tournant</small></label>
-                <div class="num nounit"><input id="mb" type="number" step="1" min="2" max="12" /></div>
+                <div class="num nounit">
+                  <input id="mb" type="number" inputmode="numeric" step="1" min="2" max="12" />
+                </div>
               </div>
               <div class="row">
                 <label for="prog">Progressivité<small id="progTxt">0 % = girons égaux au jour</small></label
@@ -157,30 +177,40 @@
             </div>
             <div class="row">
               <label for="et">Épaisseur de marche</label>
-              <div class="num"><input id="et" type="number" step="1" min="18" /><span>mm</span></div>
+              <div class="num">
+                <input id="et" type="number" inputmode="numeric" step="1" min="18" /><span>mm</span>
+              </div>
             </div>
             <div class="row">
               <label for="deb">Débord de nez<small>recouvrement</small></label>
-              <div class="num"><input id="deb" type="number" step="1" min="0" /><span>mm</span></div>
+              <div class="num">
+                <input id="deb" type="number" inputmode="numeric" step="1" min="0" /><span>mm</span>
+              </div>
             </div>
             <div class="row">
               <label for="rn">Rayon du nez<small>arrondi dessus et dessous, 0 = vif</small></label>
-              <div class="num"><input id="rn" type="number" step="1" min="0" /><span>mm</span></div>
+              <div class="num"><input id="rn" type="number" inputmode="numeric" step="1" min="0" /><span>mm</span></div>
             </div>
             <div class="row">
               <div>
                 <label for="ecm">Contremarches</label
                 ><label class="check"><input type="checkbox" id="cm" /> avec</label>
               </div>
-              <div class="num"><input id="ecm" type="number" step="1" min="10" /><span>mm</span></div>
+              <div class="num">
+                <input id="ecm" type="number" inputmode="numeric" step="1" min="10" /><span>mm</span>
+              </div>
             </div>
             <div class="row">
               <label for="el">Épaisseur de limon</label>
-              <div class="num"><input id="el" type="number" step="1" min="20" /><span>mm</span></div>
+              <div class="num">
+                <input id="el" type="number" inputmode="numeric" step="1" min="20" /><span>mm</span>
+              </div>
             </div>
             <div class="row" data-show="quart">
               <label for="ps">Section du poteau<small>carrée, affleurant les limons côté marches</small></label>
-              <div class="num"><input id="ps" type="number" step="5" min="75" /><span>mm</span></div>
+              <div class="num">
+                <input id="ps" type="number" inputmode="numeric" step="5" min="75" /><span>mm</span>
+              </div>
             </div>
           </div>
         </details>
@@ -207,15 +237,21 @@
             </div>
             <div class="row" data-gc>
               <label for="mcL">Largeur de main courante</label>
-              <div class="num"><input id="mcL" type="number" step="5" min="30" /><span>mm</span></div>
+              <div class="num">
+                <input id="mcL" type="number" inputmode="numeric" step="5" min="30" /><span>mm</span>
+              </div>
             </div>
             <div class="row" data-gc>
               <label for="mcH">Hauteur de main courante</label>
-              <div class="num"><input id="mcH" type="number" step="5" min="30" /><span>mm</span></div>
+              <div class="num">
+                <input id="mcH" type="number" inputmode="numeric" step="5" min="30" /><span>mm</span>
+              </div>
             </div>
             <div class="row" data-gc>
               <label for="bs">Section des balustres<small>carrée ; montants et lisses aussi</small></label>
-              <div class="num"><input id="bs" type="number" step="1" min="20" /><span>mm</span></div>
+              <div class="num">
+                <input id="bs" type="number" inputmode="numeric" step="1" min="20" /><span>mm</span>
+              </div>
             </div>
           </div>
         </details>
@@ -236,7 +272,7 @@
 
       <main class="main">
         <section class="views">
-          <div class="view">
+          <div class="view" id="view3d">
             <div class="vhead">
               <h2>Vue 3D</h2>
               <div class="vbtns">
@@ -246,7 +282,7 @@
             </div>
             <div class="canvas" id="scene"><div class="errbox" id="err3d" hidden></div></div>
           </div>
-          <div class="view">
+          <div class="view" id="viewPlan">
             <div class="vhead">
               <h2>Plan</h2>
               <div class="legend">
@@ -295,26 +331,36 @@
               <div class="asmgrid">
                 <div class="row">
                   <label for="hl">Hauteur de limon<small data-show="quart">limon de mur</small></label>
-                  <div class="num"><input id="hl" type="number" step="5" min="150" /><span>mm</span></div>
+                  <div class="num">
+                    <input id="hl" type="number" inputmode="numeric" step="5" min="150" /><span>mm</span>
+                  </div>
                 </div>
                 <div class="row" data-show="quart">
                   <div>
                     <label for="hlj">Hauteur du limon de jour</label
                     ><label class="check"><input type="checkbox" id="hljAuto" /> automatique</label>
                   </div>
-                  <div class="num"><input id="hlj" type="number" step="5" min="150" /><span>mm</span></div>
+                  <div class="num">
+                    <input id="hlj" type="number" inputmode="numeric" step="5" min="150" /><span>mm</span>
+                  </div>
                 </div>
                 <div class="row">
                   <label for="pL">Longueur des plateaux<small>bois disponible, dans le fil</small></label>
-                  <div class="num"><input id="pL" type="number" step="100" min="500" /><span>mm</span></div>
+                  <div class="num">
+                    <input id="pL" type="number" inputmode="numeric" step="100" min="500" /><span>mm</span>
+                  </div>
                 </div>
                 <div class="row">
                   <label for="pW">Largeur des plateaux<small>bois disponible</small></label>
-                  <div class="num"><input id="pW" type="number" step="10" min="100" /><span>mm</span></div>
+                  <div class="num">
+                    <input id="pW" type="number" inputmode="numeric" step="10" min="100" /><span>mm</span>
+                  </div>
                 </div>
                 <div class="row">
                   <label for="enc">Encastrement<small>marches et contremarches dans les limons</small></label>
-                  <div class="num"><input id="enc" type="number" step="1" min="0" max="40" /><span>mm</span></div>
+                  <div class="num">
+                    <input id="enc" type="number" inputmode="numeric" step="1" min="0" max="40" /><span>mm</span>
+                  </div>
                 </div>
                 <div class="row">
                   <label for="jeu">Jeu d'assemblage<small>par côté, sur les logements</small></label>
@@ -378,7 +424,7 @@
               </div>
             </div>
             <div class="tablewrap"><table id="parts"></table></div>
-            <div class="actions">
+            <div class="actions cprow">
               <button class="btn" id="cpT" type="button">Copier marches.dxf</button
               ><button class="btn" id="cpR" type="button">Copier contremarches.dxf</button
               ><button class="btn" id="cpB" type="button">Copier limons.dxf</button
@@ -396,6 +442,31 @@
         </p>
       </main>
     </div>
+
+    <nav class="tabbar" id="tabbar" aria-label="Affichage">
+      <button type="button" data-tab="reglages">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12" />
+          <circle cx="16" cy="6" r="2" />
+          <circle cx="10" cy="12" r="2" />
+          <circle cx="18" cy="18" r="2" /></svg
+        >Réglages
+      </button>
+      <button type="button" data-tab="vue3d">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5" /></svg
+        >3D
+      </button>
+      <button type="button" data-tab="plan">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="7" y="3" width="10" height="18" />
+          <path d="M7 7.5h10M7 12h10M7 16.5h10" /></svg
+        >Plan
+      </button>
+      <button type="button" data-tab="fiche" id="tabFiche">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h4" /></svg>Fiche
+      </button>
+    </nav>
 
     <dialog id="projets" class="dlg" aria-labelledby="pjTitle">
       <div class="shead">

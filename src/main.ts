@@ -26,6 +26,7 @@ import { ProjectsDialog } from "./ui/projects";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
 import { LocalStore, newId } from "./ui/store";
+import { Tabs } from "./ui/tabs";
 
 const store = new LocalStore();
 // Lu avant le premier calcul, qui réécrit l'adresse.
@@ -49,6 +50,7 @@ function render(result: ComputeResult): void {
     byId("table").innerHTML = "";
     byId("notes").innerHTML = "";
     byId("headline").textContent = "";
+    byId("tabFiche").classList.remove("alert");
     byId("cnc").hidden = true;
     scene?.showError(msg);
     return;
@@ -58,6 +60,11 @@ function render(result: ComputeResult): void {
   byId("tiles").innerHTML = tilesHTML(R);
   byId("notes").innerHTML = notesHTML(R.notes);
   byId("headline").innerHTML = headlineHTML(R);
+  // Pastille sur l'onglet Fiche du téléphone : une règle n'est pas respectée.
+  byId("tabFiche").classList.toggle(
+    "alert",
+    R.notes.some(([s]) => s === "warn" || s === "bad"),
+  );
   byId("table").innerHTML = treadsTableHTML(R);
   scene?.draw(R);
 
@@ -132,6 +139,8 @@ byId("cncClose").addEventListener("click", () => {
   setCNC(false);
   update();
 });
+
+new Tabs(byId("tabbar"), document.querySelector<HTMLElement>(".work")!);
 
 const projects = new ProjectsDialog(store, { current: () => project, open: openProject });
 byId("pjOpen").addEventListener("click", () => void projects.show());
