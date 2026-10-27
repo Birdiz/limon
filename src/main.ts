@@ -14,6 +14,7 @@ import { DEFAULTS, type Params } from "./core/params";
 import { NOM_PAR_DEFAUT, type Project } from "./core/project";
 import { treadsCSV } from "./core/sheet";
 import { compute, type ComputeResult } from "./core/stair";
+import { SECTIONS, sectionSummaries } from "./core/summary";
 import { cutListHTML, previewSVG, stringerFitHTML } from "./ui/cnc-panel";
 import { byId, copyText, downloadBytes, flash } from "./ui/dom";
 import { planSVG } from "./ui/plan";
@@ -21,6 +22,7 @@ import { headlineHTML, notesHTML, tilesHTML, treadsTableHTML } from "./ui/result
 import type { Scene3D } from "./ui/scene3d";
 import { ProjectsDialog } from "./ui/projects";
 import { readInputs, syncInputs, writeInputs } from "./ui/settings";
+import { Steps } from "./ui/steps";
 import { LocalStore } from "./ui/store";
 
 const store = new LocalStore();
@@ -49,16 +51,18 @@ function render(result: ComputeResult): void {
   byId("notes").innerHTML = notesHTML(R.notes);
   byId("headline").innerHTML = headlineHTML(R);
   byId("table").innerHTML = treadsTableHTML(R);
+  scene?.draw(R);
 
-  cnc = buildCNC(R);
   byId("cnc").hidden = false;
+  // L'export CNC n'est calculé que lorsque sa section est ouverte.
+  cnc = byId("cncBody").hidden ? null : buildCNC(R);
+  if (!cnc) return;
   byId("pvT").innerHTML = previewSVG(cnc.treadEnts, "Aperçu des marches à découper");
   byId("pvB").innerHTML = previewSVG(cnc.boardEnts, "Aperçu des limons développés");
   byId("pvRbox").hidden = byId("cpR").hidden = !R.params.cm;
   byId("pvR").innerHTML = previewSVG(cnc.riserEnts, "Aperçu des contremarches à découper");
   byId("cncnotes").innerHTML = stringerFitHTML(cnc.boardParts, R);
   byId("parts").innerHTML = cutListHTML(cnc, R);
-  scene?.draw(R);
 }
 
 function update(): void {
@@ -70,6 +74,8 @@ function update(): void {
   }
   current = compute(params);
   syncInputs(params, current.ok ? current.stair : null);
+  const sums = sectionSummaries(params, current.ok ? current.stair : null);
+  SECTIONS.forEach((k) => (byId(`sum-${k}`).textContent = sums[k]));
   render(current);
 }
 
@@ -86,8 +92,30 @@ function openProject(p: Project | null): void {
   params = p ? { ...p.params } : { ...DEFAULTS };
   byId<HTMLInputElement>("pjName").value = p?.nom ?? "";
   writeInputs(params);
+  steps.apply(p?.mode ?? "complet", p?.etape ?? 0);
+  setCNC(false);
   update();
 }
+
+const steps = new Steps((mode, etape) => {
+  if (!project) return;
+  project = { ...project, mode, etape };
+  void store.save(project);
+});
+
+/** Ouvre ou replie l'export CNC. */
+function setCNC(on: boolean): void {
+  byId("cncBody").hidden = byId("dl").hidden = byId("cncClose").hidden = !on;
+  byId("cncIntro").hidden = byId("cncOpen").hidden = on;
+}
+byId("cncOpen").addEventListener("click", () => {
+  setCNC(true);
+  update();
+});
+byId("cncClose").addEventListener("click", () => {
+  setCNC(false);
+  update();
+});
 
 const projects = new ProjectsDialog(store, { current: () => project, open: openProject });
 byId("pjOpen").addEventListener("click", () => void projects.show());
@@ -100,9 +128,10 @@ byId<HTMLInputElement>("pjName").addEventListener("change", (e) => {
 });
 
 /* ---------- Événements ---------- */
-const side = document.querySelector<HTMLElement>(".side")!;
-side.addEventListener("input", schedule);
-side.addEventListener("change", schedule);
+for (const el of [document.querySelector<HTMLElement>(".side")!, byId("cncBody")]) {
+  el.addEventListener("input", schedule);
+  el.addEventListener("change", schedule);
+}
 byId("reset").addEventListener("click", () => {
   params = { ...DEFAULTS };
   writeInputs(params);

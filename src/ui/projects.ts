@@ -1,13 +1,7 @@
-import type { Forme } from "../core/params";
 import { fileBase, newProject, parseProjectFile, projectFile, type Mode, type Project } from "../core/project";
+import { FORME_LABEL } from "../core/summary";
 import { byId, downloadBytes, esc, flash } from "./dom";
 import { newId, type ProjectStore } from "./store";
-
-const FORME_LABEL: Record<Forme, string> = {
-  droit: "Droit",
-  "quart-g": "Quart tournant gauche",
-  "quart-d": "Quart tournant droit",
-};
 
 const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
 

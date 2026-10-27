@@ -149,7 +149,10 @@ select {
 .side {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+}
+.side > .stepper,
+.side > #reset {
+  margin-top: 14px;
 }
 .group {
   display: flex;
@@ -850,4 +853,141 @@ td.low {
   .pjname {
     width: 100%;
   }
+}
+
+/* Sections de réglage */
+.sec {
+  border-bottom: 1px solid var(--rule);
+}
+.sec summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 22px 8px 0;
+  cursor: pointer;
+  list-style: none;
+  position: relative;
+}
+.sec summary::-webkit-details-marker {
+  display: none;
+}
+.sec summary::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  top: 14px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+.sec[open] summary::after {
+  transform: rotate(-135deg);
+  top: 17px;
+}
+.sh {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.sec summary:hover .sh {
+  color: var(--chalk);
+}
+.sum {
+  font-family: var(--f-data);
+  font-size: 12.5px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.sec[open] .sum {
+  display: none;
+}
+.sbody {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 2px 0 14px;
+}
+.sub {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 4px;
+}
+.sub h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.hint {
+  display: none;
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.guided .hint {
+  display: block;
+}
+.guided .sec summary::after {
+  display: none;
+}
+.guided .sec.done .sh::before {
+  content: "✓ ";
+  color: var(--ok);
+}
+.guided .sec:not(.done) summary {
+  cursor: default;
+}
+.guided #sheetBox,
+.guided #cnc,
+.guided #reset {
+  display: none;
+}
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.stxt {
+  font-size: 13px;
+  color: var(--muted);
+}
+.stepper .actions {
+  justify-content: space-between;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  border-color: var(--rule);
+  color: inherit;
+}
+
+/* Export CNC à la demande */
+.cncbody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.asm {
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.asmgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 9px 28px;
 }
