@@ -16,19 +16,21 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
   const marches = toDXF(cnc.treadEnts),
     limons = toDXF(cnc.boardEnts),
     contremarches = toDXF(cnc.riserEnts),
-    poteau = toDXF(cnc.postEnts);
+    poteau = toDXF(cnc.postEnts),
+    gardeCorps = cnc.rail ? toDXF(cnc.rail.ents) : "";
 
   it("produit les mêmes DXF, fiche et notice", async () => {
     await expect(marches).toMatchFileSnapshot(`__snapshots__/${name}-marches.dxf`);
     await expect(limons).toMatchFileSnapshot(`__snapshots__/${name}-limons.dxf`);
     if (R.params.cm) await expect(contremarches).toMatchFileSnapshot(`__snapshots__/${name}-contremarches.dxf`);
     if (R.newel) await expect(poteau).toMatchFileSnapshot(`__snapshots__/${name}-poteau.dxf`);
+    if (R.rail) await expect(gardeCorps).toMatchFileSnapshot(`__snapshots__/${name}-garde-corps.dxf`);
     await expect(treadsCSV(R)).toMatchFileSnapshot(`__snapshots__/${name}.csv`);
     await expect(readme(R)).toMatchFileSnapshot(`__snapshots__/${name}-lisezmoi.txt`);
   });
 
   it("écrit un DXF R12 en ASCII, fins de ligne CRLF", () => {
-    for (const dxf of [marches, limons, contremarches, poteau]) {
+    for (const dxf of [marches, limons, contremarches, poteau, ...(R.rail ? [gardeCorps] : [])]) {
       expect(dxf).toMatch(/^ {2}0\r\nSECTION\r\n/);
       expect(dxf).toContain("\r\nAC1009\r\n");
       expect(dxf.endsWith("  0\r\nEOF\r\n")).toBe(true);
@@ -39,13 +41,19 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
   it("découpe une marche par giron et un limon par tronçon", () => {
     const cut = (ents: typeof cnc.treadEnts) => ents.filter((e) => e.kind === "poly" && e.layer === "DECOUPE");
     expect(cut(cnc.treadEnts)).toHaveLength(R.treads.length);
-    expect(cut(cnc.boardEnts)).toHaveLength(R.stringers.length);
+    // Avec des balustres posés dans le chant, le chant haut de chaque limon de jour est déroulé en plus.
+    const chants = R.rail?.pose === "chant" ? R.stringers.filter((sp) => sp.side === "in").length : 0;
+    expect(cut(cnc.boardEnts)).toHaveLength(R.stringers.length + chants);
     expect(cnc.riserParts).toHaveLength(R.params.cm ? R.n : 0);
     expect(cut(cnc.riserEnts)).toHaveLength(R.params.cm ? R.n : 0);
   });
 
   it("met contremarches.dxf dans l'archive seulement s'il y a des contremarches", () => {
     expect(exportFiles(R, cnc).some((f) => f.name === "contremarches.dxf")).toBe(R.params.cm);
+  });
+
+  it("met garde-corps.dxf dans l'archive seulement avec un garde-corps", () => {
+    expect(exportFiles(R, cnc).some((f) => f.name === "garde-corps.dxf")).toBe(R.params.gc !== "aucun");
   });
 
   it("met poteau.dxf dans l'archive seulement en quart tournant", () => {

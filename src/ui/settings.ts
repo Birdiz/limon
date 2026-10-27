@@ -5,7 +5,9 @@ import {
   sanitizeParams,
   type Essence,
   type Forme,
+  type GardeCorps,
   type NumericKey,
+  type Pose,
   type Params,
 } from "../core/params";
 import type { InputError, Stair } from "../core/stair";
@@ -36,6 +38,8 @@ export function writeInputs(p: Params): void {
   NUMERIC_KEYS.forEach((k) => (input(k).value = String(p[k])));
   BOOLEAN_KEYS.forEach((k) => (input(k).checked = p[k]));
   byId<HTMLSelectElement>("ess").value = p.ess;
+  byId<HTMLSelectElement>("gc").value = p.gc;
+  byId<HTMLSelectElement>("gcPose").value = p.gcPose;
 }
 
 /** Réglages lus dans le formulaire ; un champ vide ou invalide garde sa valeur précédente et figure dans missing. */
@@ -51,6 +55,8 @@ export function readInputs(prev: Params): { params: Params; missing: NumericKey[
   });
   BOOLEAN_KEYS.forEach((k) => (p[k] = input(k).checked));
   p.ess = byId<HTMLSelectElement>("ess").value as Essence;
+  p.gc = byId<HTMLSelectElement>("gc").value as GardeCorps;
+  p.gcPose = byId<HTMLSelectElement>("gcPose").value as Pose;
   return { params: p, missing };
 }
 
@@ -110,6 +116,7 @@ export function syncInputs(p: Params, stair: Stair | null): void {
   document
     .querySelectorAll<HTMLElement>("[data-show]")
     .forEach((el) => (el.hidden = (el.dataset.show === "quart") !== quart));
+  document.querySelectorAll<HTMLElement>("[data-gc]").forEach((el) => (el.hidden = p.gc === "aucun"));
   input("n").disabled = p.nAuto;
   input("f").disabled = p.fAuto;
   input("hlj").disabled = p.hljAuto;

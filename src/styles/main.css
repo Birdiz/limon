@@ -711,6 +711,10 @@ td.low {
 .pv.short {
   height: clamp(200px, 30vh, 340px);
 }
+.pl-gc {
+  fill: none;
+  stroke: var(--chalk);
+}
 .cx-DECOUPE {
   fill: var(--panel);
   stroke: var(--ink);

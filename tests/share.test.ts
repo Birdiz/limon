@@ -16,7 +16,16 @@ describe("lien de projet", () => {
   });
 
   it("relit un lien à l'identique", () => {
-    const p = { ...DEFAULTS, forme: "quart-g" as const, ess: "noyer" as const, A: 3100, nAuto: false, n: 16 };
+    const p = {
+      ...DEFAULTS,
+      forme: "quart-g" as const,
+      ess: "noyer" as const,
+      gc: "lisses" as const,
+      gcPose: "anglaise" as const,
+      A: 3100,
+      nAuto: false,
+      n: 16,
+    };
     expect(paramsFromHash(`#${paramsToHash(p)}`)).toEqual(p);
   });
 

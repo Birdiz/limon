@@ -5,6 +5,7 @@ import { fmt, ceil10 } from "./format";
 import type { NumericKey, Params } from "./params";
 import { cncFrame, stringerPockets } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
+import { GC, railing, type Railing } from "./railing";
 import { V, clamp, interp, type Pt, type Vertex } from "./vec";
 
 export type Status = "ok" | "warn" | "bad";
@@ -107,8 +108,8 @@ export interface NewelFace {
   u1: number;
   /** Logements des marches et contremarches (u, z), sur les faces côté marches. */
   pockets: Vertex[][];
-  /** Mortaise du tronçon de limon de jour idx, sur sa face d'entrée. */
-  mortises: { idx: number; pts: Pt[]; depth: number }[];
+  /** Mortaises du tronçon idx (limon de jour ou main courante), sur sa face d'entrée. */
+  mortises: { idx: number; of: "limon" | "main courante"; pts: Pt[]; depth: number }[];
 }
 
 /** Poteau du quart tournant, du sol à h, affleurant les faces des limons de jour côté marches. */
@@ -185,6 +186,8 @@ export interface Stair {
   needJ: number;
   needM: number;
   newel: Newel | null;
+  /** Garde-corps côté jour ; null sans garde-corps. */
+  rail: Railing | null;
   slab: Rect;
   tre: Rect;
   /** Hauteur de la sous-face du plancher. */
@@ -277,6 +280,19 @@ function validate(p: Params, quart: boolean): InputError[] {
     err("ps", "La section du poteau doit dépasser l'épaisseur de limon d'au moins 30 mm.");
   else if (quart && p.A > W + 1 && p.B > W + 1 && !(Math.min(p.A, p.B) - W >= p.ps + 100))
     err("ps", "Le poteau doit laisser au moins 100 mm de limon de jour de chaque côté : réduisez sa section.");
+  if (p.gc !== "aucun") {
+    if (!(p.bs >= 20)) err("bs", "Les balustres, montants et lisses doivent faire au moins 20 mm.");
+    else if (p.gcPose === "chant" && !(p.bs <= p.el))
+      err("bs", "Posés dans le chant, les balustres ne doivent pas dépasser l'épaisseur du limon.");
+    if (!(p.mcH >= 30)) err("mcH", "La main courante doit faire au moins 30 mm de haut.");
+    if (!(p.mcL >= 30)) err("mcL", "La main courante doit faire au moins 30 mm de large.");
+    else if (
+      quart &&
+      p.ps >= p.el + 30 &&
+      !(p.mcL / 2 + (p.gcPose === "chant" ? p.el / 2 : p.el + p.bs / 2) <= p.ps - 10)
+    )
+      err("mcL", "La main courante déborde du poteau : réduisez sa largeur ou élargissez le poteau.");
+  }
   if (!(p.ep >= 0 && p.ep < H - 500))
     err("ep", "L'épaisseur du plancher doit rester inférieure à la hauteur à monter moins 500 mm.");
   return errors;
@@ -621,6 +637,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
     const t = stringers.find((sp) => isJour(sp) && sp.idx === idx)!.tenon!;
     return {
       idx,
+      of: "limon" as const,
       depth: t.u1 - t.u0 + TENON.fond,
       pts: [
         [t.t0 - jeu, t.z0 - jeu],
@@ -630,15 +647,62 @@ export function compute(p: Params, suggest = true): ComputeResult {
       ] as Pt[],
     };
   };
+  // Garde-corps : main courante au-dessus des limons de jour, assemblée dans le poteau qui monte la recevoir.
+  const rail = railing({
+    p,
+    quart,
+    jour: stringers.filter((sp) => sp.side === "in"),
+    cum: inner.cum,
+    noseS: lines.map((l) => l.sIn),
+    noseZ: lines.map((l) => (l.k + 1) * h),
+  });
+  const mcMortise = (idx: number) => {
+    const hr = rail?.handrails.find((r) => r.idx === idx);
+    const t = hr?.tenon;
+    if (!t) return [];
+    return [
+      {
+        idx,
+        of: "main courante" as const,
+        depth: t.u1 - t.u0 + GC.fond,
+        pts: [
+          [t.t0 - jeu, t.z0 - jeu],
+          [t.t1 + jeu, t.z0 - jeu],
+          [t.t1 + jeu, t.z1 + jeu],
+          [t.t0 - jeu, t.z1 + jeu],
+        ] as Pt[],
+      },
+    ];
+  };
+  const mcTop = Math.max(
+    0,
+    ...(rail?.handrails.filter((r) => r.tenon).map((r) => r.z0 + r.b * (r.idx === 0 ? r.u1 : r.u0)) ?? []),
+  );
   const newel: Newel | null = quart
     ? {
         c: [W + ps / 2, sK - ps / 2],
         size: ps,
-        h: newelTop,
+        h: rail ? Math.max(newelTop, ceil10(mcTop + GC.tete)) : newelTop,
         faces: [
           { n: [-1, 0], o: [W, 0], dir: [0, 1], u0: sK - ps, u1: sK, pockets: pk[geoms.length]!.pockets, mortises: [] },
-          { n: [0, -1], o: [W, sK - ps], dir: [1, 0], u0: 0, u1: ps, pockets: [], mortises: [mortise(0)] },
-          { n: [1, 0], o: [W + ps, sK], dir: [0, -1], u0: 0, u1: ps, pockets: [], mortises: [mortise(1)] },
+          {
+            n: [0, -1],
+            o: [W, sK - ps],
+            dir: [1, 0],
+            u0: 0,
+            u1: ps,
+            pockets: [],
+            mortises: [mortise(0), ...mcMortise(0)],
+          },
+          {
+            n: [1, 0],
+            o: [W + ps, sK],
+            dir: [0, -1],
+            u0: 0,
+            u1: ps,
+            pockets: [],
+            mortises: [mortise(1), ...mcMortise(1)],
+          },
           { n: [0, 1], o: [W, sK], dir: [1, 0], u0: 0, u1: ps, pockets: pk[geoms.length + 1]!.pockets, mortises: [] },
         ],
       }
@@ -790,6 +854,22 @@ export function compute(p: Params, suggest = true): ComputeResult {
         : `Trémie minimale pour 2 000 mm d'échappée : ${fmt(tLmin!)} mm de long.`,
     ]);
   }
+  if (rail) {
+    const what =
+      rail.type === "balustres"
+        ? `${rail.posts.length} balustres`
+        : `${rail.posts.length} montants et ${rail.rails.length} lisses`;
+    N.push([
+      "info",
+      `Garde-corps${quart ? "" : " côté limon droit"} : main courante de ${fmt(rail.hMin)} à ${fmt(rail.hMax)} mm au-dessus des nez, ${what}, écart libre de ${fmt(rail.gap)} mm au plus.`,
+    ]);
+    if (rail.railLow < 0)
+      N.push([
+        "warn",
+        "La lisse basse touche le limon là où il monte plus vite que la main courante (tournant) : préférez des balustres.",
+        { set: { gc: "balustres" }, label: "Passer aux balustres" },
+      ]);
+  }
   if (!p.nAuto && n !== nAuto && !N.some((x) => x[2]?.set.nAuto))
     N.push([
       "info",
@@ -833,6 +913,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       needJ,
       needM,
       newel,
+      rail,
       slab,
       tre,
       ceil,

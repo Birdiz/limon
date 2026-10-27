@@ -69,6 +69,8 @@ function render(result: ComputeResult): void {
   byId("pvR").innerHTML = previewSVG(cnc.riserEnts, "Aperçu des contremarches à découper");
   byId("pvPbox").hidden = byId("cpP").hidden = !R.newel;
   byId("pvP").innerHTML = previewSVG(cnc.postEnts, "Aperçu des faces du poteau");
+  byId("pvGbox").hidden = byId("cpG").hidden = !cnc.rail;
+  byId("pvG").innerHTML = cnc.rail ? previewSVG(cnc.rail.ents, "Aperçu des pièces du garde-corps") : "";
   byId("cncnotes").innerHTML = stringerFitHTML(cnc.boardParts, R) + stockFitHTML(cnc, R);
   byId("parts").innerHTML = cutListHTML(cnc, R);
   scene?.draw(R);
@@ -150,6 +152,11 @@ byId("cpT").addEventListener("click", () => copyDXF("treadEnts", "marches.dxf"))
 byId("cpR").addEventListener("click", () => copyDXF("riserEnts", "contremarches.dxf"));
 byId("cpB").addEventListener("click", () => copyDXF("boardEnts", "limons.dxf"));
 byId("cpP").addEventListener("click", () => copyDXF("postEnts", "poteau.dxf"));
+byId("cpG").addEventListener("click", async () => {
+  if (!cnc?.rail) return;
+  if (await copyText(toDXF(cnc.rail.ents), byId<HTMLTextAreaElement>("dxffb")))
+    flash(byId("cpmsg"), "garde-corps.dxf copié");
+});
 
 const reTheme = () => scene?.applyTheme();
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", reTheme);

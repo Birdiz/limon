@@ -6,10 +6,12 @@
 import { fmt } from "../core/format";
 import { cncFrame } from "../core/pockets";
 import { polyPath } from "../core/poly";
+import { GC } from "../core/railing";
 import { PERCAGE, type Stair } from "../core/stair";
 import { stringerOutline } from "../core/stringer";
-import { V, bbox, closeRing, type Box, type Pt, type Vertex } from "../core/vec";
+import { V, bbox, closeRing, interp, type Box, type Pt, type Vertex } from "../core/vec";
 import type { Entity, Layer } from "./entities";
+import { buildRailing, postTenon, type RailingCNC } from "./railing";
 
 export interface TreadPart {
   j: number;
@@ -57,7 +59,10 @@ export function stockVolume(cnc: CNC, R: Stair): number {
   const p = R.params;
   const sum = (list: readonly Piece[], e: number) => list.reduce((v, q) => v + q.L * q.l * e, 0);
   const post = cnc.postPart ? cnc.postPart.L * cnc.postPart.l * cnc.postPart.e : 0;
-  return (sum(cnc.boardParts, p.el) + sum(cnc.treadParts, p.et) + sum(cnc.riserParts, p.ecm) + post) / 1e9;
+  const rail = cnc.rail
+    ? sum(cnc.rail.handrailParts, p.mcL) + sum(cnc.rail.postParts, p.bs) + sum(cnc.rail.railParts, p.bs)
+    : 0;
+  return (sum(cnc.boardParts, p.el) + sum(cnc.treadParts, p.et) + sum(cnc.riserParts, p.ecm) + post + rail) / 1e9;
 }
 
 export interface CNC {
@@ -69,6 +74,8 @@ export interface CNC {
   boardParts: BoardPart[];
   postEnts: Entity[];
   postPart: PostPart | null;
+  /** Garde-corps côté jour, s'il y en a un. */
+  rail: RailingCNC | null;
 }
 
 export function buildCNC(R: Stair): CNC {
@@ -212,6 +219,7 @@ export function buildCNC(R: Stair): CNC {
   const boardEnts: Entity[] = [],
     boardParts: BoardPart[] = [];
   let by = 0;
+  const G = R.rail;
   const names = R.quart ? { in: "LIMON DE JOUR", out: "LIMON DE MUR" } : { in: "LIMON DROIT", out: "LIMON GAUCHE" };
   R.stringers.forEach((sp) => {
     const outline = stringerOutline(sp, sp.hl),
@@ -263,6 +271,14 @@ export function buildCNC(R: Stair): CNC {
       const c = tr(q);
       boardEnts.push({ kind: "circle", layer: "PERCAGE", x: c[0], y: c[1], r: PERCAGE / 2 });
     });
+    // Balustres posés à l'anglaise : perçages de fixation dans le limon de jour.
+    const posts = G && sp.side === "in" ? G.posts.filter((q) => q.idx === sp.idx) : [];
+    posts.forEach((q) =>
+      q.holes.forEach((h) => {
+        const c = tr(h);
+        boardEnts.push({ kind: "circle", layer: "PERCAGE", x: c[0], y: c[1], r: GC.vis / 2 });
+      }),
+    );
     const name = names[sp.side] + (sp.count > 1 ? ` ${sp.idx + 1}/${sp.count}` : "");
     const L = B.r.x1 - B.r.x0,
       H = B.r.y1 - B.r.y0;
@@ -285,6 +301,61 @@ export function buildCNC(R: Stair): CNC {
     if (joint) boardEnts.push({ kind: "text", layer: "TEXTE", x: 0, y: by + H + 100, h: 30, s: joint });
     boardParts.push({ name, L, l: H, pockets: pockets.length, need: sp.need, hl: sp.hl });
     by += H + 180;
+    // Balustres posés dans le chant : chant haut déroulé au-dessus du limon, dans le même sens, avec les mortaises.
+    if (posts.length && G!.pose === "chant") {
+      const pr = sp.prof,
+        arc = [0];
+      for (let i = 1; i < pr.length; i++)
+        arc.push(arc[i - 1]! + Math.hypot(pr[i]![0] - pr[i - 1]![0], pr[i]![1] - pr[i - 1]![1]));
+      const total = arc[arc.length - 1]!,
+        at = (u: number) => {
+          const x = interp(
+            pr.map((q) => q[0]),
+            arc,
+            u,
+          );
+          return flip ? total - x : x;
+        };
+      const tb = postTenon(p),
+        jeu = Math.max(0, p.jeu);
+      boardEnts.push({
+        kind: "poly",
+        layer: "DECOUPE",
+        pts: [
+          [0, by],
+          [total, by],
+          [total, by + p.el],
+          [0, by + p.el],
+        ],
+        closed: true,
+      });
+      posts.forEach((q) => {
+        const x = at(q.u),
+          a = (tb * Math.hypot(1, q.ab)) / 2 + jeu,
+          b = tb / 2 + jeu,
+          m = by + G!.off;
+        boardEnts.push({
+          kind: "poly",
+          layer: "MORTAISE",
+          pts: [
+            [x - a, m - b],
+            [x + a, m - b],
+            [x + a, m + b],
+            [x - a, m + b],
+          ],
+          closed: true,
+        });
+      });
+      boardEnts.push({
+        kind: "text",
+        layer: "TEXTE",
+        x: 0,
+        y: by + p.el + 30,
+        h: 30,
+        s: `${name} - CHANT HAUT deroule, cote marches en bas - mortaises d'aplomb ${tb} x ${tb} profondeur ${GC.tenon + GC.fond} mm, jeu ${fmt(p.jeu, 1)} mm`,
+      });
+      by += p.el + 180;
+    }
   });
 
   // Poteau : chaque face vue de l'extérieur, couchée pied à gauche, la suivante du tour dessous
@@ -295,8 +366,8 @@ export function buildCNC(R: Stair): CNC {
     const ps = N.size;
     const what = [
       `cote marches, volee de depart - defonce ${e} mm, jeu ${fmt(p.jeu, 1)} mm`,
-      `mortaise du ${names.in} 1/2`,
-      `mortaise du ${names.in} 2/2`,
+      `mortaise${G ? "s" : ""} du ${names.in} 1/2`,
+      `mortaise${G ? "s" : ""} du ${names.in} 2/2`,
       `cote marches, volee d'arrivee - defonce ${e} mm, jeu ${fmt(p.jeu, 1)} mm`,
     ];
     // Le miroir du quart gauche inverse le sens du tour.
@@ -336,9 +407,12 @@ export function buildCNC(R: Stair): CNC {
       });
       f.pockets.forEach((pk) => postEnts.push({ kind: "poly", layer: "DEFONCE", pts: pk.map(tr), closed: true }));
       f.mortises.forEach((m) => postEnts.push({ kind: "poly", layer: "MORTAISE", pts: m.pts.map(tr), closed: true }));
-      const depth = f.mortises.length
-        ? ` - profondeur ${fmt(f.mortises[0]!.depth, 1)} mm, jeu ${fmt(p.jeu, 1)} mm`
-        : "";
+      const mc = f.mortises.find((m) => m.of === "main courante");
+      const depth = !f.mortises.length
+        ? ""
+        : mc
+          ? ` (profondeur ${fmt(f.mortises[0]!.depth, 1)} mm) et de la MAIN COURANTE ${mc.idx + 1}/2 (profondeur ${fmt(mc.depth, 1)} mm), jeu ${fmt(p.jeu, 1)} mm`
+          : ` - profondeur ${fmt(f.mortises[0]!.depth, 1)} mm, jeu ${fmt(p.jeu, 1)} mm`;
       postEnts.push({
         kind: "text",
         layer: "TEXTE",
@@ -350,5 +424,6 @@ export function buildCNC(R: Stair): CNC {
     });
   }
   const postPart = N ? { L: N.h, l: N.size, e: N.size } : null;
-  return { treadEnts, riserEnts, boardEnts, treadParts, riserParts, boardParts, postEnts, postPart };
+  const rail = G ? buildRailing(G, p) : null;
+  return { treadEnts, riserEnts, boardEnts, treadParts, riserParts, boardParts, postEnts, postPart, rail };
 }

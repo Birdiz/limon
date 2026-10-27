@@ -120,7 +120,7 @@ function group(list: readonly TreadPart[], one: string, many: string, e: number)
   }));
 }
 
-/** Liste de débit : limons, marches, contremarches, poteau. */
+/** Liste de débit : limons, marches, contremarches, garde-corps, poteau. */
 export function cutListHTML(cnc: CNC, R: Stair): string {
   const p = R.params;
   const rows: CutRow[] = [
@@ -133,6 +133,15 @@ export function cutListHTML(cnc: CNC, R: Stair): string {
     })),
     ...group(cnc.treadParts, "Marche", "Marches", p.et),
     ...group(cnc.riserParts, "Contremarche", "Contremarches", p.ecm),
+    ...(cnc.rail
+      ? [
+          ...cnc.rail.handrailParts.map((q) => ({ name: q.name, q: 1, L: Math.ceil(q.L), l: p.mcH, e: p.mcL })),
+          ...(R.rail?.type === "balustres"
+            ? group(cnc.rail.postParts, "Balustre", "Balustres", p.bs)
+            : group(cnc.rail.postParts, "Montant", "Montants", p.bs)),
+          ...group(cnc.rail.railParts, "Lisse", "Lisses", p.bs),
+        ]
+      : []),
     ...(cnc.postPart
       ? [{ name: "Poteau", q: 1, L: Math.ceil(cnc.postPart.L), l: cnc.postPart.l, e: cnc.postPart.e }]
       : []),

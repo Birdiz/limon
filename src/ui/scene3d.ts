@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { handrailOutline, postOutline, railOutline } from "../cnc/railing";
 import type { Essence } from "../core/params";
 import type { StringerPiece, Stair, Tread } from "../core/stair";
 import { stringerOutline } from "../core/stringer";
-import type { Pt } from "../core/vec";
+import { V, type Pt } from "../core/vec";
 import { cssVar } from "./dom";
 
 /* Le plan (x, y) devient (x, -z) en 3D, la hauteur est y.
@@ -95,16 +96,34 @@ function noseMesh(n: NonNullable<Tread["nose"]>, z0: number, et: number, r: numb
   return shaded(geo, mat);
 }
 
-function stringerMesh(sp: StringerPiece, mat: THREE.Material): THREE.Mesh {
-  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(v2(stringerOutline(sp, sp.hl))), {
-    depth: sp.width,
-    bevelEnabled: false,
-  });
-  const X = new THREE.Vector3(sp.dir[0], 0, -sp.dir[1]),
+/** Contour (u, z) d'un plan vertical, extrudé sur width le long de rn depuis origin. */
+function sideMesh(outline: readonly Pt[], origin: Pt, dir: Pt, rn: Pt, width: number, mat: THREE.Material): THREE.Mesh {
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(v2(outline)), { depth: width, bevelEnabled: false });
+  const X = new THREE.Vector3(dir[0], 0, -dir[1]),
     Y = new THREE.Vector3(0, 1, 0),
-    Z = new THREE.Vector3(sp.rn[0], 0, -sp.rn[1]);
-  geo.applyMatrix4(new THREE.Matrix4().makeBasis(X, Y, Z).setPosition(sp.origin[0], 0, -sp.origin[1]));
+    Z = new THREE.Vector3(rn[0], 0, -rn[1]);
+  geo.applyMatrix4(new THREE.Matrix4().makeBasis(X, Y, Z).setPosition(origin[0], 0, -origin[1]));
   return shaded(geo, mat);
+}
+
+const stringerMesh = (sp: StringerPiece, mat: THREE.Material): THREE.Mesh =>
+  sideMesh(stringerOutline(sp, sp.hl), sp.origin, sp.dir, sp.rn, sp.width, mat);
+
+/** Garde-corps : chaque pièce dans le plan vertical de son tronçon de limon de jour. */
+function railingMeshes(R: Stair, mat: THREE.Material): THREE.Mesh[] {
+  const G = R.rail,
+    p = R.params;
+  if (!G) return [];
+  const sp = (idx: number) => R.stringers.find((s) => s.side === "in" && s.idx === idx)!;
+  const at = (idx: number, w: number) => {
+    const s = sp(idx);
+    return [V.add(s.a, V.mul(s.rn, G.off - w / 2)), s.dir, s.rn] as const;
+  };
+  return [
+    ...G.handrails.map((hr) => sideMesh(handrailOutline(hr), ...at(hr.idx, p.mcL), p.mcL, mat)),
+    ...G.posts.map((q) => sideMesh(postOutline(q, p), ...at(q.idx, p.bs), p.bs, mat)),
+    ...G.rails.map((r) => sideMesh(railOutline(r), ...at(r.idx, p.bs), p.bs, mat)),
+  ];
 }
 
 function disposeTree(root: THREE.Object3D): void {
@@ -228,6 +247,7 @@ export class Scene3D {
     });
     R.risers.forEach((r) => g.add(extrudePlan(r.plan, r.z0, Math.max(1, r.z1 - r.z0), wood)));
     R.stringers.forEach((sp) => g.add(stringerMesh(sp, woodDark)));
+    railingMeshes(R, wood).forEach((m) => g.add(m));
     if (R.newel) {
       const nb = shaded(new THREE.BoxGeometry(R.newel.size, R.newel.h, R.newel.size), woodDark);
       nb.position.set(R.newel.c[0], R.newel.h / 2, -R.newel.c[1]);

@@ -10,9 +10,10 @@ Calcul et dessin d'escaliers en bois pour menuisiers, sur le web : escalier droi
 - **Débit** : alerte quand une pièce dépasse les plateaux disponibles, volume brut et poids selon l'essence.
 - **Lien de projet et fiche d'atelier** : les réglages qui diffèrent de l'exemple vont dans l'adresse de la page (après le `#`) ; la fiche d'atelier s'imprime avec les réglages, le plan, les contrôles et la liste de débit.
 - **Plan et 3D** : plan coté en SVG, vue 3D Three.js avec limons, poteau, marches et contremarches.
-- **Export CNC** : zip contenant `marches.dxf`, `limons.dxf`, `contremarches.dxf` (si l'escalier en a), `poteau.dxf` (quart tournant), la fiche des marches en CSV et une notice.
+- **Export CNC** : zip contenant `marches.dxf`, `limons.dxf`, `contremarches.dxf` (si l'escalier en a), `poteau.dxf` (quart tournant), `garde-corps.dxf` (s'il y en a un), la fiche des marches en CSV et une notice.
   - Nez arrondi et jeu d'assemblage réglables ; le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.
   - Quart tournant : poteau carré affleurant les limons de jour côté marches, limons de jour assemblés à tenon et mortaise dans le poteau, limons de mur en about vissé ou boulonné dans l'angle.
+  - Garde-corps côté jour (limon droit pour l'escalier droit), au choix : balustres ou montants et lisses rampantes, posés dans le chant du limon ou à l'anglaise. Main courante droite à 900 mm au moins au-dessus des nez, écart libre de 110 mm au plus (NF P01-012), assemblée dans le poteau en quart tournant. Export `garde-corps.dxf`, mortaises dans le chant des limons ou perçages pour la pose à l'anglaise.
   - DXF R12 en millimètres.
   - Calques `DECOUPE` (contours), `DEFONCE` (logements), `CM_DESSUS` et `CM_DESSOUS` (traits des contremarches), `TEXTE` ; en quart tournant, `TENON`, `MORTAISE` et `PERCAGE`.
 

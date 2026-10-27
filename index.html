@@ -190,6 +190,36 @@
             <div class="num"><input id="jeu" type="number" step="0.1" min="0" max="5" /><span>mm</span></div>
           </div>
         </div>
+        <div class="group">
+          <h3>Garde-corps</h3>
+          <div class="row">
+            <label for="gc">Côté jour<small>main courante à 900 mm, écart libre de 110 mm au plus</small></label
+            ><select id="gc">
+              <option value="aucun">Aucun</option>
+              <option value="balustres">Balustres</option>
+              <option value="lisses">Lisses rampantes</option>
+            </select>
+          </div>
+          <div class="row" data-gc>
+            <label for="gcPose">Pose sur le limon</label
+            ><select id="gcPose">
+              <option value="chant">Dans le chant</option>
+              <option value="anglaise">À l'anglaise</option>
+            </select>
+          </div>
+          <div class="row" data-gc>
+            <label for="mcL">Largeur de main courante</label>
+            <div class="num"><input id="mcL" type="number" step="5" min="30" /><span>mm</span></div>
+          </div>
+          <div class="row" data-gc>
+            <label for="mcH">Hauteur de main courante</label>
+            <div class="num"><input id="mcH" type="number" step="5" min="30" /><span>mm</span></div>
+          </div>
+          <div class="row" data-gc>
+            <label for="bs">Section des balustres<small>carrée ; montants et lisses aussi</small></label>
+            <div class="num"><input id="bs" type="number" step="1" min="20" /><span>mm</span></div>
+          </div>
+        </div>
         <div class="actions">
           <button class="btn" id="share" type="button">Copier le lien du projet</button
           ><button class="btn" id="reset" type="button">Revenir à l'exemple</button
@@ -282,6 +312,15 @@
               </div>
               <div class="pv short" id="pvR"></div>
             </div>
+            <div class="view wide" id="pvGbox">
+              <div class="vhead">
+                <h2>Garde-corps</h2>
+                <div class="legend">
+                  <span><i class="lg-cut"></i>découpe</span><span><i class="lg-mor"></i>mortaise</span>
+                </div>
+              </div>
+              <div class="pv short" id="pvG"></div>
+            </div>
             <div class="view wide" id="pvPbox">
               <div class="vhead">
                 <h2>Poteau</h2>
@@ -299,6 +338,7 @@
             ><button class="btn" id="cpR" type="button">Copier contremarches.dxf</button
             ><button class="btn" id="cpB" type="button">Copier limons.dxf</button
             ><button class="btn" id="cpP" type="button">Copier poteau.dxf</button
+            ><button class="btn" id="cpG" type="button">Copier garde-corps.dxf</button
             ><span class="copied" id="cpmsg" hidden></span>
           </div>
           <textarea id="dxffb" hidden readonly aria-label="Contenu DXF"></textarea>

@@ -68,3 +68,17 @@ describe("synchronisation du formulaire", () => {
     expect(legend().hidden).toBe(false);
   });
 });
+
+describe("garde-corps", () => {
+  it("lit le remplissage et la pose, et masque leurs réglages sans garde-corps", () => {
+    const rows = () => [...document.querySelectorAll<HTMLElement>("[data-gc]")].map((el) => el.hidden);
+    syncInputs(DEFAULTS, null);
+    expect(rows().every(Boolean)).toBe(true);
+    (document.getElementById("gc") as HTMLSelectElement).value = "balustres";
+    (document.getElementById("gcPose") as HTMLSelectElement).value = "anglaise";
+    const { params } = readInputs(DEFAULTS);
+    expect([params.gc, params.gcPose]).toEqual(["balustres", "anglaise"]);
+    syncInputs(params, null);
+    expect(rows().some(Boolean)).toBe(false);
+  });
+});

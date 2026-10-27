@@ -1,7 +1,8 @@
 /* Lien de projet : les réglages qui diffèrent de l'exemple, en paramètres d'URL (après le #). */
 import { BOOLEAN_KEYS, DEFAULTS, NUMERIC_KEYS, sanitizeParams, type Params } from "./params";
 
-const KEYS = ["forme", "ess", ...NUMERIC_KEYS, ...BOOLEAN_KEYS] as const;
+const TEXT_KEYS = ["forme", "ess", "gc", "gcPose"] as const;
+const KEYS = [...TEXT_KEYS, ...NUMERIC_KEYS, ...BOOLEAN_KEYS] as const;
 
 /** Valeurs recalculées quand leur case « automatique » est cochée : inutiles dans le lien. */
 const autoKey = (p: Params, k: (typeof KEYS)[number]) =>
@@ -18,7 +19,7 @@ export function paramsFromHash(hash: string): Params | null {
   const q = new URLSearchParams(hash.replace(/^#/, ""));
   const raw: Record<string, unknown> = {};
   q.forEach((v, k) => {
-    raw[k] = k === "forme" || k === "ess" ? v : v === "true" ? true : v === "false" ? false : Number(v);
+    raw[k] = (TEXT_KEYS as readonly string[]).includes(k) ? v : v === "true" ? true : v === "false" ? false : Number(v);
   });
   return Object.keys(raw).some((k) => (KEYS as readonly string[]).includes(k)) ? sanitizeParams(raw) : null;
 }
