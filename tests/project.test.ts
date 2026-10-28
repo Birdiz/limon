@@ -20,17 +20,19 @@ describe("projets", () => {
     expect(q.params.forme).toBe(DEFAULTS.forme);
   });
 
-  it("relit son fichier .limon sous un nouvel identifiant", () => {
+  it("relit son fichier .escalier sous un nouvel identifiant", () => {
     const back = parseProjectFile(projectFile(p), "z9");
     expect(back).toEqual({ ...p, id: "z9" });
     expect(projectFile(p)).not.toContain("a1");
   });
 
   it("refuse un fichier qui n'est pas un projet", () => {
-    expect(parseProjectFile("pas du json", "x")).toEqual({ erreur: "Ce fichier n'est pas un projet Limon." });
-    expect(parseProjectFile('{"format":"autre"}', "x")).toEqual({ erreur: "Ce fichier n'est pas un projet Limon." });
+    expect(parseProjectFile("pas du json", "x")).toEqual({ erreur: "Ce fichier n'est pas un projet Quart de tour." });
+    expect(parseProjectFile('{"format":"autre"}', "x")).toEqual({
+      erreur: "Ce fichier n'est pas un projet Quart de tour.",
+    });
     expect(parseProjectFile('{"format":"limon-projet","version":9,"projet":{}}', "x")).toEqual({
-      erreur: "Ce projet vient d'une version plus récente de Limon.",
+      erreur: "Ce projet vient d'une version plus récente de Quart de tour.",
     });
   });
 

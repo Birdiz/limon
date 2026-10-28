@@ -26,12 +26,15 @@ import { ProjectsDialog } from "./ui/projects";
 import { startPWA } from "./ui/pwa";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
+import { leaveOldHost, storeMoved, takeMoved } from "./ui/move";
 import { LocalStore, newId } from "./ui/store";
 import { Tabs } from "./ui/tabs";
 
 const store = new LocalStore();
-// Lu avant le premier calcul, qui réécrit l'adresse.
-const sharedAtStart = paramsFromHash(location.hash);
+const leaving = leaveOldHost(store);
+// Lus avant le premier calcul, qui réécrit l'adresse.
+const moved = takeMoved();
+const sharedAtStart = paramsFromHash(moved ? moved.lien : location.hash);
 let project: Project | null = null;
 let params: Params = { ...DEFAULTS };
 let current: ComputeResult | null = null;
@@ -245,6 +248,8 @@ new MutationObserver(reTheme).observe(document.documentElement, { attributes: tr
 writeInputs(params);
 update();
 void (async () => {
+  if (leaving) return;
+  if (moved) await storeMoved(store, moved);
   const id = await store.currentId();
   const start = (id && (await store.get(id))) || (await store.list())[0] || null;
   openProject(start);

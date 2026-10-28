@@ -41,7 +41,7 @@ export function sanitizeProject(raw: unknown): Project | null {
   };
 }
 
-/** Contenu d'un fichier .limon. */
+/** Contenu d'un fichier .escalier (format nommé avant le renommage, gardé pour relire les fichiers .limon). */
 export function projectFile(p: Project): string {
   const { nom, cree, modifie, mode, etape, params } = p;
   return JSON.stringify(
@@ -51,19 +51,19 @@ export function projectFile(p: Project): string {
   );
 }
 
-/** Relit un fichier .limon ; le projet reçoit l'identifiant donné (un import est toujours un nouveau projet). */
+/** Relit un fichier .escalier ou .limon ; le projet reçoit l'identifiant donné (un import est toujours un nouveau projet). */
 export function parseProjectFile(text: string, id: string): Project | { erreur: string } {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    return { erreur: "Ce fichier n'est pas un projet Limon." };
+    return { erreur: "Ce fichier n'est pas un projet Quart de tour." };
   }
   const r = raw as Record<string, unknown> | null;
   if (!r || r.format !== FORMAT || typeof r.projet !== "object")
-    return { erreur: "Ce fichier n'est pas un projet Limon." };
+    return { erreur: "Ce fichier n'est pas un projet Quart de tour." };
   if (typeof r.version !== "number" || r.version > VERSION)
-    return { erreur: "Ce projet vient d'une version plus récente de Limon." };
+    return { erreur: "Ce projet vient d'une version plus récente de Quart de tour." };
   return sanitizeProject({ ...(r.projet as object), id })!;
 }
 

@@ -12,7 +12,7 @@ export interface ProjectsHost {
   open(p: Project | null): void;
 }
 
-/** Dialogue « Mes projets » : liste, création, duplication, suppression, fichiers .limon. */
+/** Dialogue « Mes projets » : liste, création, duplication, suppression, fichiers .escalier. */
 export class ProjectsDialog {
   private dlg = byId<HTMLDialogElement>("projets");
   private list = byId<HTMLUListElement>("pjList");
@@ -113,7 +113,7 @@ export class ProjectsDialog {
   private exportCurrent(): void {
     const p = this.host.current();
     if (!p) return;
-    downloadBytes(new TextEncoder().encode(projectFile(p)), `${fileBase(p.nom)}.limon`, "application/json");
+    downloadBytes(new TextEncoder().encode(projectFile(p)), `${fileBase(p.nom)}.escalier`, "application/json");
     flash(this.msg, "Fichier enregistré");
   }
 }

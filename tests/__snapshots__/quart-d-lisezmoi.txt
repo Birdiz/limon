@@ -1,4 +1,4 @@
-Limon - export CNC
+Quart de tour - export CNC
 Escalier quart tournant droit : 15 hauteurs de 180,0 mm, giron 262,0 mm, emmarchement 850 mm.
 Unités : millimètres. Format DXF R12 (AC1009).
 

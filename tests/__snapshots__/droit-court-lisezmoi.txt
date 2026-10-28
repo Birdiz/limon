@@ -1,4 +1,4 @@
-Limon - export CNC
+Quart de tour - export CNC
 Escalier droit : 13 hauteurs de 207,7 mm, giron 200,0 mm, emmarchement 850 mm.
 Unités : millimètres. Format DXF R12 (AC1009).
 

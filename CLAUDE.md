@@ -1,17 +1,18 @@
-# Limon : notes pour Claude
+# Quart de tour : notes pour Claude
 
-Outil d'escaliers pour un ébéniste et d'autres menuisiers. L'interface, les textes et les commentaires sont en français.
+Outil d'escaliers pour un ébéniste et d'autres menuisiers, appelé Limon jusqu'en octobre 2026 (dépôt, clés internes et `window.limon` gardent ce nom). En ligne sur https://quart-de-tour.fr/. L'interface, les textes et les commentaires sont en français.
 
 ## Projet
 
 - TypeScript strict (`noUncheckedIndexedAccess` : `!` sur les accès d'index garantis par la géométrie), Vite, Vitest, ESLint, Prettier. Pas de framework d'interface.
 - `src/core`, `src/cnc` et `src/pdf` restent purs (pas de DOM) : ils tournent dans Node pour les tests et `scripts/export.ts`. Le DOM et Three.js vivent dans `src/ui`.
 - `npm run check` avant tout commit. Le site est statique (`npm run build` → `dist/`, chemins relatifs).
+- Logo (piste « l'éventail » : plan d'un quart tournant et flèche de rotation), tracé sur 100 unités, recopié dans `public/favicon.svg`, l'en-tête de `index.html` et `logo()` de `src/pdf/fiche.ts` ; sur téléphone l'en-tête ne montre que le logo. Icônes PNG de `public/icons/` rendues depuis le même tracé (fond `#13171c`, logo `#7ba4ee`).
 - Polices auto-hébergées via `@fontsource` (sous-ensembles latin). Couleurs en jetons sur `:root` dans `src/styles/main.css`, thème sombre inclus.
 
 ## Projets et interface
 
-- Projets (`Project` dans `src/core/project.ts`) derrière l'interface asynchrone `ProjectStore` (`src/ui/store.ts`), pour qu'un espace en ligne remplace un jour `LocalStore`. localStorage : `limon-projets` (liste), `limon-courant` (dernier ouvert), `limon-sections` (sections ouvertes en mode complet). L'ancienne clé `limon-v2` est reprise une fois comme « Mon escalier », sans être effacée. Fichier `.limon` : JSON `{ format: "limon-projet", version, projet }`. Un lien de projet (`#H=3200&…`, `src/core/share.ts`) ouvert dans la page devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert ; l'adresse suit les réglages du projet ouvert.
+- Projets (`Project` dans `src/core/project.ts`) derrière l'interface asynchrone `ProjectStore` (`src/ui/store.ts`), pour qu'un espace en ligne remplace un jour `LocalStore`. localStorage : `limon-projets` (liste), `limon-courant` (dernier ouvert), `limon-sections` (sections ouvertes en mode complet). L'ancienne clé `limon-v2` est reprise une fois comme « Mon escalier », sans être effacée. Fichier `.escalier` (les `.limon` d'avant le renommage se lisent aussi) : JSON `{ format: "limon-projet", version, projet }`. L'ancienne adresse `limon-escaliers.up.railway.app` sert le même site, qui part aussitôt vers quart-de-tour.fr en emportant ses projets dans l'ancre (`src/ui/move.ts`) ; à garder en ligne tant que des testeurs ont des projets là-bas. Un lien de projet (`#H=3200&…`, `src/core/share.ts`) ouvert dans la page devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert ; l'adresse suit les réglages du projet ouvert.
 - Réglages en six `<details>` (Forme, Dimensions, Trémie, Marches, Bois, Garde-corps ; ordre et titres dans `SECTIONS`, `src/core/summary.ts`), avec un résumé quand ils sont repliés. Mode guidé (`Steps`, `src/ui/steps.ts`) : une section à la fois, `mode` et `etape` enregistrés dans le projet, fiche et CNC masquées jusqu'à « Terminer ».
 - L'export CNC n'est calculé (`buildCNC`) que lorsque sa section est ouverte ; il contient les réglages d'assemblage (hauteurs de limon, plateaux disponibles, encastrement, jeu).
 - Téléphone (écran ≤ 920 px) : barre d'onglets en bas (`Tabs`, `src/ui/tabs.ts`), un panneau à la fois choisi par `body[data-tab]` (réglages, 3D, plan, fiche avec contrôles, notes et CNC sans les boutons « Copier »). 3D et plan prennent la hauteur sous l'en-tête (`--hdr`). Pastille sur « Fiche » quand une note est `warn` ou `bad`. La capture 3D du PDF se rend à taille fixe quand la vue est masquée.

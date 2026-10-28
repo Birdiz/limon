@@ -1,6 +1,6 @@
-# Limon
+# Quart de tour
 
-Calcul et dessin d'escaliers en bois pour menuisiers, sur le web : escalier droit et quart tournant (gauche ou droite), 3D, contrôle de l'échappée et export CNC en DXF.
+Calcul et dessin d'escaliers en bois pour menuisiers, sur le web (https://quart-de-tour.fr/, anciennement Limon) : escalier droit et quart tournant (gauche ou droite), 3D, contrôle de l'échappée et export CNC en DXF.
 
 ## Ce que fait l'outil
 
@@ -63,7 +63,7 @@ Puis ouvrir http://localhost:5173.
 
 `npm run build` produit un site statique dans `dist/`, avec des chemins relatifs : il se sert depuis n'importe quel hébergement statique et n'importe quel sous-chemin. Three.js est chargé à part, après le calcul et le plan.
 
-Limon s'installe comme une application (manifeste `public/manifest.json`, icônes dans `public/icons/`) et fonctionne sans réseau : au build, `dist/sw.js` reçoit la liste des fichiers à garder en cache. Les mises à jour sont silencieuses : la nouvelle version s'installe en arrière-plan et la page se recharge quand elle n'est pas affichée. Le service worker n'est enregistré qu'en production ; pour l'essayer en local, `npm run build` puis `npm run preview`.
+Quart de tour s'installe comme une application (manifeste `public/manifest.json`, icônes dans `public/icons/`) et fonctionne sans réseau : au build, `dist/sw.js` reçoit la liste des fichiers à garder en cache. Les mises à jour sont silencieuses : la nouvelle version s'installe en arrière-plan et la page se recharge quand elle n'est pas affichée. Le service worker n'est enregistré qu'en production ; pour l'essayer en local, `npm run build` puis `npm run preview`.
 
 ## Export sans navigateur
 
@@ -71,10 +71,10 @@ Limon s'installe comme une application (manifeste `public/manifest.json`, icône
 npm run export -- quart-g --out out
 ```
 
-Avec un projet enregistré depuis la page (« Mes projets », puis « Enregistrer ce projet en fichier .limon ») :
+Avec un projet enregistré depuis la page (« Mes projets », puis « Enregistrer ce projet en fichier .escalier ») ; les anciens fichiers `.limon` se lisent aussi :
 
 ```bash
-npm run export -- --params escalier.limon
+npm run export -- --params projet.escalier
 ```
 
 `--params` accepte aussi un JSON de réglages seuls, avec les mêmes clés que la page.

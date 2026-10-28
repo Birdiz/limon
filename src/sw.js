@@ -1,4 +1,4 @@
-/* Service worker : garde tout le site en cache pour que Limon s'ouvre sans réseau.
+/* Service worker : garde tout le site en cache pour que Quart de tour s'ouvre sans réseau.
 
    Écrit en JavaScript : il n'est pas mis en paquet avec la page. Au build, le greffon `pwa` de
    vite.config.ts remplace VERSION et FICHIERS par l'empreinte du build et la liste de ses fichiers.
