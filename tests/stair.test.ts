@@ -80,7 +80,7 @@ describe("quart tournant", () => {
   const G = stairOf({ forme: "quart-g" });
 
   it("respecte les règles de confort avec l'exemple par défaut", () => {
-    expect(D.notes[0]).toEqual(["ok", "Toutes les règles de confort sont respectées."]);
+    expect(D.notes[0]).toEqual(["ok", "Escalier confortable : tout est dans les règles."]);
     expect(D.gInMin).toBeGreaterThanOrEqual(100);
   });
 

@@ -913,7 +913,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       { set: { nAuto: true }, label: "Revenir en automatique" },
     ]);
   if (!N.some((x) => x[0] === "warn" || x[0] === "bad"))
-    N.unshift(["ok", "Toutes les règles de confort sont respectées."]);
+    N.unshift(["ok", "Escalier confortable : tout est dans les règles."]);
 
   return {
     ok: true,

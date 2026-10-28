@@ -8,15 +8,15 @@ import { A4, PdfDoc, hex, wrap, type Page, type RGB, type Stroke } from "./pdf";
 
 /** Couleurs du thème clair de la page, la fiche étant faite pour l'impression. */
 const C = {
-  ink: hex("#1b2129"),
-  muted: hex("#5a6472"),
-  rule: hex("#c9d0d9"),
+  ink: hex("#161b22"),
+  muted: hex("#56606c"),
+  rule: hex("#cbd2d9"),
   chalk: hex("#2b5db3"),
   chalkSoft: hex("#e3eaf5"),
-  paper: hex("#edf0f3"),
+  paper: hex("#eceff2"),
   white: hex("#ffffff"),
   ok: hex("#2e7d4f"),
-  warn: hex("#a2650f"),
+  warn: hex("#856a00"),
   bad: hex("#b42318"),
 } satisfies Record<string, RGB>;
 const ST: Record<Status | "info", RGB> = { ok: C.ok, warn: C.warn, bad: C.bad, info: C.muted };
@@ -160,22 +160,24 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
 
   /* ---------- Page 1 ---------- */
   const pg = doc.page();
-  pg.text(M, 58, o.nom, { size: 22, bold: true, color: C.ink });
-  logo(pg, A4.w - M - 24, 30, 24);
-  pg.text(A4.w - M - 30, 41, "QUART DE TOUR", { size: 9.5, bold: true, color: C.ink, anchor: "end" });
-  pg.text(A4.w - M - 30, 53, `Fiche escalier · ${o.date}`, { size: 8.5, color: C.muted, anchor: "end" });
-  pg.text(
-    M,
-    78,
-    `Escalier ${FORME_LABEL[p.forme].toLowerCase()} · ${R.n} hauteurs de ${mm(R.h, 1)} · giron ${mm(R.g, 1)}`,
-    { size: 11, color: C.muted },
-  );
+  // Bandeau de la marque, comme l'en-tête de la page : logo et nom à gauche, date à droite.
+  logo(pg, M, 22, 22);
+  pg.text(M + 28, 39, "QUART DE TOUR", { size: 11, bold: true, color: C.ink });
+  pg.text(A4.w - M, 33, `Fiche escalier · ${o.date}`, { size: 8.5, color: C.muted, anchor: "end" });
+  pg.text(A4.w - M, 44, "quart-de-tour.fr", { size: 8.5, color: C.muted, anchor: "end" });
   pg.path(
     [
-      [M, 90],
-      [A4.w - M, 90],
+      [M, 52],
+      [A4.w - M, 52],
     ],
-    { stroke: C.ink, width: 0.8 },
+    { stroke: C.ink, width: 1.6 },
+  );
+  pg.text(M, 79, o.nom, { size: 22, bold: true, color: C.ink });
+  pg.text(
+    M,
+    95,
+    `Escalier ${FORME_LABEL[p.forme].toLowerCase()} · ${R.n} hauteurs de ${mm(R.h, 1)} · giron ${mm(R.g, 1)}`,
+    { size: 10.5, color: C.muted },
   );
 
   const colW = (CW - 28) / 2;

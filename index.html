@@ -9,8 +9,8 @@
     />
     <meta name="color-scheme" content="light dark" />
     <title>Quart de tour</title>
-    <meta name="theme-color" content="#edf0f3" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#13171c" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#181c22" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
@@ -18,7 +18,7 @@
   </head>
   <body>
     <header class="top">
-      <div class="brand">
+      <button class="brand" id="homeBtn" type="button" aria-label="Accueil de Quart de tour">
         <span class="mark"
           ><svg class="logo" viewBox="0 0 100 100" aria-hidden="true">
             <mask id="logoMask">
@@ -32,19 +32,63 @@
             <path class="f" d="M14 72V28A58 58 0 0 1 72 86H28A14 14 0 0 0 14 72Z" mask="url(#logoMask)" />
             <path class="s" d="M14 12A74 74 0 0 1 85.8 68.1" />
             <path class="f" d="M88.5 78.8 92.6 66.4 79 69.8Z" /></svg
-          ><span class="word">Quart de tour</span></span
+          ><span class="word" aria-hidden="true">Quart de tour</span></span
         >
-        <span class="tag">Calcul d'escaliers bois · prototype</span>
+      </button>
+      <div class="proj" id="proj">
+        <button class="pjswitch" id="pjOpen" type="button">
+          Mes escaliers<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" /></svg>
+        </button>
+        <input id="pjName" class="pjname" type="text" maxlength="80" aria-label="Nom de l'escalier" />
       </div>
-      <div class="proj">
-        <input id="pjName" class="pjname" type="text" maxlength="80" aria-label="Nom du projet" />
-        <button class="btn" id="pjOpen" type="button">Mes projets</button>
-      </div>
-      <div class="headline" id="headline"></div>
+      <span class="saved" id="saved" role="status"></span>
+      <span class="grow"></span>
+      <button class="btn hbtn" id="pjNew" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg><span>Nouvel escalier</span>
+      </button>
+      <button class="btn hbtn acbtn" id="acOpen" type="button"></button>
     </header>
+
+    <section class="home" id="home" hidden aria-labelledby="homeTitle">
+      <h1 id="homeTitle">Un escalier à calculer ?</h1>
+      <p class="lead">
+        Six questions, les cotes du chantier sous la main. Le plan, la 3D et la fiche se font tout seuls.
+      </p>
+      <div class="homeacts">
+        <button class="btn go big" id="homeNew" type="button">
+          Nouvel escalier<svg class="turn" viewBox="0 0 100 100" aria-hidden="true">
+            <path d="M14 12A74 74 0 0 1 85.8 68.1" />
+            <path class="h" d="M96 82 98 60 74 70Z" />
+          </svg>
+        </button>
+        <button class="btn big" id="homeEx" type="button">Voir un exemple déjà calculé</button>
+        <button class="btn big" id="homeBack" type="button" hidden></button>
+      </div>
+      <div class="homelist" id="homeListBox" hidden>
+        <h2>Mes escaliers</h2>
+        <ul class="plist" id="homeList"></ul>
+      </div>
+      <p class="invite" id="homeInvite">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="2" y="5" width="13" height="10" rx="1.5" />
+          <rect x="16" y="8" width="6" height="11" rx="1.2" />
+          <path d="M5 18h8" /></svg
+        ><span
+          >Vos escaliers sur le téléphone et l'ordinateur :
+          <button class="linkbtn" id="homeAcct" type="button">créer mon compte</button>, sans mot de passe.</span
+        >
+      </p>
+    </section>
 
     <div class="work">
       <aside class="side">
+        <div class="stephead" id="stepHead" hidden>
+          <svg class="fan" id="stepFan" viewBox="0 0 64 64" aria-hidden="true"></svg>
+          <div>
+            <span class="stxt" id="stepTxt"></span>
+            <span class="sttitle" id="stepTitle"></span>
+          </div>
+        </div>
         <details class="sec" data-step="forme" open>
           <summary><span class="sh">Forme</span><span class="sum" id="sum-forme"></span></summary>
           <div class="sbody">
@@ -108,19 +152,24 @@
                 <input id="W" type="number" inputmode="numeric" step="10" min="400" /><span>mm</span>
               </div>
             </div>
+            <figure class="croquis" data-sketch></figure>
           </div>
         </details>
         <details class="sec" data-step="tremie" open>
           <summary><span class="sh">Trémie</span><span class="sum" id="sum-tremie"></span></summary>
           <div class="sbody">
-            <p class="hint">
-              L'ouverture dans le plancher du haut. Si elle n'est pas encore faite, Quart de tour calcule la plus petite
-              qui laisse 2 m d'échappée.
-            </p>
-            <label class="check"
-              ><input type="checkbox" id="tAuto" /> je ne la connais pas : Quart de tour calcule la trémie
-              minimale</label
-            >
+            <p class="hint">L'ouverture dans le plancher du haut. Est-elle déjà faite ?</p>
+            <div class="choices" role="radiogroup" aria-label="La trémie est-elle déjà faite ?">
+              <label class="choice"
+                ><input type="radio" name="tre" id="tKnown" /><span
+                  ><b>Oui, je la mesure</b><small>je donne ses cotes</small></span
+                ></label
+              ><label class="choice"
+                ><input type="radio" name="tre" id="tAuto" /><span
+                  ><b>Pas encore</b><small>Quart de tour calcule la plus petite qui laisse 2 m de passage</small></span
+                ></label
+              >
+            </div>
             <div class="row" data-show="droit">
               <label for="tL">Longueur de trémie<small>depuis le bord du palier</small></label>
               <div class="num">
@@ -143,22 +192,24 @@
               <label for="ep">Épaisseur du plancher<small>sol fini à sous-face du plafond</small></label>
               <div class="num"><input id="ep" type="number" inputmode="numeric" step="5" min="0" /><span>mm</span></div>
             </div>
+            <figure class="croquis" data-sketch></figure>
           </div>
         </details>
         <details class="sec" data-step="marches" open>
           <summary><span class="sh">Marches</span><span class="sum" id="sum-marches"></span></summary>
           <div class="sbody">
             <p class="hint">
-              Quart de tour choisit le nombre de marches et la ligne de foulée. Ne les changez que si besoin.
+              Quart de tour choisit le nombre de marches et la ligne de foulée pour un escalier confortable.
             </p>
-            <div class="row">
+            <p class="auto" id="marchesAuto"></p>
+            <div class="row" data-adv>
               <div>
                 <label for="n">Nombre de hauteurs</label
                 ><label class="check"><input type="checkbox" id="nAuto" /> automatique</label>
               </div>
               <div class="num nounit"><input id="n" type="number" inputmode="numeric" step="1" min="3" max="40" /></div>
             </div>
-            <div class="row">
+            <div class="row" data-adv>
               <div>
                 <label for="f">Ligne de foulée<small>distance depuis le jour</small></label
                 ><label class="check"><input type="checkbox" id="fAuto" /> automatique</label>
@@ -179,13 +230,13 @@
                   <input id="tour" type="number" inputmode="numeric" step="1" min="0" max="38" />
                 </div>
               </div>
-              <div class="row">
+              <div class="row" data-adv>
                 <label for="mb">Marches balancées<small>marches touchées par le tournant</small></label>
                 <div class="num nounit">
                   <input id="mb" type="number" inputmode="numeric" step="1" min="2" max="12" />
                 </div>
               </div>
-              <div class="row">
+              <div class="row" data-adv>
                 <label for="prog">Progressivité<small id="progTxt">0 % = girons égaux au jour</small></label
                 ><input id="prog" type="range" min="0" max="100" step="5" />
               </div>
@@ -212,13 +263,13 @@
                 <input id="et" type="number" inputmode="numeric" step="1" min="18" /><span>mm</span>
               </div>
             </div>
-            <div class="row">
+            <div class="row" data-adv>
               <label for="deb">Débord de nez<small>recouvrement</small></label>
               <div class="num">
                 <input id="deb" type="number" inputmode="numeric" step="1" min="0" /><span>mm</span>
               </div>
             </div>
-            <div class="row">
+            <div class="row" data-adv>
               <label for="rn">Rayon du nez<small>arrondi dessus et dessous, 0 = vif</small></label>
               <div class="num"><input id="rn" type="number" inputmode="numeric" step="1" min="0" /><span>mm</span></div>
             </div>
@@ -287,18 +338,15 @@
           </div>
         </details>
         <div class="stepper" id="stepper" hidden>
-          <span class="stxt" id="stepTxt"></span>
-          <div class="actions">
-            <button class="btn" id="stPrev" type="button">Précédent</button
-            ><button class="btn primary" id="stNext" type="button">Suivant</button>
-          </div>
+          <button class="btn" id="stPrev" type="button">Précédent</button
+          ><button class="btn go" id="stNext" type="button">Suivant</button>
         </div>
         <div class="actions sideacts" id="sideActs">
-          <button class="btn" id="share" type="button">Copier le lien du projet</button
+          <button class="btn" id="share" type="button">Envoyer à un collègue</button
           ><button class="btn" id="reset" type="button">Revenir à l'exemple</button
           ><span class="copied" id="sharemsg" hidden></span>
         </div>
-        <textarea id="linkfb" hidden readonly aria-label="Lien du projet"></textarea>
+        <textarea id="linkfb" hidden readonly aria-label="Lien de l'escalier"></textarea>
       </aside>
 
       <main class="main">
@@ -306,9 +354,9 @@
           <div class="view" id="view3d">
             <div class="vhead">
               <h2>Vue 3D</h2>
-              <div class="vbtns">
-                <button class="btn" id="v3d" type="button">Perspective</button
-                ><button class="btn" id="vtop" type="button">Dessus</button>
+              <div class="seg" role="group" aria-label="Point de vue">
+                <button id="v3d" type="button" aria-pressed="true">Perspective</button
+                ><button id="vtop" type="button" aria-pressed="false">Dessus</button>
               </div>
             </div>
             <div class="canvas" id="scene"><div class="errbox" id="err3d" hidden></div></div>
@@ -337,7 +385,7 @@
               <select id="ficheFmt" class="fmtsel">
                 <option value="pdf">Fiche PDF</option>
                 <option value="csv">Tableau CSV</option></select
-              ><button class="btn primary" id="ficheDl" type="button">Télécharger</button>
+              ><button class="btn go" id="ficheDl" type="button">Télécharger</button>
             </div>
           </div>
           <div class="tablewrap"><table id="table"></table></div>
@@ -345,19 +393,19 @@
 
         <section class="sheet" id="cnc">
           <div class="shead">
-            <h2>Export CNC</h2>
+            <h2>Fichiers pour la machine</h2>
             <div class="actions">
               <span class="copied" id="dlmsg" hidden></span
-              ><button class="btn primary" id="cncOpen" type="button">Préparer l'export CNC</button
-              ><button class="btn primary" id="dl" type="button" hidden>Télécharger les DXF (.zip)</button
+              ><button class="btn" id="cncOpen" type="button">Préparer les fichiers machine</button
+              ><button class="btn go" id="dl" type="button" hidden>Télécharger les fichiers machine</button
               ><button class="btn" id="cncClose" type="button" hidden>Replier</button>
             </div>
           </div>
           <p class="disclaimer" id="cncIntro">
-            Fichiers DXF pour la machine : marches, contremarches et limons avec leurs logements, calculés à la demande.
+            Pour la CNC, en DXF : marches, contremarches et limons avec leurs logements, préparés à la demande.
           </p>
           <div class="cncbody" id="cncBody" hidden>
-            <div class="group asm">
+            <div class="group asm" data-adv>
               <h3>Assemblage</h3>
               <div class="asmgrid">
                 <div class="row">
@@ -455,7 +503,7 @@
               </div>
             </div>
             <div class="tablewrap"><table id="parts"></table></div>
-            <div class="actions cprow">
+            <div class="actions cprow" data-adv>
               <button class="btn" id="cpT" type="button">Copier marches.dxf</button
               ><button class="btn" id="cpR" type="button">Copier contremarches.dxf</button
               ><button class="btn" id="cpB" type="button">Copier limons.dxf</button
@@ -476,46 +524,58 @@
 
     <nav class="tabbar" id="tabbar" aria-label="Affichage">
       <button type="button" data-tab="reglages">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12" />
-          <circle cx="16" cy="6" r="2" />
-          <circle cx="10" cy="12" r="2" />
-          <circle cx="18" cy="18" r="2" /></svg
+        <span class="pill"
+          ><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12" />
+            <circle cx="16" cy="6" r="2" />
+            <circle cx="10" cy="12" r="2" />
+            <circle cx="18" cy="18" r="2" /></svg></span
         >Réglages
       </button>
       <button type="button" data-tab="vue3d">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5" /></svg
+        <span class="pill"
+          ><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5" /></svg></span
         >3D
       </button>
       <button type="button" data-tab="plan">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="7" y="3" width="10" height="18" />
-          <path d="M7 7.5h10M7 12h10M7 16.5h10" /></svg
+        <span class="pill"
+          ><svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="7" y="3" width="10" height="18" />
+            <path d="M7 7.5h10M7 12h10M7 16.5h10" /></svg></span
         >Plan
       </button>
       <button type="button" data-tab="fiche" id="tabFiche">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h4" /></svg>Fiche
+        <span class="pill"
+          ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h4" /></svg></span
+        >Fiche
       </button>
     </nav>
 
     <dialog id="projets" class="dlg" aria-labelledby="pjTitle">
       <div class="shead">
-        <h2 id="pjTitle">Mes projets</h2>
+        <h2 id="pjTitle">Mes escaliers</h2>
         <button class="btn" id="pjClose" type="button">Fermer</button>
       </div>
       <div class="newp">
-        <label for="pjNom">Nouveau projet</label>
-        <input id="pjNom" type="text" maxlength="80" placeholder="Escalier Dupont" />
-        <div class="actions">
-          <button class="btn primary" id="pjGuide" type="button">Nouveau projet pas à pas</button
-          ><button class="btn" id="pjFull" type="button">Nouveau projet complet</button>
+        <label for="pjNom">Nom du nouvel escalier</label>
+        <div class="newrow">
+          <input id="pjNom" type="text" maxlength="80" placeholder="Escalier Dupont" /><button
+            class="btn go"
+            id="pjGuide"
+            type="button"
+          >
+            Démarrer
+          </button>
+        </div>
+        <div class="actions" data-adv>
+          <button class="btn" id="pjFull" type="button">Tous les réglages d'un coup</button>
         </div>
       </div>
       <ul class="plist" id="pjList"></ul>
-      <div class="actions">
-        <button class="btn" id="pjImport" type="button">Ouvrir un fichier .escalier</button
-        ><button class="btn" id="pjExport" type="button">Enregistrer ce projet en fichier .escalier</button
+      <div class="links">
+        <button class="linkbtn" id="pjImport" type="button">Ouvrir une copie gardée</button
+        ><button class="linkbtn" id="pjExport" type="button">Garder une copie de cet escalier</button
         ><span class="copied" id="pjMsg" hidden></span>
       </div>
       <input type="file" id="pjFile" accept=".escalier,.limon,application/json" hidden />
@@ -529,17 +589,10 @@
         </p>
         <p class="disclaimer" id="pjInstallIos" hidden>
           Pour installer Quart de tour sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil ». Quart de
-          tour s'ouvre alors comme une application et fonctionne sans réseau. Les projets faits dans le navigateur n'y
-          apparaissent pas : connectez-vous à votre compte dans l'application, ou enregistrez-les en fichier .escalier
-          puis ouvrez ce fichier dans l'application.
+          tour s'ouvre alors comme une application et fonctionne sans réseau. Les escaliers faits dans le navigateur n'y
+          apparaissent pas : connectez-vous à votre compte dans l'application, ou gardez-en une copie puis ouvrez-la
+          dans l'application.
         </p>
-      </div>
-      <div class="acct">
-        <p class="disclaimer" id="acLine">
-          Les projets sont gardés dans ce navigateur. Avec un compte, retrouvez-les sur votre téléphone et votre
-          ordinateur.
-        </p>
-        <button class="btn" id="acOpen" type="button">Créer un compte ou se connecter</button>
       </div>
     </dialog>
 
@@ -550,11 +603,11 @@
       </div>
       <div class="acview" id="acLogin">
         <p>
-          Avec un compte, vos projets vous suivent sur votre téléphone et votre ordinateur, et restent utilisables sans
-          réseau.
+          Avec un compte, vos escaliers vous suivent sur votre téléphone et votre ordinateur, et restent utilisables
+          sans réseau.
         </p>
         <div class="actions" id="acPkBox" hidden>
-          <button class="btn primary" id="acPk" type="button">Se connecter avec Face ID ou l'empreinte</button>
+          <button class="btn" id="acPk" type="button">Se connecter avec Face ID ou l'empreinte</button>
         </div>
         <form class="newp" id="acEmailForm">
           <label for="acEmail">Créer un compte, ou se connecter avec un code</label>
@@ -567,7 +620,7 @@
             placeholder="vous@exemple.fr"
           />
           <div class="actions">
-            <button class="btn" type="submit">Recevoir un code par e-mail</button>
+            <button class="btn go" type="submit">Recevoir un code par e-mail</button>
           </div>
         </form>
         <form class="newp" id="acCodeForm" hidden>
@@ -582,7 +635,7 @@
             required
           />
           <div class="actions">
-            <button class="btn primary" type="submit">Se connecter</button
+            <button class="btn go" type="submit">Se connecter</button
             ><button class="btn" id="acBack" type="button">Changer d'adresse ou renvoyer</button>
           </div>
         </form>
@@ -592,7 +645,7 @@
           Vous êtes connecté. La prochaine fois, connectez-vous avec Face ID ou l'empreinte, sans attendre d'e-mail.
         </p>
         <div class="actions">
-          <button class="btn primary" id="acOfferYes" type="button">Activer Face ID ou l'empreinte</button
+          <button class="btn go" id="acOfferYes" type="button">Activer Face ID ou l'empreinte</button
           ><button class="btn" id="acOfferNo" type="button">Plus tard</button>
         </div>
       </div>
@@ -611,6 +664,15 @@
         </div>
       </div>
       <p class="copied" id="acMsg" role="status" hidden></p>
+      <label class="adv"
+        ><span
+          ><b>Réglages avancés</b
+          ><small
+            >Pour régler l'escalier dans le détail : nombre de hauteurs et ligne de foulée à la main, marches balancées,
+            nez, assemblage des fichiers machine, nouvel escalier avec tous les réglages d'un coup.</small
+          ></span
+        ><input type="checkbox" role="switch" id="advToggle"
+      /></label>
       <details class="privacy">
         <summary>Confidentialité</summary>
         <p>

@@ -14,7 +14,7 @@ const ios = () =>
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
-/** Bouton « Installer » du dialogue Mes projets ; sur iPhone, une ligne d'aide à la place. */
+/** Bouton « Installer » du dialogue Mes escaliers ; sur iPhone, une ligne d'aide à la place. */
 function setupInstall(): void {
   if (standalone()) return;
   const box = byId("pjInstall");

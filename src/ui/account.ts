@@ -6,6 +6,8 @@ import type { SyncStore } from "./sync";
 const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
 const webauthn = () => import("@simplewebauthn/browser");
 const hasWebAuthn = () => typeof window.PublicKeyCredential === "function";
+const PERSON =
+  '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.5"/><path d="M3.5 17c1-3.2 3.5-4.8 6.5-4.8s5.5 1.6 6.5 4.8"/></svg>';
 
 /** Appareil qui crée une passkey, pour la reconnaître dans la liste. L'iPad se présente comme un Mac. */
 function deviceName(): string {
@@ -30,7 +32,7 @@ function problem(e: unknown): string | null {
 type View = "login" | "offer" | "account";
 
 /**
- * Compte : ligne d'état dans « Mes projets », et dialogue de connexion (passkey, ou code par e-mail
+ * Compte : bouton et état de l'enregistrement dans l'en-tête, et dialogue de connexion (passkey, ou code par e-mail
  * pour créer le compte et en secours) puis de gestion du compte.
  */
 export class AccountDialog {
@@ -67,25 +69,31 @@ export class AccountDialog {
     void this.refreshLine();
   }
 
-  /** Ligne du dialogue Mes projets. */
+  /** En-tête : bouton du compte et état de l'enregistrement. */
   private async refreshLine(): Promise<void> {
     const st = await this.store.status();
-    const line = byId("acLine");
-    const open = byId("acOpen");
+    const btn = byId("acOpen");
+    const saved = byId("saved");
+    saved.classList.toggle("wait", !!st.compte && st.pending > 0);
     if (!st.compte) {
-      line.textContent =
-        "Les projets sont gardés dans ce navigateur. Avec un compte, retrouvez-les sur votre téléphone et votre ordinateur.";
-      open.textContent = "Créer un compte ou se connecter";
+      saved.textContent = "Enregistré sur cet appareil";
+      btn.className = "btn hbtn acbtn guest";
+      btn.innerHTML = `${PERSON}<span class="lbl-long">Créer mon compte</span><span class="lbl-short">Compte</span>`;
+      btn.removeAttribute("aria-label");
       return;
     }
     const s = st.pending > 1 ? "s" : "";
     const state = !st.pending
-      ? "projets enregistrés en ligne"
+      ? "escaliers enregistrés sur tous vos appareils"
       : st.offline
-        ? `${st.pending} projet${s} à envoyer dès que le réseau revient`
-        : `${st.pending} projet${s} en cours d'envoi`;
-    line.innerHTML = `Connecté avec <b>${esc(st.compte.email)}</b> · ${state}.`;
-    open.textContent = "Mon compte";
+        ? `${st.pending} escalier${s} à envoyer dès que le réseau revient`
+        : `${st.pending} escalier${s} en cours d'envoi`;
+    saved.textContent = st.pending
+      ? `${state[0]!.toUpperCase()}${state.slice(1)}`
+      : "Enregistré sur tous vos appareils";
+    btn.className = "btn hbtn acbtn member";
+    btn.innerHTML = `<span class="lbl">Mon compte</span><span class="avatar" aria-hidden="true">${esc(st.compte.email[0]!.toUpperCase())}</span>`;
+    btn.setAttribute("aria-label", "Mon compte");
     if (this.dlg.open && !byId("acAccount").hidden)
       byId("acState").textContent = `${state[0]!.toUpperCase()}${state.slice(1)}.`;
   }
@@ -208,7 +216,7 @@ export class AccountDialog {
   private async logout(): Promise<void> {
     if (
       !confirm(
-        "Se déconnecter ? Vos projets restent dans votre compte et quittent cet appareil : vous les retrouverez en vous reconnectant.",
+        "Se déconnecter ? Vos escaliers restent dans votre compte et quittent cet appareil : vous les retrouverez en vous reconnectant.",
       )
     )
       return;
@@ -219,7 +227,7 @@ export class AccountDialog {
   private async deleteAccount(): Promise<void> {
     if (
       !confirm(
-        "Supprimer votre compte ? Votre adresse et vos projets en ligne seront effacés. Les projets restent sur cet appareil, mais plus sur les autres.",
+        "Supprimer votre compte ? Votre adresse et vos escaliers en ligne seront effacés. Les escaliers restent sur cet appareil, mais plus sur les autres.",
       )
     )
       return;

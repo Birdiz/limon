@@ -19,6 +19,8 @@ export function writeInputs(p: Params): void {
   document.querySelectorAll<HTMLInputElement>('input[name="forme"]').forEach((r) => (r.checked = r.value === p.forme));
   NUMERIC_KEYS.forEach((k) => (input(k).value = String(p[k])));
   BOOLEAN_KEYS.forEach((k) => (input(k).checked = p[k]));
+  // La trémie se choisit entre deux cases : « Pas encore » (tAuto) et « Oui, je la mesure ».
+  input("tKnown").checked = !p.tAuto;
   byId<HTMLSelectElement>("ess").value = p.ess;
   byId<HTMLSelectElement>("gc").value = p.gc;
   byId<HTMLSelectElement>("gcPose").value = p.gcPose;
