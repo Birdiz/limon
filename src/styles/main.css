@@ -1059,7 +1059,10 @@ td.low {
   body {
     padding-bottom: calc(var(--below) + 24px);
   }
+  /* En-tête sur deux lignes : marque et projet, puis le résumé. */
   .top {
+    align-items: center;
+    gap: 6px 12px;
     padding-block: 12px 10px;
     margin-bottom: 14px;
   }
@@ -1068,6 +1071,17 @@ td.low {
   }
   .tag {
     display: none;
+  }
+  .proj {
+    flex: 1;
+  }
+  .pjname {
+    flex: 1;
+    width: auto;
+    font-size: 18px;
+  }
+  .headline {
+    flex-basis: 100%;
   }
 
   .tabbar {
