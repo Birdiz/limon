@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULTS, sanitizeParams, type Params } from "../src/core/params";
-import { ECHAPPEE, comfortableRun, compute, pickN, type Stair } from "../src/core/stair";
+import { ECHAPPEE, comfortableRun, compute, pickN, turnLengths, turnRange, type Stair } from "../src/core/stair";
 import { stairOf } from "./cases";
 
 describe("nombre de hauteurs", () => {
@@ -104,6 +104,26 @@ describe("quart tournant", () => {
   it("coupe les limons au poteau : deux tronçons de chaque côté", () => {
     expect(D.stringers.map((s) => `${s.side}${s.idx + 1}/${s.count}`)).toEqual(["in1/2", "in2/2", "out1/2", "out2/2"]);
     expect(D.newel).not.toBeNull();
+  });
+
+  it("place le tour plus bas en échangeant de la longueur entre départ et arrivée", () => {
+    const p = { ...DEFAULTS, forme: "quart-d" as const };
+    expect(D.bal!.a).toBe(6);
+    expect(turnLengths(p, 6)).toEqual({ A: p.A, B: p.B });
+    const ab = turnLengths(p, 2)!;
+    expect(ab.A + ab.B).toBe(p.A + p.B);
+    const R = stairOf({ forme: "quart-d", ...ab });
+    expect(R.bal!.a).toBe(2);
+    // Même ligne de foulée, donc mêmes hauteur et giron.
+    expect([R.n, R.h, R.g]).toEqual([D.n, D.h, D.g]);
+    expect(turnRange(p)).toEqual({ min: 0, max: 7 });
+    expect(turnLengths(p, 8)).toBeNull();
+  });
+
+  it("refuse un balancement trop serré sans planter", () => {
+    const r = compute({ ...DEFAULTS, mb: 2, A: 1120, B: 3580 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors[0]!.key).toBe("mb");
   });
 
   it("limite la progressivité pour garder 100 mm au jour", () => {

@@ -15,7 +15,7 @@ import { NOM_PAR_DEFAUT, fileBase, newProject, type Project } from "./core/proje
 import { paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
 import { fichePDF } from "./pdf/fiche";
-import { compute, type ComputeResult } from "./core/stair";
+import { compute, turnLengths, type ComputeResult } from "./core/stair";
 import { SECTIONS, sectionSummaries } from "./core/summary";
 import { cutListHTML, previewSVG, stockFitHTML, stringerFitHTML } from "./ui/cnc-panel";
 import { byId, copyText, downloadBytes, flash } from "./ui/dom";
@@ -166,6 +166,14 @@ for (const el of [document.querySelector<HTMLElement>(".side")!, byId("cncBody")
   el.addEventListener("input", schedule);
   el.addEventListener("change", schedule);
 }
+// Marches droites avant le tour : l'angle se déplace, A et B sont recalculés à total constant.
+byId<HTMLInputElement>("tour").addEventListener("input", (e) => {
+  const k = parseInt((e.target as HTMLInputElement).value, 10);
+  const ab = Number.isNaN(k) ? null : turnLengths(readInputs(params).params, k);
+  if (!ab) return;
+  byId<HTMLInputElement>("A").value = String(ab.A);
+  byId<HTMLInputElement>("B").value = String(ab.B);
+});
 byId("reset").addEventListener("click", () => {
   params = { ...DEFAULTS };
   writeInputs(params);

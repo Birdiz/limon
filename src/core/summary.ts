@@ -36,17 +36,25 @@ export const SECTION_TITLE: Record<Section, string> = {
   gardecorps: "Garde-corps",
 };
 
+/** Tour du quart tournant : première et dernière marche balancée, et hauteur de leur dessus. */
+export function turnSpan(R: Stair): { from: number; to: number; z0: number; z1: number } | null {
+  if (!R.bal) return null;
+  const { a, b } = R.bal;
+  return { from: a + 1, to: b, z0: (a + 1) * R.h, z1: b * R.h };
+}
+
 /** Résumé d'une ligne de chaque section, lisible quand elle est repliée. */
 export function sectionSummaries(p: Params, R: Stair | null): Record<Section, string> {
   const quart = p.forme !== "droit";
   const tre = R ? R.treDims : { tL: p.tL, tX: p.tX, tY: p.tY };
   const treTxt = quart ? `${fmt(tre.tY)} × ${fmt(tre.tX)}` : fmt(tre.tL);
+  const tour = R && turnSpan(R);
   return {
     forme: FORME_LABEL[p.forme],
     dimensions: `${fmt(p.H)} de haut · ${quart ? `${fmt(p.A)} × ${fmt(p.B)}` : `${fmt(p.L)} de long`} · ${fmt(p.W)} de large`,
     tremie: p.tAuto ? (R ? `à calculer : ${treTxt}` : "à calculer") : treTxt,
     marches: R
-      ? `${R.n} hauteurs de ${fmt(R.h, 1)}${p.nAuto ? ", automatique" : ""}${R.bal ? ` · ${R.bal.m} balancées` : ""}`
+      ? `${R.n} hauteurs de ${fmt(R.h, 1)}${p.nAuto ? ", automatique" : ""}${tour ? ` · tour de ${fmt(tour.z0)} à ${fmt(tour.z1)}` : ""}`
       : p.nAuto
         ? "automatique"
         : `${p.n} hauteurs`,
@@ -77,7 +85,7 @@ export function checks(R: Stair): Check[] {
       ? c("Échappée", fmt(R.ech.c), "mm", `sur la marche ${R.ech.j}`, R.st.ech)
       : c("Échappée", "Libre", "", "tout sous la trémie", R.st.ech),
     R.bal
-      ? c("Giron mini au jour", fmt(R.gInMin), "mm", `${R.bal.m} balancées`, R.st.gIn)
+      ? c("Giron mini au jour", fmt(R.gInMin), "mm", `tour : marches ${R.bal.a + 1} à ${R.bal.b}`, R.st.gIn)
       : c("Reculement", fmt(R.L), "mm", `emmarchement ${fmt(R.W)}`, null),
   ];
 }

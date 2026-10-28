@@ -3,7 +3,7 @@ import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist
 import { fmt } from "../core/format";
 import { planShapes, type PlanRole } from "../core/plan-shapes";
 import type { Stair, Status } from "../core/stair";
-import { ESSENCE_LABEL, FORME_LABEL, GC_LABEL, POSE_LABEL, STATUS_LABEL, checks } from "../core/summary";
+import { ESSENCE_LABEL, FORME_LABEL, GC_LABEL, POSE_LABEL, STATUS_LABEL, checks, turnSpan } from "../core/summary";
 import { A4, PdfDoc, hex, wrap, type Page, type RGB, type Stroke } from "./pdf";
 
 /** Couleurs du thème clair de la page, la fiche étant faite pour l'impression. */
@@ -181,6 +181,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   const colW = (CW - 28) / 2;
   heading(pg, M, 114, "Cotes");
   const tre = R.quart ? `${mm(R.treDims.tY)} × ${mm(R.treDims.tX)}` : mm(R.treDims.tL);
+  const tour = turnSpan(R);
   const cotes: [string, string][] = [
     ["Hauteur à monter", mm(R.H)],
     ...(R.quart
@@ -193,8 +194,11 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     [R.tAuto ? "Trémie à prévoir" : "Trémie", tre],
     ["Épaisseur du plancher", mm(p.ep)],
     ["Ligne de foulée (depuis le jour)", mm(R.f)],
-    ...(R.bal
-      ? ([["Marches balancées", `${R.bal.m} · progressivité ${fmt(R.bal.pr * 100)} %`]] as [string, string][])
+    ...(R.bal && tour
+      ? ([
+          ["Marches balancées", `${R.bal.m} · progressivité ${fmt(R.bal.pr * 100)} %`],
+          ["Tour", `marches ${tour.from} à ${tour.to} · ${mm(tour.z0)} à ${mm(tour.z1)}`],
+        ] as [string, string][])
       : []),
   ];
   let yL = keyValues(pg, M, 132, colW, cotes);

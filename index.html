@@ -168,7 +168,17 @@
               </div>
             </div>
             <div class="sub" data-show="quart">
-              <h4>Balancement</h4>
+              <h4>Tournant</h4>
+              <p class="hint">
+                Déplacer le tour change les longueurs côté départ et côté arrivée ; leur total ne bouge pas, ni le
+                confort.
+              </p>
+              <div class="row">
+                <label for="tour">Marches droites avant le tour<small id="tourTxt"></small></label>
+                <div class="num nounit">
+                  <input id="tour" type="number" inputmode="numeric" step="1" min="0" max="38" />
+                </div>
+              </div>
               <div class="row">
                 <label for="mb">Marches balancées<small>marches touchées par le tournant</small></label>
                 <div class="num nounit">

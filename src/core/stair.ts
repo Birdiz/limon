@@ -593,7 +593,22 @@ export function compute(p: Params, suggest = true): ComputeResult {
   // Le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.
   const geo = { inner, outer, lines, treads, risers, stringers: [...geoms, ...postFaces] };
   const isJour = (sp: StringerGeom) => quart && sp.side === "in";
-  const pk = stringerPockets(geo, p, cncFrame(geo, p));
+  let pk: ReturnType<typeof stringerPockets>;
+  try {
+    pk = stringerPockets(geo, p, cncFrame(geo, p));
+  } catch {
+    // Une ligne de marche, décalée du débord ou de l'encastrement, sort des limons (balancement trop serré).
+    return {
+      ok: false,
+      errors: [
+        {
+          key: "mb",
+          message:
+            "Géométrie impossible : une marche ne rejoint plus les limons. Augmentez le nombre de marches balancées.",
+        },
+      ],
+    };
+  }
   const withPockets = geoms.map((sp, i) => ({ ...sp, ...pk[i]! }));
   const needJ = Math.max(0, ...withPockets.filter(isJour).map((sp) => sp.need));
   const needM = Math.max(0, ...withPockets.filter((sp) => !isJour(sp)).map((sp) => sp.need));
@@ -951,4 +966,39 @@ export function compute(p: Params, suggest = true): ComputeResult {
       st,
     },
   };
+}
+
+/** Longueurs côté départ et côté arrivée qui laissent k marches droites avant le tour, à A + B constant :
+    la ligne de foulée garde sa longueur, donc le même confort. null si le tour ne peut pas commencer là. */
+export function turnLengths(p: Params, k: number): { A: number; B: number } | null {
+  const r = compute(p, false);
+  if (!r.ok || !r.stair.bal) return null;
+  const R = r.stair,
+    S = p.A + p.B;
+  if (r.stair.bal.a === k) return { A: p.A, B: p.B };
+  // Le balancement est centré sur le tournant : on déplace l'angle pour que sa première marche tombe en k.
+  const m0 = clamp(Math.round(p.mb), 2, R.n - 1);
+  const A0 = p.A + (k + m0 / 2) * R.g - (R.T1 + R.T2) / 2;
+  const lo = p.W + p.ps + 100,
+    hi = S - lo;
+  // Au plus près, par pas de 10 mm : l'extension du balancement peut décaler la première marche.
+  for (let d = 0; d <= R.g; d += 10)
+    for (const v of d ? [A0 - d, A0 + d] : [A0]) {
+      const A = Math.round(v / 10) * 10;
+      if (A < lo || A > hi) continue;
+      const t = compute({ ...p, A, B: S - A }, false);
+      if (t.ok && t.stair.bal?.a === k) return { A, B: S - A };
+    }
+  return null;
+}
+
+/** Nombres de marches droites avant le tour possibles à A + B constant. */
+export function turnRange(p: Params): { min: number; max: number } | null {
+  const r = compute(p, false);
+  if (!r.ok || !r.stair.bal) return null;
+  let min = r.stair.bal.a,
+    max = min;
+  while (min > 0 && turnLengths(p, min - 1)) min--;
+  while (max < r.stair.n - 2 && turnLengths(p, max + 1)) max++;
+  return { min, max };
 }

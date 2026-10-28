@@ -9,7 +9,8 @@ import {
   type Pose,
   type Params,
 } from "../core/params";
-import type { InputError, Stair } from "../core/stair";
+import { turnRange, type InputError, type Stair } from "../core/stair";
+import { turnSpan } from "../core/summary";
 import { byId } from "./dom";
 
 const input = (id: string) => byId<HTMLInputElement>(id);
@@ -90,6 +91,19 @@ export function syncInputs(p: Params, stair: Stair | null): void {
     if (p.tAuto) for (const k of ["tL", "tX", "tY"] as const) input(k).value = String(Math.round(stair.treDims[k]));
   }
   const bal = stair?.bal;
+  const span = stair && turnSpan(stair);
+  if (bal && span) {
+    // Pendant la saisie, un nombre impossible reste affiché avec les bornes ; sinon le champ suit le calcul.
+    const el = input("tour"),
+      k = parseInt(el.value, 10);
+    const typing = document.activeElement === el && !Number.isNaN(k) && k !== bal.a;
+    const range = typing ? turnRange(p) : null;
+    if (!typing) el.value = String(bal.a);
+    byId("tourTxt").textContent = range
+      ? `impossible ici : de ${range.min} à ${range.max} avec ces longueurs`
+      : `marches ${span.from} à ${span.to}, de ${fmt(span.z0)} à ${fmt(span.z1)} mm`;
+    byId("tourTxt").classList.toggle("capped", !!range);
+  }
   const capped = bal && bal.pr + 0.01 < bal.want;
   byId("progTxt").textContent = capped
     ? `${p.prog} % demandés, ${fmt(bal.pr * 100)} % appliqués pour garder 100 mm au jour`
