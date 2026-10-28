@@ -9,7 +9,7 @@ function pwa(): Plugin {
   let publicDir = "";
   return {
     name: "limon-pwa",
-    apply: "build",
+    apply: (_, env) => env.command === "build" && !env.isSsrBuild,
     enforce: "post",
     configResolved(c) {
       publicDir = c.publicDir;
@@ -42,11 +42,28 @@ function pwa(): Plugin {
   };
 }
 
-export default defineConfig({
+/** En développement, /api est servi par le serveur de server/dev.ts, rechargé à chaque modification. */
+function api(): Plugin {
+  return {
+    name: "limon-api",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!req.url?.startsWith("/api/")) return next();
+        server
+          .ssrLoadModule("/server/dev.ts")
+          .then((m) => (m as typeof import("./server/dev")).handle(req, res))
+          .catch(next);
+      });
+    },
+  };
+}
+
+export default defineConfig(({ isSsrBuild }) => ({
   // Chemins relatifs : le dossier dist/ se sert depuis n'importe quel sous-chemin.
   base: "./",
-  // Three.js (≈ 590 ko) est chargé à part, après le calcul et le plan.
-  build: { target: "es2022", sourcemap: true, chunkSizeWarningLimit: 700 },
-  plugins: [pwa()],
+  // Three.js (≈ 590 ko) est chargé à part, après le calcul et le plan. Le serveur (--ssr) n'emporte pas public/.
+  build: { target: "es2022", sourcemap: true, chunkSizeWarningLimit: 700, copyPublicDir: !isSsrBuild },
+  plugins: [pwa(), api()],
   test: { include: ["tests/**/*.test.ts"] },
-});
+}));

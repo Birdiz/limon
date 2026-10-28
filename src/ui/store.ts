@@ -26,18 +26,29 @@ export function newId(): string {
   }
 }
 
-function read(key: string): string | null {
+/** Stockage du navigateur ; un autre dans les tests, pour simuler plusieurs appareils. */
+export type KeyValue = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+export function browserStorage(): KeyValue | null {
   try {
-    return localStorage.getItem(key);
+    return localStorage;
   } catch {
     return null;
   }
 }
 
-function write(key: string, value: string | null): void {
+export function read(store: KeyValue | null, key: string): string | null {
   try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
+    return store?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function write(store: KeyValue | null, key: string, value: string | null): void {
+  try {
+    if (value === null) store?.removeItem(key);
+    else store?.setItem(key, value);
   } catch {
     // Stockage indisponible (navigation privée) : les projets ne survivent pas au rechargement.
   }
@@ -49,17 +60,17 @@ export class LocalStore implements ProjectStore {
   private projects: Project[];
   private current: string | null;
 
-  constructor() {
+  constructor(private storage: KeyValue | null = browserStorage()) {
     let raw: unknown;
     try {
-      raw = JSON.parse(read(PROJECTS_KEY) ?? "null");
+      raw = JSON.parse(read(storage, PROJECTS_KEY) ?? "null");
     } catch {
       raw = null;
     }
     this.projects = Array.isArray(raw)
       ? raw.map(sanitizeProject).filter((p): p is Project => p !== null)
       : this.migrate();
-    this.current = read(CURRENT_KEY);
+    this.current = read(storage, CURRENT_KEY);
     if (!Array.isArray(raw) && this.projects.length) {
       this.current = this.projects[0]!.id;
       this.flush();
@@ -67,7 +78,7 @@ export class LocalStore implements ProjectStore {
   }
 
   private migrate(): Project[] {
-    const legacy = read(LEGACY_KEY);
+    const legacy = read(this.storage, LEGACY_KEY);
     if (legacy === null) return [];
     let params;
     try {
@@ -79,8 +90,8 @@ export class LocalStore implements ProjectStore {
   }
 
   private flush(): void {
-    write(PROJECTS_KEY, JSON.stringify(this.projects));
-    write(CURRENT_KEY, this.current);
+    write(this.storage, PROJECTS_KEY, JSON.stringify(this.projects));
+    write(this.storage, CURRENT_KEY, this.current);
   }
 
   list(): Promise<Project[]> {

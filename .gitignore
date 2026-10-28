@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-server/
+.pglite/
 .venv/
 venv/
 out/

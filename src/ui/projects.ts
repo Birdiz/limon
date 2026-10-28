@@ -10,6 +10,8 @@ export interface ProjectsHost {
   current(): Project | null;
   /** null : plus aucun projet, la page attend qu'on en crée un. */
   open(p: Project | null): void;
+  /** Connecté à un compte : les projets y sont aussi. */
+  signedIn(): boolean;
 }
 
 /** Dialogue « Mes projets » : liste, création, duplication, suppression, fichiers .escalier. */
@@ -44,6 +46,11 @@ export class ProjectsDialog {
   async show(): Promise<void> {
     await this.refresh();
     if (!this.dlg.open) this.dlg.showModal();
+  }
+
+  /** Liste à jour quand un autre appareil a changé des projets. */
+  async refreshIfOpen(): Promise<void> {
+    if (this.dlg.open) await this.refresh();
   }
 
   private async refresh(): Promise<void> {
@@ -87,7 +94,8 @@ export class ProjectsDialog {
       await this.store.save({ ...p, id: newId(), nom: `${p.nom} (copie)`, cree: now, modifie: now });
       await this.refresh();
     } else if (b.dataset.act === "del") {
-      if (!confirm(`Supprimer « ${p.nom} » ? Le projet sera effacé de ce navigateur.`)) return;
+      const where = this.host.signedIn() ? "de cet appareil et de votre compte" : "de ce navigateur";
+      if (!confirm(`Supprimer « ${p.nom} » ? Le projet sera effacé ${where}.`)) return;
       await this.store.remove(p.id);
       if (p.id === this.host.current()?.id) {
         const next = (await this.store.list())[0];

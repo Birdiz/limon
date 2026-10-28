@@ -8,6 +8,7 @@ Calcul et dessin d'escaliers en bois pour menuisiers, sur le web (https://quart-
 - **Trémie et échappée** : contrôle de la hauteur libre sous le plancher (alerte sous 2 000 mm, erreur sous 1 900 mm) et trémie minimale.
 - **Corrections chiffrées** : quand une règle n'est pas tenue, l'outil propose la valeur qui la rétablit (reculement ou longueur côté départ, marches balancées, hauteur de limon, trémie), applicable d'un clic.
 - **Débit** : alerte quand une pièce dépasse les plateaux disponibles, volume brut et poids selon l'essence.
+- **Compte facultatif** : connexion par Face ID ou l'empreinte (passkey), code à 6 chiffres par e-mail pour créer le compte et en secours. Les projets suivent l'artisan d'un appareil à l'autre et restent utilisables sans réseau.
 - **Lien de projet et fiche PDF** : les réglages qui diffèrent de l'exemple vont dans l'adresse de la page (après le `#`) ; la fiche PDF téléchargée réunit les cotes, les contrôles, le plan, la vue 3D, la fiche des marches et la liste de débit.
 - **Plan et 3D** : plan coté en SVG, vue 3D Three.js avec limons, poteau, marches et contremarches.
 - **Export CNC** : zip contenant `marches.dxf`, `limons.dxf`, `contremarches.dxf` (si l'escalier en a), `poteau.dxf` (quart tournant), `garde-corps.dxf` (s'il y en a un), la fiche des marches en CSV et une notice.
@@ -29,6 +30,7 @@ src/
   ui/                 rendu dans la page : réglages, plan SVG, résultats, panneau CNC, 3D
   styles/main.css     jetons de couleur, thème sombre
   main.ts             branchement des événements et boucle de mise à jour
+server/               serveur Node : le site construit et /api (compte, projets), Postgres
 tests/                Vitest ; les fichiers de référence sont dans tests/__snapshots__
 scripts/export.ts     export CNC en ligne de commande
 tools/check_dxf.py    vérification des DXF avec ezdxf
@@ -48,22 +50,28 @@ npm install
 npm run dev
 ```
 
-Puis ouvrir http://localhost:5173.
+Puis ouvrir http://localhost:5173. Le serveur de développement répond aussi à `/api` : base PGlite (Postgres en WebAssembly) dans `.pglite/`, rien à installer ; les codes de connexion s'affichent dans la console au lieu de partir par e-mail.
 
-| Commande            | Rôle                                                     |
-| ------------------- | -------------------------------------------------------- |
-| `npm run check`     | types, lint, mise en forme et tests (ce que lance la CI) |
-| `npm test`          | tests seuls ; `npm run test:watch` pour les relancer     |
-| `npm run format`    | met en forme avec Prettier                               |
-| `npm run build`     | site statique dans `dist/`                               |
-| `npm run export`    | archives CNC des trois formes dans `out/`                |
-| `npm run check:dxf` | export puis vérification des DXF avec ezdxf              |
+| Commande              | Rôle                                                     |
+| --------------------- | -------------------------------------------------------- |
+| `npm run check`       | types, lint, mise en forme et tests (ce que lance la CI) |
+| `npm test`            | tests seuls ; `npm run test:watch` pour les relancer     |
+| `npm run format`      | met en forme avec Prettier                               |
+| `npm run build`       | site dans `dist/`, serveur dans `dist-server/`           |
+| `npm start`           | serveur en ligne (`DATABASE_URL`, `BREVO_API_KEY`)       |
+| `npm run start:local` | le build avec une base en mémoire, codes dans la console |
+| `npm run export`      | archives CNC des trois formes dans `out/`                |
+| `npm run check:dxf`   | export puis vérification des DXF avec ezdxf              |
 
 ## Mise en ligne
 
-`npm run build` produit un site statique dans `dist/`, avec des chemins relatifs : il se sert depuis n'importe quel hébergement statique et n'importe quel sous-chemin. Three.js est chargé à part, après le calcul et le plan.
+Railway construit et lance le service d'après `railway.json` : `npm run build` (le site dans `dist/`, le serveur dans `dist-server/`), puis `npm start`, avec `/api/sante` pour contrôle. Le serveur sert le site (compressé, `assets/` gardés un an, le reste revalidé) et `/api` sur la même adresse. Three.js est chargé à part, après le calcul et le plan.
 
-Quart de tour s'installe comme une application (manifeste `public/manifest.json`, icônes dans `public/icons/`) et fonctionne sans réseau : au build, `dist/sw.js` reçoit la liste des fichiers à garder en cache. Les mises à jour sont silencieuses : la nouvelle version s'installe en arrière-plan et la page se recharge quand elle n'est pas affichée. Le service worker n'est enregistré qu'en production ; pour l'essayer en local, `npm run build` puis `npm run preview`.
+À régler dans Railway : un service Postgres dans le même projet, le service web et Postgres dans la région EU West (Amsterdam), et sur le service web les variables `DATABASE_URL` (référence au Postgres) et `BREVO_API_KEY`. Le schéma se crée et se met à jour au démarrage (`server/db.ts`).
+
+E-mails : Brevo, depuis `connexion@quart-de-tour.fr`. Le domaine est authentifié dans Brevo ; chez Gandi, les enregistrements que Brevo indique (vérification, DKIM `brevo1._domainkey` et `brevo2._domainkey`, DMARC), et un seul SPF pour le domaine, qui complète celui de Gandi Mail : `v=spf1 include:_mailcust.gandi.net include:spf.brevo.com ?all`.
+
+Quart de tour s'installe comme une application (manifeste `public/manifest.json`, icônes dans `public/icons/`) et fonctionne sans réseau : au build, `dist/sw.js` reçoit la liste des fichiers à garder en cache. Les mises à jour sont silencieuses : la nouvelle version s'installe en arrière-plan et la page se recharge quand elle n'est pas affichée. Le service worker n'est enregistré qu'en production ; pour l'essayer en local, `npm run build` puis `npm run start:local`.
 
 ## Export sans navigateur
 
