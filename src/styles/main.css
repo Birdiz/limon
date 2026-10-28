@@ -848,6 +848,39 @@ td.low {
   border-radius: 4px;
   background: var(--paper);
 }
+a.btn {
+  color: inherit;
+  line-height: normal;
+  text-decoration: none;
+}
+.acct,
+.acview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.acview > form {
+  align-self: stretch;
+}
+.acview h3 {
+  margin: 4px 0 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.acview .plist {
+  align-self: stretch;
+}
+.privacy {
+  color: var(--muted);
+  font-size: 12.5px;
+  max-width: 80ch;
+}
+.privacy summary {
+  cursor: pointer;
+}
 .install {
   display: flex;
   flex-direction: column;

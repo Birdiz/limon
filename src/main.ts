@@ -22,15 +22,19 @@ import { byId, copyText, downloadBytes, flash } from "./ui/dom";
 import { planSVG } from "./ui/plan";
 import { headlineHTML, notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
+import { AccountDialog } from "./ui/account";
+import { Api } from "./ui/api";
 import { ProjectsDialog } from "./ui/projects";
 import { startPWA } from "./ui/pwa";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
 import { leaveOldHost, storeMoved, takeMoved } from "./ui/move";
 import { LocalStore, newId } from "./ui/store";
+import { SyncStore } from "./ui/sync";
 import { Tabs } from "./ui/tabs";
 
-const store = new LocalStore();
+const api = new Api();
+const store = new SyncStore(new LocalStore(), api);
 const leaving = leaveOldHost(store);
 // Lus avant le premier calcul, qui réécrit l'adresse.
 const moved = takeMoved();
@@ -126,7 +130,7 @@ function openProject(p: Project | null): void {
 
 const steps = new Steps((mode, etape) => {
   if (!project) return;
-  project = { ...project, mode, etape };
+  project = { ...project, mode, etape, modifie: Date.now() };
   void store.save(project);
 });
 
@@ -146,7 +150,27 @@ byId("cncClose").addEventListener("click", () => {
 
 new Tabs(byId("tabbar"), document.querySelector<HTMLElement>(".work")!);
 
-const projects = new ProjectsDialog(store, { current: () => project, open: openProject });
+const projects = new ProjectsDialog(store, {
+  current: () => project,
+  open: openProject,
+  signedIn: () => store.account() !== null,
+});
+new AccountDialog(store, api);
+/** Projets changés sur un autre appareil : le projet ouvert se recharge, ou laisse la place s'il a été supprimé. */
+store.onChange(async (ids) => {
+  if (project && ids.includes(project.id)) {
+    const p = await store.get(project.id);
+    if (p) {
+      if (p.modifie !== project.modifie) openProject(p);
+    } else {
+      const next = (await store.list())[0] ?? null;
+      openProject(next);
+      if (next) void store.setCurrent(next.id);
+      else void projects.show();
+    }
+  }
+  await projects.refreshIfOpen();
+});
 byId("pjOpen").addEventListener("click", () => void projects.show());
 byId<HTMLInputElement>("pjName").addEventListener("change", (e) => {
   const el = e.target as HTMLInputElement;
@@ -264,6 +288,7 @@ void (async () => {
   if (start) void store.setCurrent(start.id);
   if (sharedAtStart) await openShared(sharedAtStart);
   else if (!start) void projects.show();
+  store.start();
 })();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.
 // Le cadrage initial attend les polices, qui changent la largeur de la colonne de réglages.

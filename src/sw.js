@@ -29,7 +29,9 @@ self.addEventListener("message", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+  const url = new URL(req.url);
+  // Le serveur (/api) répond toujours lui-même : comptes et projets ne passent jamais par le cache.
+  if (req.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
   // La page est la même quelle que soit l'adresse : le projet partagé est après le « # ».
   // ignoreVary : les scripts de module partent avec un en-tête Origin que la copie en cache n'a pas.
   const opts = { cacheName: CACHE, ignoreSearch: true, ignoreVary: true };

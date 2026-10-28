@@ -530,12 +530,106 @@
         <p class="disclaimer" id="pjInstallIos" hidden>
           Pour installer Quart de tour sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil ». Quart de
           tour s'ouvre alors comme une application et fonctionne sans réseau. Les projets faits dans le navigateur n'y
-          apparaissent pas : enregistrez-les en fichier .escalier, puis ouvrez ce fichier dans l'application.
+          apparaissent pas : connectez-vous à votre compte dans l'application, ou enregistrez-les en fichier .escalier
+          puis ouvrez ce fichier dans l'application.
         </p>
       </div>
-      <p class="disclaimer">
-        Les projets sont gardés dans ce navigateur. Enregistrez-les en fichier pour les retrouver sur un autre appareil.
-      </p>
+      <div class="acct">
+        <p class="disclaimer" id="acLine">
+          Les projets sont gardés dans ce navigateur. Avec un compte, retrouvez-les sur votre téléphone et votre
+          ordinateur.
+        </p>
+        <button class="btn" id="acOpen" type="button">Créer un compte ou se connecter</button>
+      </div>
+    </dialog>
+
+    <dialog id="compte" class="dlg" aria-labelledby="acTitle">
+      <div class="shead">
+        <h2 id="acTitle">Compte</h2>
+        <button class="btn" id="acClose" type="button">Fermer</button>
+      </div>
+      <div class="acview" id="acLogin">
+        <p>
+          Avec un compte, vos projets vous suivent sur votre téléphone et votre ordinateur, et restent utilisables sans
+          réseau.
+        </p>
+        <div class="actions" id="acPkBox" hidden>
+          <button class="btn primary" id="acPk" type="button">Se connecter avec Face ID ou l'empreinte</button>
+        </div>
+        <form class="newp" id="acEmailForm">
+          <label for="acEmail">Créer un compte, ou se connecter avec un code</label>
+          <input
+            id="acEmail"
+            type="email"
+            inputmode="email"
+            autocomplete="username webauthn"
+            required
+            placeholder="vous@exemple.fr"
+          />
+          <div class="actions">
+            <button class="btn" type="submit">Recevoir un code par e-mail</button>
+          </div>
+        </form>
+        <form class="newp" id="acCodeForm" hidden>
+          <label for="acCode">Code reçu à <span id="acCodeTo"></span></label>
+          <input
+            id="acCode"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            pattern="[0-9 ]{6,7}"
+            maxlength="7"
+            required
+          />
+          <div class="actions">
+            <button class="btn primary" type="submit">Se connecter</button
+            ><button class="btn" id="acBack" type="button">Changer d'adresse ou renvoyer</button>
+          </div>
+        </form>
+      </div>
+      <div class="acview" id="acOffer" hidden>
+        <p>
+          Vous êtes connecté. La prochaine fois, connectez-vous avec Face ID ou l'empreinte, sans attendre d'e-mail.
+        </p>
+        <div class="actions">
+          <button class="btn primary" id="acOfferYes" type="button">Activer Face ID ou l'empreinte</button
+          ><button class="btn" id="acOfferNo" type="button">Plus tard</button>
+        </div>
+      </div>
+      <div class="acview" id="acAccount" hidden>
+        <p>Connecté avec <b id="acMe"></b></p>
+        <p class="disclaimer" id="acState"></p>
+        <h3>Face ID et empreinte</h3>
+        <ul class="plist" id="acKeys"></ul>
+        <div class="actions">
+          <button class="btn" id="acAddKey" type="button">Activer Face ID ou l'empreinte sur cet appareil</button>
+        </div>
+        <div class="actions">
+          <a class="btn" id="acData" href="/api/compte/donnees" download>Télécharger mes données</a
+          ><button class="btn" id="acLogout" type="button">Se déconnecter</button
+          ><button class="btn danger" id="acDelete" type="button">Supprimer mon compte</button>
+        </div>
+      </div>
+      <p class="copied" id="acMsg" role="status" hidden></p>
+      <details class="privacy">
+        <summary>Confidentialité</summary>
+        <p>
+          Responsable : Thomas Bouzy, <a href="mailto:art.birdiz@gmail.com">art.birdiz@gmail.com</a>. Le compte garde
+          votre adresse e-mail, vos projets et la clé publique de vos passkeys : Face ID et l'empreinte ne quittent pas
+          votre appareil. Ces données servent seulement à vous connecter et à retrouver vos projets sur vos appareils ;
+          ni publicité, ni mesure d'audience.
+        </p>
+        <p>
+          Hébergement chez Railway, dans un centre de données à Amsterdam ; Railway est une société américaine, liée par
+          un accord de traitement des données. Les codes de connexion partent par Brevo, en France.
+        </p>
+        <p>
+          Les données sont gardées jusqu'à la suppression du compte, qui les efface aussitôt ; les sauvegardes de la
+          base en gardent une copie le temps de leur conservation. Vous pouvez télécharger vos données et supprimer
+          votre compte ici même. Pour toute autre demande, écrivez à l'adresse ci-dessus ; vous pouvez aussi vous
+          adresser à la CNIL.
+        </p>
+      </details>
     </dialog>
   </body>
 </html>
