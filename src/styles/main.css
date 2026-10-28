@@ -835,6 +835,11 @@ td.low {
   border-radius: 4px;
   background: var(--paper);
 }
+.install {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .plist {
   list-style: none;
   margin-inline: 0;

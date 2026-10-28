@@ -9,7 +9,11 @@
     />
     <meta name="color-scheme" content="light dark" />
     <title>Limon Escaliers</title>
+    <meta name="theme-color" content="#edf0f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#13171c" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body>
@@ -488,6 +492,19 @@
         ><span class="copied" id="pjMsg" hidden></span>
       </div>
       <input type="file" id="pjFile" accept=".limon,application/json" hidden />
+      <div class="install" id="pjInstall" hidden>
+        <div class="actions" id="pjInstallBtns">
+          <button class="btn" id="pjInstallBtn" type="button">Installer Limon sur cet appareil</button>
+        </div>
+        <p class="disclaimer" id="pjInstallNote">
+          Limon s'ouvre alors comme une application, depuis l'écran d'accueil ou le bureau, et fonctionne sans réseau.
+        </p>
+        <p class="disclaimer" id="pjInstallIos" hidden>
+          Pour installer Limon sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil ». Limon s'ouvre alors
+          comme une application et fonctionne sans réseau. Les projets faits dans le navigateur n'y apparaissent pas :
+          enregistrez-les en fichier .limon, puis ouvrez ce fichier dans l'application.
+        </p>
+      </div>
       <p class="disclaimer">
         Les projets sont gardés dans ce navigateur. Enregistrez-les en fichier pour les retrouver sur un autre appareil.
       </p>

@@ -23,6 +23,7 @@ import { planSVG } from "./ui/plan";
 import { headlineHTML, notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
 import { ProjectsDialog } from "./ui/projects";
+import { startPWA } from "./ui/pwa";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
 import { LocalStore, newId } from "./ui/store";
@@ -150,6 +151,11 @@ byId<HTMLInputElement>("pjName").addEventListener("change", (e) => {
   project = { ...project, nom: el.value.trim() || NOM_PAR_DEFAUT, modifie: Date.now() };
   el.value = project.nom;
   void store.save(project);
+});
+// Avant un rechargement silencieux : la saisie en cours (nom du projet, réglage) est enregistrée.
+startPWA(() => {
+  (document.activeElement as HTMLElement | null)?.blur();
+  if (queued) update();
 });
 
 /* ---------- Événements ---------- */
