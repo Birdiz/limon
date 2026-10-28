@@ -3,9 +3,11 @@ import type { ProjectStore } from "./store";
 
 /* Déménagement vers quart-de-tour.fr. Les projets des premiers utilisateurs sont dans le stockage
    du navigateur à l'ancienne adresse, que la nouvelle ne peut pas lire : l'ancienne page part vers la
-   nouvelle en les emportant dans l'ancre de l'adresse, qui n'est jamais envoyée au serveur. */
+   nouvelle en les emportant dans l'ancre de l'adresse, qui n'est jamais envoyée au serveur.
+   L'adresse en www sert le même site, mais le compte n'existe qu'à l'adresse sans www (origine
+   des passkeys et des sessions) : elle part de la même façon. */
 
-const OLD_HOST = "limon-escaliers.up.railway.app";
+const OLD_HOSTS = new Set(["limon-escaliers.up.railway.app", "www.quart-de-tour.fr"]);
 const NEW_ORIGIN = "https://quart-de-tour.fr";
 const KEY = "#transfert=";
 
@@ -18,7 +20,7 @@ export interface Moved {
 
 /** À l'ancienne adresse : part vers la nouvelle avec les projets ; vrai si la page s'en va. */
 export function leaveOldHost(store: ProjectStore): boolean {
-  if (location.hostname !== OLD_HOST) return false;
+  if (!OLD_HOSTS.has(location.hostname)) return false;
   const lien = location.hash;
   void (async () => {
     const projets = await store.list();
