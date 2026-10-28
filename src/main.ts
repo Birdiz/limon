@@ -20,9 +20,12 @@ import { SECTIONS, sectionSummaries } from "./core/summary";
 import { cutListHTML, previewSVG, stockFitHTML, stringerFitHTML } from "./ui/cnc-panel";
 import { byId, copyText, downloadBytes, flash } from "./ui/dom";
 import { planSVG } from "./ui/plan";
-import { headlineHTML, notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
+import { notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
 import { AccountDialog } from "./ui/account";
+import { fmt } from "./core/format";
+import { Home } from "./ui/home";
+import { showSketch } from "./ui/sketch";
 import { Api } from "./ui/api";
 import { ProjectsDialog } from "./ui/projects";
 import { startPWA } from "./ui/pwa";
@@ -57,7 +60,6 @@ function render(result: ComputeResult): void {
     byId("tiles").innerHTML = "";
     byId("table").innerHTML = "";
     byId("notes").innerHTML = "";
-    byId("headline").textContent = "";
     byId("tabFiche").classList.remove("alert");
     byId("cnc").hidden = true;
     scene?.showError(msg);
@@ -67,7 +69,6 @@ function render(result: ComputeResult): void {
   byId("plan").innerHTML = planSVG(R);
   byId("tiles").innerHTML = tilesHTML(R);
   byId("notes").innerHTML = notesHTML(R.notes);
-  byId("headline").innerHTML = headlineHTML(R);
   // Pastille sur l'onglet Fiche du téléphone : une règle n'est pas respectée.
   byId("tabFiche").classList.toggle(
     "alert",
@@ -107,6 +108,12 @@ function update(): void {
   showFieldErrors([...missingErrors(params, read.missing), ...(current.ok ? [] : current.errors)]);
   const sums = sectionSummaries(params, current.ok ? current.stair : null);
   SECTIONS.forEach((k) => (byId(`sum-${k}`).textContent = sums[k]));
+  // Sans les réglages avancés, la section Marches montre le choix fait par le calcul.
+  const R = current.ok ? current.stair : null;
+  byId("marchesAuto").innerHTML = R
+    ? `${R.n} hauteurs de ${fmt(R.h, 1)} mm, giron de ${fmt(R.g, 1)} mm.`
+    : "Le nombre de marches sera choisi une fois les cotes justes.";
+  sketches();
   render(current);
 }
 
@@ -117,8 +124,15 @@ function schedule(): void {
   requestAnimationFrame(update);
 }
 
-/** Ouvre un projet ; null quand il n'en reste aucun (le dialogue des projets reste alors affiché). */
+/** Croquis des cotes : celle du champ en cours de saisie, sinon la première de la section. */
+function sketches(focused = document.activeElement?.id): void {
+  document.querySelectorAll<HTMLElement>("[data-sketch]").forEach((fig) => showSketch(fig, params.forme, focused));
+}
+
+/** Ouvre un escalier ; null quand il n'en reste aucun : l'accueil prend alors la page. */
 function openProject(p: Project | null): void {
+  if (p) home.hide();
+  else void home.show();
   project = p;
   params = p ? { ...p.params } : { ...DEFAULTS };
   byId<HTMLInputElement>("pjName").value = p?.nom ?? "";
@@ -150,12 +164,55 @@ byId("cncClose").addEventListener("click", () => {
 
 new Tabs(byId("tabbar"), document.querySelector<HTMLElement>(".work")!);
 
+/** Nouvel escalier : toujours en pas à pas, sauf choix contraire dans les réglages avancés. */
+async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = DEFAULTS): Promise<void> {
+  const q = newProject(newId(), nom, mode, Date.now(), p);
+  await store.save(q);
+  await store.setCurrent(q.id);
+  openProject(q);
+}
+
 const projects = new ProjectsDialog(store, {
   current: () => project,
   open: openProject,
   signedIn: () => store.account() !== null,
 });
-new AccountDialog(store, api);
+const account = new AccountDialog(store, api);
+const home = new Home(store, {
+  current: () => project,
+  create: () => void startNew(),
+  example: () => void startNew("Exemple", "complet"),
+  open: (p) => {
+    openProject(p);
+    void store.setCurrent(p.id);
+  },
+  account: () => void account.show(),
+  signedIn: () => store.account() !== null,
+});
+byId("homeBtn").addEventListener("click", () => void home.show());
+byId("pjNew").addEventListener("click", () => void startNew());
+
+/** Réglages avancés : une préférence de l'appareil, réglée dans le dialogue Compte. */
+const ADV_KEY = "limon-avance";
+function setAdvanced(on: boolean): void {
+  document.body.classList.toggle("avance", on);
+  byId<HTMLInputElement>("advToggle").checked = on;
+  sketches();
+}
+try {
+  setAdvanced(localStorage.getItem(ADV_KEY) === "1");
+} catch {
+  setAdvanced(false);
+}
+byId<HTMLInputElement>("advToggle").addEventListener("change", (e) => {
+  const on = (e.target as HTMLInputElement).checked;
+  setAdvanced(on);
+  try {
+    localStorage.setItem(ADV_KEY, on ? "1" : "0");
+  } catch {
+    // Stockage indisponible : l'option vaut pour cette visite.
+  }
+});
 /** Projets changés sur un autre appareil : le projet ouvert se recharge, ou laisse la place s'il a été supprimé. */
 store.onChange(async (ids) => {
   if (project && ids.includes(project.id)) {
@@ -166,7 +223,6 @@ store.onChange(async (ids) => {
       const next = (await store.list())[0] ?? null;
       openProject(next);
       if (next) void store.setCurrent(next.id);
-      else void projects.show();
     }
   }
   await projects.refreshIfOpen();
@@ -190,6 +246,9 @@ for (const el of [document.querySelector<HTMLElement>(".side")!, byId("cncBody")
   el.addEventListener("input", schedule);
   el.addEventListener("change", schedule);
 }
+document.querySelector<HTMLElement>(".side")!.addEventListener("focusin", (e) => {
+  if ((e.target as HTMLElement).matches("input[type=number]")) sketches((e.target as HTMLElement).id);
+});
 // Marches droites avant le tour : l'angle se déplace, A et B sont recalculés à total constant.
 byId<HTMLInputElement>("tour").addEventListener("input", (e) => {
   const k = parseInt((e.target as HTMLInputElement).value, 10);
@@ -214,20 +273,25 @@ byId("notes").addEventListener("click", (ev) => {
 /** Un lien de projet devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert. */
 async function openShared(p: Params): Promise<void> {
   if (project && JSON.stringify(p) === JSON.stringify(project.params)) return;
-  const q = newProject(newId(), "Projet reçu par lien", "complet", Date.now(), p);
-  await store.save(q);
-  await store.setCurrent(q.id);
-  openProject(q);
+  await startNew("Escalier reçu par lien", "complet", p);
 }
 window.addEventListener("hashchange", () => {
   const p = paramsFromHash(location.hash);
   if (p) void openShared(p);
 });
 byId("share").addEventListener("click", async () => {
-  if (await copyText(location.href, byId<HTMLTextAreaElement>("linkfb"))) flash(byId("sharemsg"), "Lien copié");
+  if (await copyText(location.href, byId<HTMLTextAreaElement>("linkfb")))
+    flash(byId("sharemsg"), "Lien copié : collez-le dans un message ou un e-mail", false, 6000);
 });
-byId("v3d").addEventListener("click", () => scene?.viewPerspective());
-byId("vtop").addEventListener("click", () => scene?.viewTop());
+/** Point de vue de la 3D : un seul des deux boutons enfoncé. */
+function view3d(top: boolean): void {
+  byId("v3d").setAttribute("aria-pressed", String(!top));
+  byId("vtop").setAttribute("aria-pressed", String(top));
+  if (top) scene?.viewTop();
+  else scene?.viewPerspective();
+}
+byId("v3d").addEventListener("click", () => view3d(false));
+byId("vtop").addEventListener("click", () => view3d(true));
 
 byId("ficheDl").addEventListener("click", () => {
   if (!current?.ok) return;
@@ -255,7 +319,7 @@ const confirmTight = (c: CNC): boolean =>
 byId("dl").addEventListener("click", () => {
   if (!current?.ok || !cnc || !confirmTight(cnc)) return;
   downloadBytes(exportZip(current.stair, cnc), exportFilename(current.stair), "application/zip");
-  flash(byId("dlmsg"), "Archive enregistrée");
+  flash(byId("dlmsg"), "Fichiers enregistrés");
 });
 const copyDXF = async (which: "treadEnts" | "riserEnts" | "boardEnts" | "postEnts", label: string) => {
   if (!cnc || (which === "boardEnts" && !confirmTight(cnc))) return;
@@ -287,7 +351,6 @@ void (async () => {
   openProject(start);
   if (start) void store.setCurrent(start.id);
   if (sharedAtStart) await openShared(sharedAtStart);
-  else if (!start) void projects.show();
   store.start();
 })();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.

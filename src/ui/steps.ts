@@ -13,6 +13,26 @@ const DEFAULT_OPEN: Record<Section, boolean> = {
   gardecorps: false,
 };
 
+/** Bouton « Suivant » : il annonce l'étape d'après. */
+const NEXT_LABEL: Record<Section, string> = {
+  forme: "la forme",
+  dimensions: "les dimensions",
+  tremie: "la trémie",
+  marches: "les marches",
+  bois: "le bois",
+  gardecorps: "le garde-corps",
+};
+
+/** Éventail du pas à pas : une marche du quart tournant par étape, centre en bas à gauche comme le logo. */
+function fanPaths(n: number): string {
+  const pt = (r: number, a: number) => `${(6 + r * Math.cos(a)).toFixed(2)} ${(58 + r * Math.sin(a)).toFixed(2)}`;
+  return Array.from({ length: n }, (_, i) => {
+    const a0 = ((-90 + (i * 90) / n + 1.5) * Math.PI) / 180;
+    const a1 = ((-90 + ((i + 1) * 90) / n - 1.5) * Math.PI) / 180;
+    return `<path d="M${pt(22, a0)}L${pt(52, a0)}A52 52 0 0 1 ${pt(52, a1)}L${pt(22, a1)}A22 22 0 0 0 ${pt(22, a0)}Z"/>`;
+  }).join("");
+}
+
 function loadOpen(): Record<Section, boolean> {
   const o = { ...DEFAULT_OPEN };
   try {
@@ -38,8 +58,10 @@ export class Steps {
   private secs = SECTIONS.map((k) => document.querySelector<HTMLDetailsElement>(`details[data-step="${k}"]`)!);
   private prev = byId<HTMLButtonElement>("stPrev");
   private next = byId<HTMLButtonElement>("stNext");
+  private fan = byId("stepFan");
 
   constructor(private onChange: (mode: Mode, etape: number) => void) {
+    this.fan.innerHTML = fanPaths(SECTIONS.length);
     this.secs.forEach((d, i) => {
       d.querySelector("summary")!.addEventListener("click", (e) => {
         if (this.mode !== "guide") return;
@@ -72,8 +94,8 @@ export class Steps {
     this.etape = Math.min(Math.max(0, i), SECTIONS.length - 1);
     this.render();
     this.onChange(this.mode, this.etape);
-    this.secs[this.etape]!.querySelector("summary")!.focus({ preventScroll: true });
-    this.secs[this.etape]!.scrollIntoView({ block: "nearest" });
+    // Le titre de l'étape est dans l'en-tête du pas à pas : on y remonte, le focus reste sur « Suivant ».
+    byId("stepHead").scrollIntoView({ block: "nearest" });
   }
 
   private saveOpen(): void {
@@ -88,7 +110,7 @@ export class Steps {
   private render(): void {
     const guide = this.mode === "guide";
     document.body.classList.toggle("guided", guide);
-    byId("stepper").hidden = !guide;
+    byId("stepper").hidden = byId("stepHead").hidden = !guide;
     if (guide) {
       this.secs.forEach((d, i) => {
         d.hidden = i > this.etape;
@@ -96,10 +118,14 @@ export class Steps {
         d.classList.toggle("done", i < this.etape);
       });
       const last = this.etape === SECTIONS.length - 1;
-      byId("stepTxt").textContent =
-        `Étape ${this.etape + 1} sur ${SECTIONS.length} · ${SECTION_TITLE[SECTIONS[this.etape]!]}`;
+      byId("stepTxt").textContent = `Étape ${this.etape + 1} sur ${SECTIONS.length}`;
+      byId("stepTitle").textContent = SECTION_TITLE[SECTIONS[this.etape]!];
+      this.fan.querySelectorAll("path").forEach((el, i) => {
+        el.classList.toggle("done", i < this.etape);
+        el.classList.toggle("cur", i === this.etape);
+      });
       this.prev.disabled = this.etape === 0;
-      this.next.textContent = last ? "Terminer" : "Suivant";
+      this.next.textContent = last ? "Voir mon escalier" : `Suivant : ${NEXT_LABEL[SECTIONS[this.etape + 1]!]}`;
     } else {
       const o = loadOpen();
       this.secs.forEach((d, i) => {

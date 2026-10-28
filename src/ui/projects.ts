@@ -14,7 +14,7 @@ export interface ProjectsHost {
   signedIn(): boolean;
 }
 
-/** Dialogue « Mes projets » : liste, création, duplication, suppression, fichiers .escalier. */
+/** Dialogue « Mes escaliers » : liste, création, duplication, suppression, copies en fichier .escalier. */
 export class ProjectsDialog {
   private dlg = byId<HTMLDialogElement>("projets");
   private list = byId<HTMLUListElement>("pjList");
@@ -28,10 +28,6 @@ export class ProjectsDialog {
     byId("pjGuide").addEventListener("click", () => void this.create("guide"));
     byId("pjFull").addEventListener("click", () => void this.create("complet"));
     byId("pjClose").addEventListener("click", () => this.dlg.close());
-    // Sans projet ouvert, il n'y a rien derrière le dialogue : il reste affiché.
-    this.dlg.addEventListener("cancel", (e) => {
-      if (!this.host.current()) e.preventDefault();
-    });
     this.list.addEventListener("click", (e) => void this.act(e));
     const file = byId<HTMLInputElement>("pjFile");
     byId("pjImport").addEventListener("click", () => file.click());
@@ -66,8 +62,7 @@ export class ProjectsDialog {
               `<button class="btn danger" type="button" data-act="del" data-id="${p.id}">Supprimer</button></div></li>`,
           )
           .join("")
-      : '<li class="empty">Aucun projet pour l\'instant. Donnez un nom à votre escalier et choisissez comment le régler.</li>';
-    byId("pjClose").hidden = !cur;
+      : '<li class="empty">Aucun escalier pour l\'instant. Donnez-lui un nom et démarrez.</li>';
     byId("pjExport").hidden = !cur;
   }
 
@@ -94,8 +89,8 @@ export class ProjectsDialog {
       await this.store.save({ ...p, id: newId(), nom: `${p.nom} (copie)`, cree: now, modifie: now });
       await this.refresh();
     } else if (b.dataset.act === "del") {
-      const where = this.host.signedIn() ? "de cet appareil et de votre compte" : "de ce navigateur";
-      if (!confirm(`Supprimer « ${p.nom} » ? Le projet sera effacé ${where}.`)) return;
+      const where = this.host.signedIn() ? "de cet appareil et de votre compte" : "de cet appareil";
+      if (!confirm(`Supprimer « ${p.nom} » ? L'escalier sera effacé ${where}.`)) return;
       await this.store.remove(p.id);
       if (p.id === this.host.current()?.id) {
         const next = (await this.store.list())[0];
@@ -122,6 +117,6 @@ export class ProjectsDialog {
     const p = this.host.current();
     if (!p) return;
     downloadBytes(new TextEncoder().encode(projectFile(p)), `${fileBase(p.nom)}.escalier`, "application/json");
-    flash(this.msg, "Fichier enregistré");
+    flash(this.msg, "Copie enregistrée");
   }
 }

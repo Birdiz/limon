@@ -17,9 +17,6 @@ export const notesHTML = (notes: readonly Note[]): string =>
     )
     .join("");
 
-export const headlineHTML = (R: Stair): string =>
-  `<b>${R.n}</b> hauteurs de <b>${fmt(R.h, 1)}</b> mm · giron <b>${fmt(R.g, 1)}</b> mm`;
-
 /** Fiche des marches : girons sur le jour, la foulée et l'extérieur en quart tournant. */
 export function treadsTableHTML(R: Stair): string {
   const head = R.quart
