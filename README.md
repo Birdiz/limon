@@ -69,11 +69,13 @@ Puis ouvrir http://localhost:5173.
 npm run export -- quart-g --out out
 ```
 
-Avec des réglages enregistrés (mêmes clés que la page, par exemple copiées depuis `localStorage["limon-v2"]`) :
+Avec un projet enregistré depuis la page (« Mes projets », puis « Enregistrer ce projet en fichier .limon ») :
 
 ```bash
-npm run export -- --params reglages.json
+npm run export -- --params escalier.limon
 ```
+
+`--params` accepte aussi un JSON de réglages seuls, avec les mêmes clés que la page.
 
 ## Vérifier les DXF
 

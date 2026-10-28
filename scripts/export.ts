@@ -2,19 +2,41 @@
 
    npm run export                          trois formes avec l'exemple par défaut, dans out/
    npm run export -- quart-g --out tmp     une forme, autre dossier
-   npm run export -- --params reglages.json   réglages enregistrés (mêmes clés que la page) */
+   npm run export -- --params escalier.limon   projet enregistré depuis la page
+   npm run export -- --params reglages.json    ou réglages seuls (mêmes clés que la page) */
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { exportFilename, exportZip } from "../src/cnc/package";
 import { FORMES, sanitizeParams, type Forme } from "../src/core/params";
+import { parseProjectFile } from "../src/core/project";
 import { compute } from "../src/core/stair";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: { out: { type: "string", default: "out" }, params: { type: "string" } },
 });
-const base = values.params ? JSON.parse(fs.readFileSync(values.params, "utf8")) : {};
+
+/** Réglages lus dans un fichier .limon ou dans un JSON de réglages seuls. */
+function readParams(file: string): unknown {
+  const text = fs.readFileSync(file, "utf8");
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    console.error(`${file} : ce n'est pas un fichier JSON.`);
+    process.exit(1);
+  }
+  if ((raw as { format?: unknown } | null)?.format === undefined) return raw;
+  const p = parseProjectFile(text, "export");
+  if ("erreur" in p) {
+    console.error(`${file} : ${p.erreur}`);
+    process.exit(1);
+  }
+  return p.params;
+}
+
+const base = values.params ? readParams(values.params) : {};
 const formes = positionals.length ? positionals : values.params ? [sanitizeParams(base).forme] : FORMES;
 fs.mkdirSync(values.out, { recursive: true });
 
@@ -25,7 +47,7 @@ for (const forme of formes) {
     failed = true;
     continue;
   }
-  const r = compute(sanitizeParams({ ...base, forme }));
+  const r = compute(sanitizeParams({ ...(base as object), forme }));
   if (!r.ok) {
     console.error(`${forme} : ${r.errors.map((e) => e.message).join(" ")}`);
     failed = true;
