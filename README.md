@@ -69,7 +69,7 @@ Railway construit et lance le service d'après `railway.json` : `npm run build` 
 
 À régler dans Railway : un service Postgres dans le même projet, le service web et Postgres dans la région EU West (Amsterdam), et sur le service web les variables `DATABASE_URL` (référence au Postgres) et `BREVO_API_KEY`. Le schéma se crée et se met à jour au démarrage (`server/db.ts`).
 
-E-mails : Brevo, depuis `connexion@quart-de-tour.fr`. Le domaine est authentifié dans Brevo ; chez Gandi, les enregistrements que Brevo indique (vérification, DKIM `brevo1._domainkey` et `brevo2._domainkey`, DMARC), et un seul SPF pour le domaine, qui complète celui de Gandi Mail : `v=spf1 include:_mailcust.gandi.net include:spf.brevo.com ?all`.
+E-mails : Brevo, depuis `connexion@quart-de-tour.fr`. Le domaine est authentifié dans Brevo ; chez Gandi, les quatre enregistrements que Brevo indique (code de vérification, DKIM `brevo1._domainkey` et `brevo2._domainkey`, DMARC). Le SPF de Gandi Mail reste tel quel : Brevo ne le demande pas.
 
 Quart de tour s'installe comme une application (manifeste `public/manifest.json`, icônes dans `public/icons/`) et fonctionne sans réseau : au build, `dist/sw.js` reçoit la liste des fichiers à garder en cache. Les mises à jour sont silencieuses : la nouvelle version s'installe en arrière-plan et la page se recharge quand elle n'est pas affichée. Le service worker n'est enregistré qu'en production ; pour l'essayer en local, `npm run build` puis `npm run start:local`.
 
