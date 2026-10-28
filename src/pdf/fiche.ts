@@ -59,8 +59,44 @@ function keyValues(pg: Page, x: number, y: number, w: number, rows: [string, str
   return y;
 }
 
+/** Marches balancées du logo, tracées sur 100 unités comme public/favicon.svg. */
+const LOGO_RISERS: [[number, number], [number, number]][] = [
+  [
+    [17.4, 75.5],
+    [32.9, 28],
+  ],
+  [
+    [20.5, 77.1],
+    [49.9, 36.6],
+  ],
+  [
+    [22.9, 79.5],
+    [63.4, 50.1],
+  ],
+  [
+    [24.5, 82.6],
+    [72, 67.1],
+  ],
+];
+
+/** Logo (l'éventail d'un quart tournant et sa flèche), coin haut gauche en (x, y), côté s. */
+function logo(pg: Page, x: number, y: number, s: number): void {
+  const k = s / 100;
+  const P = (u: number, v: number): [number, number] => [x + u * k, y + v * k];
+  const arc = (r: number, a0: number, a1: number) =>
+    Array.from({ length: 25 }, (_, i) => {
+      const a = ((a0 + ((a1 - a0) * i) / 24) * Math.PI) / 180;
+      return P(14 + r * Math.cos(a), 86 + r * Math.sin(a));
+    });
+  pg.path([...arc(58, -90, 0), ...arc(14, 0, -90)], { fill: C.chalk }, true);
+  for (const [a, b] of LOGO_RISERS) pg.path([P(...a), P(...b)], { stroke: C.white, width: 3.6 * k });
+  pg.path(arc(74, -90, -14), { stroke: C.chalk, width: 7 * k });
+  pg.circle(...P(14, 12), 3.5 * k, { fill: C.chalk });
+  pg.path([P(88.5, 78.8), P(92.6, 66.4), P(79, 69.8)], { fill: C.chalk }, true);
+}
+
 function footer(pg: Page, nom: string, i: number, count: number): void {
-  pg.text(M, A4.h - 24, `Limon · ${nom}`, { size: 7.5, color: C.muted });
+  pg.text(M, A4.h - 24, `Quart de tour · ${nom}`, { size: 7.5, color: C.muted });
   pg.text(A4.w - M, A4.h - 24, `page ${i}/${count}`, { size: 7.5, color: C.muted, anchor: "end" });
 }
 
@@ -125,7 +161,9 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   /* ---------- Page 1 ---------- */
   const pg = doc.page();
   pg.text(M, 58, o.nom, { size: 22, bold: true, color: C.ink });
-  pg.text(A4.w - M, 46, `Fiche escalier · ${o.date}`, { size: 8.5, color: C.muted, anchor: "end" });
+  logo(pg, A4.w - M - 24, 30, 24);
+  pg.text(A4.w - M - 30, 41, "QUART DE TOUR", { size: 9.5, bold: true, color: C.ink, anchor: "end" });
+  pg.text(A4.w - M - 30, 53, `Fiche escalier · ${o.date}`, { size: 8.5, color: C.muted, anchor: "end" });
   pg.text(
     M,
     78,

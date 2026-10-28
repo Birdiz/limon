@@ -8,7 +8,7 @@
       content="Calcul et dessin d'escaliers bois : droit et quart tournant, 3D, échappée, export CNC DXF."
     />
     <meta name="color-scheme" content="light dark" />
-    <title>Limon Escaliers</title>
+    <title>Quart de tour</title>
     <meta name="theme-color" content="#edf0f3" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#13171c" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -19,7 +19,21 @@
   <body>
     <header class="top">
       <div class="brand">
-        <span class="mark">Li<i>m</i>on</span>
+        <span class="mark"
+          ><svg class="logo" viewBox="0 0 100 100" aria-hidden="true">
+            <mask id="logoMask">
+              <rect width="100" height="100" fill="#fff" />
+              <path
+                d="M17.4 75.5 32.9 28M20.5 77.1 49.9 36.6M22.9 79.5 63.4 50.1M24.5 82.6 72 67.1"
+                stroke="#000"
+                stroke-width="3.6"
+              />
+            </mask>
+            <path class="f" d="M14 72V28A58 58 0 0 1 72 86H28A14 14 0 0 0 14 72Z" mask="url(#logoMask)" />
+            <path class="s" d="M14 12A74 74 0 0 1 85.8 68.1" />
+            <path class="f" d="M88.5 78.8 92.6 66.4 79 69.8Z" /></svg
+          ><span class="word">Quart de tour</span></span
+        >
         <span class="tag">Calcul d'escaliers bois · prototype</span>
       </div>
       <div class="proj">
@@ -100,11 +114,12 @@
           <summary><span class="sh">Trémie</span><span class="sum" id="sum-tremie"></span></summary>
           <div class="sbody">
             <p class="hint">
-              L'ouverture dans le plancher du haut. Si elle n'est pas encore faite, Limon calcule la plus petite qui
-              laisse 2 m d'échappée.
+              L'ouverture dans le plancher du haut. Si elle n'est pas encore faite, Quart de tour calcule la plus petite
+              qui laisse 2 m d'échappée.
             </p>
             <label class="check"
-              ><input type="checkbox" id="tAuto" /> je ne la connais pas : Limon calcule la trémie minimale</label
+              ><input type="checkbox" id="tAuto" /> je ne la connais pas : Quart de tour calcule la trémie
+              minimale</label
             >
             <div class="row" data-show="droit">
               <label for="tL">Longueur de trémie<small>depuis le bord du palier</small></label>
@@ -133,7 +148,9 @@
         <details class="sec" data-step="marches" open>
           <summary><span class="sh">Marches</span><span class="sum" id="sum-marches"></span></summary>
           <div class="sbody">
-            <p class="hint">Limon choisit le nombre de marches et la ligne de foulée. Ne les changez que si besoin.</p>
+            <p class="hint">
+              Quart de tour choisit le nombre de marches et la ligne de foulée. Ne les changez que si besoin.
+            </p>
             <div class="row">
               <div>
                 <label for="n">Nombre de hauteurs</label
@@ -487,22 +504,23 @@
       </div>
       <ul class="plist" id="pjList"></ul>
       <div class="actions">
-        <button class="btn" id="pjImport" type="button">Ouvrir un fichier .limon</button
-        ><button class="btn" id="pjExport" type="button">Enregistrer ce projet en fichier .limon</button
+        <button class="btn" id="pjImport" type="button">Ouvrir un fichier .escalier</button
+        ><button class="btn" id="pjExport" type="button">Enregistrer ce projet en fichier .escalier</button
         ><span class="copied" id="pjMsg" hidden></span>
       </div>
-      <input type="file" id="pjFile" accept=".limon,application/json" hidden />
+      <input type="file" id="pjFile" accept=".escalier,.limon,application/json" hidden />
       <div class="install" id="pjInstall" hidden>
         <div class="actions" id="pjInstallBtns">
-          <button class="btn" id="pjInstallBtn" type="button">Installer Limon sur cet appareil</button>
+          <button class="btn" id="pjInstallBtn" type="button">Installer Quart de tour sur cet appareil</button>
         </div>
         <p class="disclaimer" id="pjInstallNote">
-          Limon s'ouvre alors comme une application, depuis l'écran d'accueil ou le bureau, et fonctionne sans réseau.
+          Quart de tour s'ouvre alors comme une application, depuis l'écran d'accueil ou le bureau, et fonctionne sans
+          réseau.
         </p>
         <p class="disclaimer" id="pjInstallIos" hidden>
-          Pour installer Limon sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil ». Limon s'ouvre alors
-          comme une application et fonctionne sans réseau. Les projets faits dans le navigateur n'y apparaissent pas :
-          enregistrez-les en fichier .limon, puis ouvrez ce fichier dans l'application.
+          Pour installer Quart de tour sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil ». Quart de
+          tour s'ouvre alors comme une application et fonctionne sans réseau. Les projets faits dans le navigateur n'y
+          apparaissent pas : enregistrez-les en fichier .escalier, puis ouvrez ce fichier dans l'application.
         </p>
       </div>
       <p class="disclaimer">

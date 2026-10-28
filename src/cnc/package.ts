@@ -14,7 +14,7 @@ export function readme(R: Stair): string {
   const p = R.params;
   return (
     [
-      "Limon - export CNC",
+      "Quart de tour - export CNC",
       `Escalier ${FORME_LABEL[p.forme]} : ${R.n} hauteurs de ${fmt(R.h, 1)} mm, giron ${fmt(R.g, 1)} mm, emmarchement ${fmt(R.W)} mm.`,
       "Unités : millimètres. Format DXF R12 (AC1009).",
       "",

@@ -101,7 +101,7 @@ select {
 }
 .brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 14px;
   flex-wrap: wrap;
 }
@@ -112,10 +112,23 @@ select {
   line-height: 1;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
 }
-.mark i {
-  font-style: normal;
-  color: var(--chalk);
+.logo {
+  width: 1.1em;
+  height: 1.1em;
+  flex: none;
+}
+.logo .f {
+  fill: var(--chalk);
+}
+.logo .s {
+  fill: none;
+  stroke: var(--chalk);
+  stroke-width: 7;
+  stroke-linecap: round;
 }
 .tag {
   color: var(--muted);
@@ -1071,8 +1084,17 @@ td.low {
     padding-block: 12px 10px;
     margin-bottom: 14px;
   }
+  /* Le logo seul : le nom en entier prendrait la place du nom du projet. */
   .mark {
-    font-size: 26px;
+    font-size: 30px;
+  }
+  .mark .word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .tag {
     display: none;

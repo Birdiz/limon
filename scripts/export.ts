@@ -2,7 +2,7 @@
 
    npm run export                          trois formes avec l'exemple par défaut, dans out/
    npm run export -- quart-g --out tmp     une forme, autre dossier
-   npm run export -- --params escalier.limon   projet enregistré depuis la page
+   npm run export -- --params projet.escalier  projet enregistré depuis la page
    npm run export -- --params reglages.json    ou réglages seuls (mêmes clés que la page) */
 import fs from "node:fs";
 import path from "node:path";
@@ -17,7 +17,7 @@ const { values, positionals } = parseArgs({
   options: { out: { type: "string", default: "out" }, params: { type: "string" } },
 });
 
-/** Réglages lus dans un fichier .limon ou dans un JSON de réglages seuls. */
+/** Réglages lus dans un fichier .escalier (ou .limon) ou dans un JSON de réglages seuls. */
 function readParams(file: string): unknown {
   const text = fs.readFileSync(file, "utf8");
   let raw: unknown;

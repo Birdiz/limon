@@ -235,7 +235,7 @@ export class PdfDoc {
         return c > 0xffff ? [] : [c.toString(16).padStart(4, "0")];
       })
       .join("");
-    obj(5, `<< /Title <FEFF${utf16.toUpperCase()}> /Producer (Limon) >>`);
+    obj(5, `<< /Title <FEFF${utf16.toUpperCase()}> /Producer (Quart de tour) >>`);
     for (const [k, im] of this.jpegs)
       obj(imgIds.get(k)!, [
         `<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.data.length} >>\nstream\n`,
