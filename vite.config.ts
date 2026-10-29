@@ -4,6 +4,13 @@ import path from "node:path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
+/**
+ * Les trois pages : la page publique (/), l'outil (/app/) et les mentions légales. Chemins relatifs à
+ * la racine : en absolu, Railway, qui construit dans /app, confondrait /app/index.html (la page
+ * publique) avec l'adresse de l'outil, et la page publique manquerait au build.
+ */
+const PAGES = ["./index.html", "./app/index.html", "./mentions-legales/index.html"];
+
 /** Écrit dist/sw.js : src/sw.js avec la liste des fichiers du build et leur empreinte. */
 function pwa(): Plugin {
   let publicDir = "";
@@ -15,6 +22,8 @@ function pwa(): Plugin {
       publicDir = c.publicDir;
     },
     generateBundle(_, bundle) {
+      // Une page manquante servirait un 404 : mieux vaut un build en échec, l'ancienne version reste en ligne.
+      for (const p of PAGES) if (!bundle[p.slice(2)]) this.error(`Page absente du build : ${p}`);
       const hash = createHash("sha256");
       const files: string[] = [];
       for (const [name, out] of Object.entries(bundle).sort(([a], [b]) => a.localeCompare(b))) {
@@ -65,19 +74,12 @@ export default defineConfig(({ isSsrBuild }) => ({
   // Chemins relatifs : le dossier dist/ se sert depuis n'importe quel sous-chemin.
   base: "./",
   // Three.js (≈ 590 ko) est chargé à part, après le calcul et le plan. Le serveur (--ssr) n'emporte pas public/.
-  // Trois pages : la page publique (/), l'outil (/app/) et les mentions légales.
   build: {
     target: "es2022",
     sourcemap: true,
     chunkSizeWarningLimit: 700,
     copyPublicDir: !isSsrBuild,
-    rolldownOptions: isSsrBuild
-      ? {}
-      : {
-          input: ["index.html", "app/index.html", "mentions-legales/index.html"].map((f) =>
-            path.resolve(import.meta.dirname, f),
-          ),
-        },
+    rolldownOptions: isSsrBuild ? {} : { input: PAGES },
   },
   plugins: [pwa(), api()],
   test: { include: ["tests/**/*.test.ts"] },
