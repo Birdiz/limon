@@ -17,8 +17,11 @@ const TYPES: Record<string, string> = {
   ".woff": "font/woff",
   ".map": "application/json; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
+  ".webp": "image/webp",
+  ".jpg": "image/jpeg",
 };
-const COMPRESS = new Set([".html", ".js", ".css", ".json", ".svg", ".map", ".txt"]);
+const COMPRESS = new Set([".html", ".js", ".css", ".json", ".svg", ".map", ".txt", ".xml"]);
 
 interface File {
   type: string;
@@ -36,7 +39,8 @@ const bytes = (b: Buffer) => new Uint8Array(b);
 /**
  * Le site construit (`dist/`), lu et compressé une fois au démarrage : il pèse quelques mégaoctets.
  * Les fichiers de `assets/` portent leur empreinte dans leur nom et se gardent un an ; les autres
- * (index.html, sw.js, manifeste, icônes) sont revalidés à chaque fois.
+ * (pages, sw.js, manifeste, icônes, images de la page publique) sont revalidés à chaque fois.
+ * Un dossier sert son index.html : / la page publique, /app/ l'outil.
  */
 export async function staticFiles(dir: string): Promise<MiddlewareHandler> {
   const files = new Map<string, File>();
@@ -61,8 +65,13 @@ export async function staticFiles(dir: string): Promise<MiddlewareHandler> {
 
   return async (c, next) => {
     if (c.req.method !== "GET" && c.req.method !== "HEAD") return next();
-    const f = files.get(c.req.path === "/" ? "/index.html" : c.req.path);
-    if (!f) return next();
+    const p = c.req.path;
+    const f = files.get(p.endsWith("/") ? p + "index.html" : p);
+    if (!f) {
+      // /app sans barre finale : les chemins relatifs de la page partiraient de la racine.
+      if (files.has(p + "/index.html")) return c.redirect(p + "/" + new URL(c.req.url).search, 301);
+      return next();
+    }
     c.header("Content-Type", f.type);
     c.header("Cache-Control", f.cache);
     c.header("ETag", f.etag);

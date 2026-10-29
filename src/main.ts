@@ -44,6 +44,9 @@ const leaving = leaveOldHost(store);
 // Lus avant le premier calcul, qui réécrit l'adresse.
 const moved = takeMoved();
 const sharedAtStart = paramsFromHash(moved ? moved.lien : location.hash);
+/** Boutons de la page publique : « Calculer mon escalier » (?nouveau), « Voir un exemple » (?exemple). */
+const asked = new URLSearchParams(location.search);
+if (asked.size) history.replaceState(null, "", location.pathname + location.hash);
 let project: Project | null = null;
 let params: Params = { ...DEFAULTS };
 let current: ComputeResult | null = null;
@@ -185,7 +188,7 @@ const account = new AccountDialog(store, api);
 const home = new Home(store, {
   current: () => project,
   create: () => void startNew(),
-  example: () => void startNew("Exemple", "complet", { ...DEFAULTS }),
+  example: () => void example(),
   open: (p) => {
     openProject(p);
     void store.setCurrent(p.id);
@@ -284,6 +287,7 @@ async function openShared(p: Params): Promise<void> {
   if (project && JSON.stringify(p) === JSON.stringify(project.params)) return;
   await startNew("Escalier reçu par lien", "complet", p);
 }
+const example = () => startNew("Exemple", "complet", { ...DEFAULTS });
 window.addEventListener("hashchange", () => {
   const p = paramsFromHash(location.hash);
   if (p) void openShared(p);
@@ -360,6 +364,8 @@ void (async () => {
   openProject(start);
   if (start) void store.setCurrent(start.id);
   if (sharedAtStart) await openShared(sharedAtStart);
+  else if (asked.has("exemple")) await example();
+  else if (asked.has("nouveau")) await startNew();
   store.start();
 })();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.

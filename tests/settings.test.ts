@@ -7,7 +7,7 @@ import { compute } from "../src/core/stair";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "../src/ui/settings";
 import { stairOf } from "./cases";
 
-const html = fs.readFileSync(path.resolve("index.html"), "utf8");
+const html = fs.readFileSync(path.resolve("app/index.html"), "utf8");
 const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
 const field = (id: string) => document.getElementById(id) as HTMLInputElement;
 

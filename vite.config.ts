@@ -29,6 +29,8 @@ function pwa(): Plugin {
           .flatMap((d) => (d.isDirectory() ? walk(path.join(dir, d.name)) : [path.join(dir, d.name)]));
       for (const f of walk(publicDir).sort()) {
         const name = path.relative(publicDir, f).split(path.sep).join("/");
+        // Les images de la page publique ne servent pas à l'outil hors ligne.
+        if (name.startsWith("vitrine/")) continue;
         files.push(name);
         hash.update(name).update(fs.readFileSync(f));
       }
@@ -63,7 +65,20 @@ export default defineConfig(({ isSsrBuild }) => ({
   // Chemins relatifs : le dossier dist/ se sert depuis n'importe quel sous-chemin.
   base: "./",
   // Three.js (≈ 590 ko) est chargé à part, après le calcul et le plan. Le serveur (--ssr) n'emporte pas public/.
-  build: { target: "es2022", sourcemap: true, chunkSizeWarningLimit: 700, copyPublicDir: !isSsrBuild },
+  // Trois pages : la page publique (/), l'outil (/app/) et les mentions légales.
+  build: {
+    target: "es2022",
+    sourcemap: true,
+    chunkSizeWarningLimit: 700,
+    copyPublicDir: !isSsrBuild,
+    rolldownOptions: isSsrBuild
+      ? {}
+      : {
+          input: ["index.html", "app/index.html", "mentions-legales/index.html"].map((f) =>
+            path.resolve(import.meta.dirname, f),
+          ),
+        },
+  },
   plugins: [pwa(), api()],
   test: { include: ["tests/**/*.test.ts"] },
 }));

@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "export": "tsx scripts/export.ts",
+    "vitrine": "tsx scripts/vitrine.ts",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
     "check:dxf": "npm run export && .venv/bin/python tools/check_dxf.py out/*.zip"
   },

@@ -1,0 +1,487 @@
+/* Page publique : mêmes jetons que l'outil. Une colonne sur téléphone, texte et capture côte à côte
+   sur ordinateur ; le seul bouton orange est celui qui fait démarrer un escalier. */
+@import "./base.css";
+
+.vitrine {
+  --wrap: 1180px;
+  --gut: max(16px, env(safe-area-inset-left, 0px));
+  font-size: 17px;
+  line-height: 1.55;
+}
+.vitrine a {
+  color: inherit;
+}
+.vitrine main > section {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 72px var(--gut);
+  /* Les liens « L'outil », « Prix », « Questions » arrivent sous l'en-tête fixe. */
+  scroll-margin-top: 20px;
+}
+.vitrine h2 {
+  font-size: clamp(30px, 4.2vw, 44px);
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+/* En-tête */
+.vtop {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px max(var(--gut), calc((100% - var(--wrap)) / 2 + var(--gut)));
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+.vtop .mark {
+  font-size: 26px;
+  text-decoration: none;
+}
+.vnav {
+  display: flex;
+  gap: 22px;
+  margin-left: auto;
+}
+.vnav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+.vnav a:hover {
+  color: var(--chalk);
+}
+
+/* Boutons */
+.vbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--raised);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.vbtn:hover {
+  border-color: var(--chalk);
+  color: var(--chalk);
+}
+.vbtn.go {
+  min-height: 56px;
+  padding-inline: 26px;
+  border-color: var(--go);
+  border-radius: 10px;
+  background: var(--go);
+  color: var(--on-go);
+  font-size: 18px;
+}
+.vbtn.go:hover {
+  color: var(--on-go);
+  filter: brightness(1.08);
+}
+.turn {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+.turn path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+.turn path.h {
+  fill: currentColor;
+  stroke: none;
+}
+/* La flèche fait son quart de tour au survol, comme les sections de l'outil. */
+.vbtn.go:hover .turn {
+  transform: rotate(90deg);
+  transition: transform 0.25s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vbtn.go:hover .turn {
+    transform: none;
+  }
+}
+
+/* Haut de page */
+.vitrine main > .hero {
+  padding-top: 56px;
+}
+.herotext {
+  max-width: 760px;
+}
+.kicker {
+  margin: 0 0 14px;
+  color: var(--chalk);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+.hero h1 {
+  font-size: clamp(42px, 7vw, 80px);
+  line-height: 0.98;
+  text-transform: uppercase;
+}
+.lead {
+  margin: 20px 0 0;
+  font-size: clamp(18px, 2.2vw, 21px);
+  color: var(--muted);
+}
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+.ctas .vbtn:not(.go) {
+  min-height: 56px;
+  font-size: 18px;
+}
+.fine {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* Captures de l'outil */
+.shot {
+  margin: 0;
+}
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 50px -24px rgba(10, 20, 40, 0.35);
+}
+.hero .shot {
+  margin-top: 48px;
+}
+.shot.phone {
+  justify-self: center;
+  width: min(300px, 78vw);
+}
+.shot.phone img {
+  border-radius: 28px;
+  border-width: 6px;
+  border-color: var(--ink);
+}
+.shot.paper {
+  justify-self: center;
+  width: min(440px, 100%);
+}
+.shot.paper img {
+  border-radius: 4px;
+  background: #fff;
+}
+
+/* Trois temps : l'éventail du pas à pas, une marche par temps */
+.steps ol {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: temps;
+}
+.steps li {
+  position: relative;
+  padding: 22px 22px 24px;
+  border: 1px solid var(--rule);
+  border-top: 4px solid var(--chalk);
+  border-radius: 10px;
+  background: var(--panel);
+  counter-increment: temps;
+}
+.steps li::before {
+  content: counter(temps);
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1;
+  color: var(--chalk);
+}
+.steps li b {
+  display: block;
+  font-family: var(--f-display);
+  font-size: 23px;
+  text-transform: uppercase;
+}
+.steps li span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+/* Ce que fait l'outil : texte et capture côte à côte, en alternance */
+.feature {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 56px;
+  align-items: center;
+  border-top: 1px solid var(--rule);
+}
+.feature.flip .ftext {
+  order: 2;
+}
+.feature:has(.phone, .paper) {
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+}
+.feature:has(.phone, .paper) .shot {
+  order: 2;
+}
+.feature.flip:has(.phone, .paper) {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+}
+.feature.flip:has(.phone, .paper) .shot {
+  order: 1;
+}
+.ftext p {
+  margin: 18px 0 0;
+  color: var(--muted);
+}
+.ftext ul,
+.card ul,
+.soon ul {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ftext li,
+.card li {
+  position: relative;
+  padding: 5px 0 5px 28px;
+}
+.ftext li::before,
+.card li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.78em;
+  width: 12px;
+  height: 7px;
+  border-left: 2.5px solid var(--ok);
+  border-bottom: 2.5px solid var(--ok);
+  transform: rotate(-45deg);
+}
+
+/* Prix */
+.price {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px 48px;
+  align-items: start;
+  border-top: 1px solid var(--rule);
+}
+.price h2 {
+  grid-column: 1 / -1;
+}
+.card {
+  padding: 30px;
+  border: 2px solid var(--chalk);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.amount {
+  margin: 0;
+  font-size: 20px;
+  color: var(--muted);
+}
+.amount b {
+  font-family: var(--f-display);
+  font-size: 76px;
+  line-height: 1;
+  color: var(--ink);
+}
+.year {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.year b {
+  color: var(--ink);
+}
+.trial {
+  margin: 10px 0 0;
+  font-weight: 600;
+  color: var(--chalk);
+}
+.card .vbtn {
+  width: 100%;
+  margin-top: 24px;
+}
+.now {
+  margin: 16px 0 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+.soon {
+  padding: 26px 0 0;
+}
+.soon h3 {
+  font-size: 24px;
+  text-transform: uppercase;
+}
+.soon li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--muted);
+}
+.soon li b {
+  color: var(--ink);
+}
+
+/* Questions */
+.faq {
+  border-top: 1px solid var(--rule);
+}
+.faq h2 {
+  margin-bottom: 18px;
+}
+.faq details {
+  border-bottom: 1px solid var(--rule);
+}
+.faq summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 0;
+  font-weight: 600;
+  font-size: 19px;
+  cursor: pointer;
+  list-style: none;
+}
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+.faq summary::after {
+  content: "";
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin: 6px 4px 0 0;
+  border-right: 2.5px solid var(--chalk);
+  border-bottom: 2.5px solid var(--chalk);
+  transform: rotate(-45deg);
+  transition: transform 0.2s;
+}
+.faq details[open] summary::after {
+  transform: rotate(45deg);
+}
+.faq details p {
+  max-width: 760px;
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+
+/* Dernier appel */
+.vitrine main > .last {
+  text-align: center;
+  padding-bottom: 96px;
+  border-top: 1px solid var(--rule);
+}
+.last p {
+  margin: 12px 0 26px;
+  color: var(--muted);
+}
+
+.vfoot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  padding: 26px max(var(--gut), calc((100% - var(--wrap)) / 2 + var(--gut)));
+  border-top: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 15px;
+}
+.vfoot span {
+  margin-right: auto;
+}
+
+/* Mentions légales */
+.legal {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 48px var(--gut) 80px;
+}
+.legal h1 {
+  font-size: clamp(34px, 5vw, 48px);
+  text-transform: uppercase;
+}
+.legal h2 {
+  margin-top: 40px;
+  font-size: 26px;
+}
+.legal p,
+.legal li {
+  color: var(--muted);
+}
+.legal b {
+  color: var(--ink);
+}
+/* Ce qui reste à remplir avant la mise en ligne */
+.trou {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (max-width: 920px) {
+  .vitrine main > section {
+    padding-block: 52px;
+  }
+  .vnav {
+    display: none;
+  }
+  .vtop .vbtn {
+    margin-left: auto;
+  }
+  .steps ol {
+    grid-template-columns: 1fr;
+  }
+  .feature,
+  .feature:has(.phone, .paper),
+  .feature.flip:has(.phone, .paper),
+  .price {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .feature .ftext,
+  .feature.flip .ftext {
+    order: 1;
+  }
+  .feature .shot,
+  .feature:has(.phone, .paper) .shot,
+  .feature.flip:has(.phone, .paper) .shot {
+    order: 2;
+  }
+}
+@media (max-width: 520px) {
+  .vtop .mark span {
+    display: none;
+  }
+  .ctas .vbtn {
+    width: 100%;
+  }
+  .card {
+    padding: 22px;
+  }
+}

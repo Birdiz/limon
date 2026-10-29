@@ -23,16 +23,20 @@ Calcul et dessin d'escaliers en bois pour menuisiers, sur le web (https://quart-
 TypeScript strict, Vite, sans framework d'interface.
 
 ```
-index.html            gabarit de la page
+index.html            page publique (/)
+app/index.html        gabarit de l'outil (/app/)
+mentions-legales/     mentions légales et confidentialité
 src/
   core/               calcul pur, sans DOM : géométrie, escalier, réglages, fiche CSV
   cnc/                export : pièces à usiner, DXF R12, zip, notice
   ui/                 rendu dans la page : réglages, plan SVG, résultats, panneau CNC, 3D
-  styles/main.css     jetons de couleur, thème sombre
-  main.ts             branchement des événements et boucle de mise à jour
+  styles/             base.css (jetons de couleur, thème sombre, logo), main.css (outil), vitrine.css (page publique)
+  main.ts             branchement des événements et boucle de mise à jour de l'outil
+  vitrine.ts          styles de la page publique
 server/               serveur Node : le site construit et /api (compte, projets), Postgres
 tests/                Vitest ; les fichiers de référence sont dans tests/__snapshots__
 scripts/export.ts     export CNC en ligne de commande
+scripts/vitrine.ts    captures de l'outil pour la page publique (npm run vitrine)
 tools/check_dxf.py    vérification des DXF avec ezdxf
 ```
 
@@ -50,7 +54,7 @@ npm install
 npm run dev
 ```
 
-Puis ouvrir http://localhost:5173. Le serveur de développement répond aussi à `/api` : base PGlite (Postgres en WebAssembly) dans `.pglite/`, rien à installer ; les codes de connexion s'affichent dans la console au lieu de partir par e-mail.
+Puis ouvrir http://localhost:5173 (page publique) ou http://localhost:5173/app/ (l'outil). Le serveur de développement répond aussi à `/api` : base PGlite (Postgres en WebAssembly) dans `.pglite/`, rien à installer ; les codes de connexion s'affichent dans la console au lieu de partir par e-mail.
 
 | Commande              | Rôle                                                     |
 | --------------------- | -------------------------------------------------------- |

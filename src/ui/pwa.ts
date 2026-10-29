@@ -65,7 +65,8 @@ export function startPWA(flush: () => void): void {
     location.reload();
   });
 
-  void sw.register("./sw.js").then((reg) => {
+  // À la racine du site, pour garder la portée « / » des installations faites avant /app/.
+  void sw.register("../sw.js").then((reg) => {
     // Sans contrôleur, c'est la première installation : la page est déjà la bonne version.
     const waiting = () => (sw.controller ? reg.waiting : null);
     const start = waiting();

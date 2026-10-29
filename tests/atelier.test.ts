@@ -7,7 +7,7 @@ import { DEFAULTS } from "../src/core/params";
 import { AtelierPanel, AtelierStore } from "../src/ui/atelier";
 import type { KeyValue } from "../src/ui/store";
 
-const html = fs.readFileSync(path.resolve("index.html"), "utf8");
+const html = fs.readFileSync(path.resolve("app/index.html"), "utf8");
 const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
 const field = (id: string) => document.getElementById(id) as HTMLInputElement;
 

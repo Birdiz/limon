@@ -1,105 +1,10 @@
 /* Établi : colonne de réglages à gauche, 3D et plan côte à côte, fiche d'atelier dessous.
    Identité « démarrer au quart de tour » : le bleu du cordeau pour le dessin et le logo,
    l'orange d'allumage pour le seul bouton qui fait avancer. */
-:root {
-  --paper: #eceff2;
-  --panel: #f8f9fa;
-  --raised: #ffffff;
-  --ink: #161b22;
-  --muted: #56606c;
-  --rule: #cbd2d9;
-  --chalk: #2b5db3; /* bleu du cordeau de traçage */
-  --chalk-soft: rgba(43, 93, 179, 0.12);
-  --go: #c2530a; /* orange d'allumage : l'action qui fait avancer */
-  --on-go: #ffffff;
-  --ok: #2e7d4f;
-  --warn: #856a00;
-  --bad: #b42318;
-  --scene: #e1e6eb;
-  --ground: #d3d9e0;
-  --grid: #b9c2cc;
-  --f-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
-  --f-body: "Barlow", "Helvetica Neue", Arial, sans-serif;
-  --f-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --r: 8px;
-  --field: 40px;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #111419;
-    --panel: #181c22;
-    --raised: #232931;
-    --ink: #e8ebef;
-    --muted: #9ba4af;
-    --rule: #2b323b;
-    --chalk: #7ba4ee;
-    --chalk-soft: rgba(123, 164, 238, 0.16);
-    --go: #ff8b3d;
-    --on-go: #14100c;
-    --ok: #5dbb83;
-    --warn: #e6cd4c;
-    --bad: #f2786c;
-    --scene: #161a20;
-    --ground: #20262e;
-    --grid: #313a45;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --paper: #111419;
-  --panel: #181c22;
-  --raised: #232931;
-  --ink: #e8ebef;
-  --muted: #9ba4af;
-  --rule: #2b323b;
-  --chalk: #7ba4ee;
-  --chalk-soft: rgba(123, 164, 238, 0.16);
-  --go: #ff8b3d;
-  --on-go: #14100c;
-  --ok: #5dbb83;
-  --warn: #e6cd4c;
-  --bad: #f2786c;
-  --scene: #161a20;
-  --ground: #20262e;
-  --grid: #313a45;
-  color-scheme: dark;
-}
+@import "./base.css";
 
-* {
-  box-sizing: border-box;
-}
-[hidden] {
-  display: none !important;
-}
 body {
-  margin: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--f-body);
-  font-size: 16px;
-  line-height: 1.45;
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
   padding-bottom: 40px;
-}
-h1,
-h2,
-h3 {
-  font-family: var(--f-display);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  text-wrap: balance;
-  margin: 0;
-}
-button,
-input,
-select {
-  font: inherit;
-  color: inherit;
-}
-:focus-visible {
-  outline: 2px solid var(--chalk);
-  outline-offset: 2px;
 }
 
 /* En-tête : marque, escalier ouvert, état de l'enregistrement, nouvel escalier et compte */
@@ -122,31 +27,6 @@ select {
   border-radius: var(--r);
   background: none;
   cursor: pointer;
-}
-.mark {
-  font-family: var(--f-display);
-  font-weight: 700;
-  font-size: 28px;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35em;
-}
-.logo {
-  width: 1.2em;
-  height: 1.2em;
-  flex: none;
-}
-.logo .f {
-  fill: var(--chalk);
-}
-.logo .s {
-  fill: none;
-  stroke: var(--chalk);
-  stroke-width: 7;
-  stroke-linecap: round;
 }
 .proj {
   display: flex;

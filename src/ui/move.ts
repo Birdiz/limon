@@ -5,7 +5,9 @@ import type { ProjectStore } from "./store";
    du navigateur à l'ancienne adresse, que la nouvelle ne peut pas lire : l'ancienne page part vers la
    nouvelle en les emportant dans l'ancre de l'adresse, qui n'est jamais envoyée au serveur.
    L'adresse en www sert le même site, mais le compte n'existe qu'à l'adresse sans www (origine
-   des passkeys et des sessions) : elle part de la même façon. */
+   des passkeys et des sessions) : elle part de la même façon.
+   On arrive sur la page publique, qui passe l'ancre à l'outil (/app/) : un appareil qui garde le
+   service worker d'avant /app/ y sert encore l'ancien outil, qui sait lire l'ancre. */
 
 const OLD_HOSTS = new Set(["limon-escaliers.up.railway.app", "www.quart-de-tour.fr"]);
 const NEW_ORIGIN = "https://quart-de-tour.fr";
