@@ -1,4 +1,5 @@
 import type { Changement, Compte, CompteDetail, Entree } from "../core/account";
+import type { Atelier } from "../core/atelier";
 import type { Project } from "../core/project";
 
 /** Session absente ou expirée. */
@@ -35,6 +36,10 @@ export class Api {
   account = () => this.call<CompteDetail>("GET", "compte");
   deleteAccount = () => this.call<undefined>("DELETE", "compte");
   logout = () => this.call<undefined>("POST", "deconnexion", {});
+
+  atelierOf = () => this.call<Atelier | null>("GET", "atelier");
+  /** Envoie le profil de l'atelier ; renvoie celui qui l'emporte, c'est-à-dire le plus récent. */
+  pushAtelier = (atelier: Atelier) => this.call<Atelier | null>("PUT", "atelier", { atelier });
 
   index = () => this.call<Entree[]>("GET", "projets");
   /** `keepalive` : l'envoi se termine même si la page se ferme. */

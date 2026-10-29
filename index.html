@@ -343,6 +343,7 @@
         </div>
         <div class="actions sideacts" id="sideActs">
           <button class="btn" id="share" type="button">Envoyer à un collègue</button
+          ><button class="btn" id="atKeep" type="button">Garder ces réglages pour mes prochains escaliers</button
           ><button class="btn" id="reset" type="button">Revenir à l'exemple</button
           ><span class="copied" id="sharemsg" hidden></span>
         </div>
@@ -664,6 +665,31 @@
         </div>
       </div>
       <p class="copied" id="acMsg" role="status" hidden></p>
+      <details class="atsec" id="atelier">
+        <summary><span class="sh">Mon atelier</span><span class="sum" id="atSum"></span></summary>
+        <div class="sbody" id="atBody">
+          <p class="disclaimer">
+            Vos habitudes de travail : chaque nouvel escalier part avec ces réglages. Les cotes du chantier, elles,
+            restent propres à chaque escalier.
+          </p>
+          <div class="actions">
+            <button class="btn" id="atTake" type="button">Reprendre les réglages de l'escalier ouvert</button
+            ><button class="btn" id="atReset" type="button">Revenir à l'exemple</button
+            ><span class="copied" id="atMsg" hidden></span>
+          </div>
+        </div>
+      </details>
+      <div class="soon">
+        <h3>Bientôt</h3>
+        <ul>
+          <li><b>Nom et logo de l'atelier</b> en tête de la fiche remise au client</li>
+          <li><b>Devis</b> : le prix de l'escalier, de la marche au garde-corps</li>
+          <li><b>État du chantier</b> : devis, en fabrication, posé</li>
+          <li><b>Lien de visite</b> pour montrer l'escalier au client, en 3D</li>
+          <li><b>Versions</b> : revoir un escalier tel qu'il était avant</li>
+        </ul>
+        <p class="disclaimer">Ces outils arrivent avec l'abonnement, en préparation.</p>
+      </div>
       <label class="adv"
         ><span
           ><b>Réglages avancés</b

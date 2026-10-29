@@ -1243,6 +1243,39 @@ a.btn {
 .acview .plist {
   align-self: stretch;
 }
+/* Mon atelier et les outils à venir, dans le dialogue du compte */
+.atsec {
+  border-top: 1px solid var(--rule);
+}
+.atsec .sbody {
+  padding-bottom: 6px;
+}
+.soon {
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.soon h3 {
+  margin: 0 0 8px;
+}
+.soon ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 14.5px;
+}
+.soon li::before {
+  content: "› ";
+  color: var(--chalk);
+  font-weight: 600;
+}
+.soon .disclaimer {
+  margin: 10px 0 0;
+}
 .privacy {
   color: var(--muted);
   font-size: 12.5px;
@@ -1315,10 +1348,12 @@ a.btn {
 }
 
 /* Sections de réglage */
-.sec {
+.sec,
+.atsec {
   border-bottom: 1px solid var(--rule);
 }
-.sec summary {
+.sec summary,
+.atsec summary {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -1327,11 +1362,13 @@ a.btn {
   list-style: none;
   position: relative;
 }
-.sec summary::-webkit-details-marker {
+.sec summary::-webkit-details-marker,
+.atsec summary::-webkit-details-marker {
   display: none;
 }
 /* La flèche des sections tourne d'un quart de tour à l'ouverture. */
-.sec summary::after {
+.sec summary::after,
+.atsec summary::after {
   content: "";
   position: absolute;
   right: 6px;
@@ -1343,7 +1380,8 @@ a.btn {
   transform: rotate(-45deg);
   transition: transform 0.2s;
 }
-.sec[open] summary::after {
+.sec[open] summary::after,
+.atsec[open] summary::after {
   transform: rotate(45deg);
 }
 .sh {
@@ -1354,7 +1392,8 @@ a.btn {
   letter-spacing: 0.08em;
   color: var(--ink);
 }
-.sec summary:hover .sh {
+.sec summary:hover .sh,
+.atsec summary:hover .sh {
   color: var(--chalk);
 }
 .sum {
@@ -1363,7 +1402,8 @@ a.btn {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.sec[open] .sum {
+.sec[open] .sum,
+.atsec[open] .sum {
   display: none;
 }
 .sbody {
@@ -1497,6 +1537,7 @@ body.avance .auto {
 }
 .guided #sheetBox,
 .guided #cnc,
+.guided #atKeep,
 .guided #reset {
   display: none;
 }

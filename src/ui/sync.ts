@@ -1,6 +1,7 @@
 import type { Changement, Compte, Entree } from "../core/account";
 import { sanitizeProject, type Project } from "../core/project";
 import { NotSignedIn, type Api } from "./api";
+import type { AtelierStore } from "./atelier";
 import { browserStorage, read, write, type KeyValue, type LocalStore, type ProjectStore } from "./store";
 
 const SYNC_KEY = "limon-synchro";
@@ -52,6 +53,7 @@ export class SyncStore implements ProjectStore {
     private local: LocalStore,
     private api: Api,
     private storage: KeyValue | null = browserStorage(),
+    private atelier: AtelierStore | null = null,
   ) {
     let raw: Partial<SyncState> | null;
     try {
@@ -101,6 +103,11 @@ export class SyncStore implements ProjectStore {
     return this.local.setCurrent(id);
   }
 
+  /** Profil de l'atelier modifié ici : il part au prochain envoi. */
+  atelierChanged(): void {
+    if (this.state.compte) this.schedule();
+  }
+
   /** Projets ajoutés, changés ou supprimés par un échange avec le serveur. */
   onChange(cb: (ids: string[]) => void): void {
     this.changeListeners.push(cb);
@@ -128,6 +135,7 @@ export class SyncStore implements ProjectStore {
     if (this.state.dernier && this.state.dernier !== compte.email) {
       // Autre compte que le précédent : les projets de celui-ci, à l'abri dans son compte, quittent l'appareil.
       changed = await this.removeSynced();
+      this.atelier?.clear();
       this.state.serveur = {};
       this.state.supprimes = {};
     }
@@ -154,6 +162,7 @@ export class SyncStore implements ProjectStore {
       if (!(e instanceof NotSignedIn)) throw e;
     }
     this.emit(await this.removeSynced());
+    this.atelier?.clear();
     this.reset();
   }
 
@@ -223,6 +232,7 @@ export class SyncStore implements ProjectStore {
       const small = JSON.stringify(changes).length < KEEPALIVE_MAX;
       const index = changes.length ? await this.api.push(changes, keepalive && small) : await this.api.index();
       await this.apply(index);
+      await this.exchangeAtelier();
       this.offline = false;
       // Un projet absent de l'index n'a jamais atteint ce compte (ou le compte a été recréé) : il part au tour suivant.
       if (!changes.length && (await this.pending()).length) this.again = true;
@@ -232,6 +242,14 @@ export class SyncStore implements ProjectStore {
       this.persist();
     }
     this.emitStatus();
+  }
+
+  /** Profil de l'atelier : le plus récent des deux côtés l'emporte, comme pour un projet. */
+  private async exchangeAtelier(): Promise<void> {
+    if (!this.atelier) return;
+    const mine = this.atelier.get();
+    const theirs = mine ? await this.api.pushAtelier(mine) : await this.api.atelierOf();
+    if (theirs && theirs.modifie > (mine?.modifie ?? 0)) this.atelier.adopt(theirs);
   }
 
   /** Range l'index du serveur : télécharge ce qui est plus récent en ligne, retire ce qui y a été supprimé. */

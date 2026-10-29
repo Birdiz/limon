@@ -13,6 +13,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { cleanEmail, type Compte, type CompteDetail, type Entree, type Passkey } from "../src/core/account";
+import { sanitizeAtelier, type Atelier, type AtelierDefauts } from "../src/core/atelier";
 import { sanitizeProject, type Project } from "../src/core/project";
 import type { Db } from "./db";
 import type { SendCode } from "./mail";
@@ -337,6 +338,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
       format: "quart-de-tour-donnees",
       compte: { email: compte!.email, cree: compte!.cree, statut: compte!.statut },
       passkeys,
+      atelier: await atelierOf(id),
       projets: projets.map((p) => p.donnees),
     });
   });
@@ -383,6 +385,32 @@ export function api(cfg: ApiConfig): Hono<Env> {
       );
     }
     return c.json(await index(compte));
+  });
+
+  /* ---------- Atelier ---------- */
+
+  async function atelierOf(compte: string): Promise<Atelier | null> {
+    const [row] = await db.query<{ modifie: number; donnees: AtelierDefauts }>(
+      "select modifie, donnees from ateliers where compte = $1",
+      [compte],
+    );
+    return row ? { defauts: row.donnees, modifie: row.modifie } : null;
+  }
+
+  app.get("/atelier", auth, async (c) => c.json(await atelierOf(c.get("compte"))));
+
+  /** Le profil reçu ne remplace que plus ancien que lui ; renvoie celui qui l'emporte. */
+  app.put("/atelier", auth, async (c) => {
+    const a = sanitizeAtelier((await body(c)).atelier);
+    if (!a) return err(c, 400, "Envoi mal formé.");
+    const compte = c.get("compte");
+    await db.query(
+      `insert into ateliers (compte, modifie, donnees) values ($1, $2, $3::jsonb)
+       on conflict (compte) do update set modifie = excluded.modifie, donnees = excluded.donnees
+         where ateliers.modifie < excluded.modifie`,
+      [compte, a.modifie, JSON.stringify(a.defauts)],
+    );
+    return c.json(await atelierOf(compte));
   });
 
   app.post("/projets/lire", auth, async (c) => {

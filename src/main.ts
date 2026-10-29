@@ -23,6 +23,7 @@ import { planSVG } from "./ui/plan";
 import { notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
 import { AccountDialog } from "./ui/account";
+import { AtelierPanel, AtelierStore } from "./ui/atelier";
 import { fmt } from "./core/format";
 import { Home } from "./ui/home";
 import { showSketch } from "./ui/sketch";
@@ -32,12 +33,13 @@ import { startPWA } from "./ui/pwa";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
 import { leaveOldHost, storeMoved, takeMoved } from "./ui/move";
-import { LocalStore, newId } from "./ui/store";
+import { LocalStore, browserStorage, newId } from "./ui/store";
 import { SyncStore } from "./ui/sync";
 import { Tabs } from "./ui/tabs";
 
 const api = new Api();
-const store = new SyncStore(new LocalStore(), api);
+const atelier = new AtelierStore();
+const store = new SyncStore(new LocalStore(), api, browserStorage(), atelier);
 const leaving = leaveOldHost(store);
 // Lus avant le premier calcul, qui réécrit l'adresse.
 const moved = takeMoved();
@@ -139,6 +141,7 @@ function openProject(p: Project | null): void {
   writeInputs(params);
   steps.apply(p?.mode ?? "complet", p?.etape ?? 0);
   setCNC(false);
+  atelierPanel.refresh();
   update();
 }
 
@@ -164,8 +167,8 @@ byId("cncClose").addEventListener("click", () => {
 
 new Tabs(byId("tabbar"), document.querySelector<HTMLElement>(".work")!);
 
-/** Nouvel escalier : toujours en pas à pas, sauf choix contraire dans les réglages avancés. */
-async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = DEFAULTS): Promise<void> {
+/** Nouvel escalier : réglages de l'atelier, et toujours en pas à pas sauf choix contraire. */
+async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = atelier.params()): Promise<void> {
   const q = newProject(newId(), nom, mode, Date.now(), p);
   await store.save(q);
   await store.setCurrent(q.id);
@@ -174,6 +177,7 @@ async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = D
 
 const projects = new ProjectsDialog(store, {
   current: () => project,
+  params: () => atelier.params(),
   open: openProject,
   signedIn: () => store.account() !== null,
 });
@@ -181,7 +185,7 @@ const account = new AccountDialog(store, api);
 const home = new Home(store, {
   current: () => project,
   create: () => void startNew(),
-  example: () => void startNew("Exemple", "complet"),
+  example: () => void startNew("Exemple", "complet", { ...DEFAULTS }),
   open: (p) => {
     openProject(p);
     void store.setCurrent(p.id);
@@ -189,6 +193,11 @@ const home = new Home(store, {
   account: () => void account.show(),
   signedIn: () => store.account() !== null,
 });
+const atelierPanel = new AtelierPanel(atelier, {
+  params: () => (project ? params : null),
+  saved: () => store.atelierChanged(),
+});
+byId("atKeep").addEventListener("click", () => atelierPanel.keep(byId("sharemsg")));
 byId("homeBtn").addEventListener("click", () => void home.show());
 byId("pjNew").addEventListener("click", () => void startNew());
 

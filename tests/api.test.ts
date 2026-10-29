@@ -1,4 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { atelierDefauts } from "../src/core/atelier";
+import { DEFAULTS } from "../src/core/params";
 import { newProject } from "../src/core/project";
 import { browser, login, ORIGIN, testServer, type TestServer } from "./server";
 
@@ -221,6 +223,48 @@ describe("projets", () => {
 
   it("demande une session", async () => {
     expect((await browser(s)("/api/projets")).status).toBe(401);
+  });
+});
+
+describe("atelier", () => {
+  const a = (modifie: number, ess: "chene" | "noyer" = "chene") => ({
+    defauts: { ...atelierDefauts(DEFAULTS), ess },
+    modifie,
+  });
+
+  it("garde le profil modifié en dernier", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect(await (await f("/api/atelier")).json()).toBeNull();
+    expect(await (await post(f, "/api/atelier", { atelier: a(10, "noyer") }, "PUT")).json()).toEqual(a(10, "noyer"));
+    expect(await (await post(f, "/api/atelier", { atelier: a(5) }, "PUT")).json()).toEqual(a(10, "noyer"));
+    expect(await (await f("/api/atelier")).json()).toEqual(a(10, "noyer"));
+  });
+
+  it("nettoie le profil reçu et refuse celui qui n'a pas de date", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await post(
+      f,
+      "/api/atelier",
+      { atelier: { defauts: { ess: "noyer", el: "épais", intrus: true }, modifie: 3 } },
+      "PUT",
+    );
+    expect(await (await f("/api/atelier")).json()).toEqual(a(3, "noyer"));
+    expect((await post(f, "/api/atelier", { atelier: { defauts: {} } }, "PUT")).status).toBe(400);
+  });
+
+  it("sépare les comptes", async () => {
+    const f = browser(s);
+    const g = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await login(s, g, "b@exemple.fr");
+    await post(f, "/api/atelier", { atelier: a(10, "noyer") }, "PUT");
+    expect(await (await g("/api/atelier")).json()).toBeNull();
+  });
+
+  it("demande une session", async () => {
+    expect((await browser(s)("/api/atelier")).status).toBe(401);
   });
 });
 

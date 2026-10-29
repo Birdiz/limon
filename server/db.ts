@@ -77,6 +77,11 @@ const MIGRATIONS = [
     donnees jsonb,
     primary key (compte, id)
   );`,
+  `create table ateliers (
+    compte uuid primary key references comptes on delete cascade,
+    modifie bigint not null,
+    donnees jsonb not null
+  );`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */

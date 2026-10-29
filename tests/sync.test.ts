@@ -1,5 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { atelierDefauts } from "../src/core/atelier";
+import { DEFAULTS } from "../src/core/params";
 import { newProject, type Project } from "../src/core/project";
+import { AtelierStore } from "../src/ui/atelier";
 import { Api } from "../src/ui/api";
 import { LocalStore, type KeyValue } from "../src/ui/store";
 import { SyncStore } from "../src/ui/sync";
@@ -21,10 +24,12 @@ beforeEach(() => s.reset());
 function device() {
   const storage = memory();
   const f = browser(s);
+  const atelier = new AtelierStore(storage);
   const d = {
     online: true,
     requests: 0,
     f,
+    atelier,
     store: new SyncStore(
       new LocalStore(storage),
       new Api(async (input, init) => {
@@ -33,6 +38,7 @@ function device() {
         return f(input, init);
       }),
       storage,
+      atelier,
     ),
     async signIn(email: string) {
       await d.store.signIn(await login(s, f, email));
@@ -220,5 +226,46 @@ describe("synchronisation des projets", () => {
     expect(await a.names()).toEqual(["Dupont"]);
     expect(a.store.account()).toBeNull();
     expect(await s.db.query("select * from projets")).toEqual([]);
+  });
+});
+
+describe("synchronisation du profil de l'atelier", () => {
+  const defauts = (ess: "chene" | "noyer" | "frene" | "sapin") => ({ ...atelierDefauts(DEFAULTS), ess });
+
+  it("monte dans le compte à la connexion et descend sur l'autre appareil", async () => {
+    const a = device();
+    a.atelier.set(defauts("noyer"), 1000);
+    await a.signIn("jean@exemple.fr");
+    const b = device();
+    await b.signIn("jean@exemple.fr");
+    expect(b.atelier.get()).toEqual({ defauts: defauts("noyer"), modifie: 1000 });
+  });
+
+  it("garde la version modifiée en dernier", async () => {
+    const a = device();
+    const b = device();
+    await a.signIn("jean@exemple.fr");
+    await b.signIn("jean@exemple.fr");
+    b.atelier.set(defauts("frene"), 2000);
+    await b.store.sync();
+    await a.store.sync();
+    expect(a.atelier.get()!.defauts.ess).toBe("frene");
+    // Une version plus ancienne ne reprend pas la main, même envoyée après.
+    a.atelier.set(defauts("sapin"), 500);
+    await a.store.sync();
+    expect(a.atelier.get()!.defauts.ess).toBe("frene");
+  });
+
+  it("quitte l'appareil à la déconnexion, et ne suit pas sur un autre compte", async () => {
+    const a = device();
+    a.atelier.set(defauts("noyer"), 1000);
+    await a.signIn("jean@exemple.fr");
+    await a.store.signOut();
+    expect(a.atelier.get()).toBeNull();
+
+    a.atelier.set(defauts("sapin"), 3000);
+    await a.signIn("jean@exemple.fr");
+    await a.signIn("marie@exemple.fr");
+    expect(a.atelier.get()).toBeNull();
   });
 });

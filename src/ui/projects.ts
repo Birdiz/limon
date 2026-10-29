@@ -1,3 +1,4 @@
+import type { Params } from "../core/params";
 import { fileBase, newProject, parseProjectFile, projectFile, type Mode, type Project } from "../core/project";
 import { FORME_LABEL } from "../core/summary";
 import { byId, downloadBytes, esc, flash } from "./dom";
@@ -8,6 +9,8 @@ const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
 /** Ce que la page fournit au dialogue : le projet ouvert et de quoi en ouvrir un autre. */
 export interface ProjectsHost {
   current(): Project | null;
+  /** Réglages de départ d'un nouvel escalier : ceux de l'atelier. */
+  params(): Params;
   /** null : plus aucun projet, la page attend qu'on en crée un. */
   open(p: Project | null): void;
   /** Connecté à un compte : les projets y sont aussi. */
@@ -73,7 +76,7 @@ export class ProjectsDialog {
   }
 
   private async create(mode: Mode): Promise<void> {
-    const p = newProject(newId(), this.nom.value, mode, Date.now());
+    const p = newProject(newId(), this.nom.value, mode, Date.now(), this.host.params());
     this.nom.value = "";
     await this.store.save(p);
     this.openProject(p);
