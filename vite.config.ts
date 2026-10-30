@@ -11,6 +11,26 @@ import { defineConfig } from "vitest/config";
  */
 const PAGES = ["./index.html", "./app/index.html", "./mentions-legales/index.html"];
 
+/**
+ * Retire les polices .woff : @fontsource les propose après le woff2, que lisent tous les navigateurs
+ * capables de faire tourner l'outil (es2022). Elles ne seraient jamais téléchargées.
+ */
+function woff2Only(): Plugin {
+  return {
+    name: "limon-woff2",
+    apply: "build",
+    generateBundle(_, bundle) {
+      for (const [name, out] of Object.entries(bundle)) {
+        // Retirer la clé est la façon prévue par Rollup d'enlever un fichier du build.
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        if (name.endsWith(".woff")) delete bundle[name];
+        else if (name.endsWith(".css") && out.type === "asset" && typeof out.source === "string")
+          out.source = out.source.replace(/,url\([^)]*\.woff\)\s*format\(["']?woff["']?\)/g, "");
+      }
+    },
+  };
+}
+
 /** Écrit dist/sw.js : src/sw.js avec la liste des fichiers du build et leur empreinte. */
 function pwa(): Plugin {
   let publicDir = "";
@@ -27,8 +47,7 @@ function pwa(): Plugin {
       const hash = createHash("sha256");
       const files: string[] = [];
       for (const [name, out] of Object.entries(bundle).sort(([a], [b]) => a.localeCompare(b))) {
-        // Les navigateurs qui ont un service worker lisent tous le woff2 : le woff ne servirait jamais.
-        if (name.endsWith(".map") || name.endsWith(".woff")) continue;
+        if (name.endsWith(".map")) continue;
         files.push(name);
         hash.update(name).update(out.type === "chunk" ? out.code : out.source);
       }
@@ -78,9 +97,12 @@ export default defineConfig(({ isSsrBuild }) => ({
     target: "es2022",
     sourcemap: true,
     chunkSizeWarningLimit: 700,
+    // Les navigateurs es2022 savent presque tous précharger les modules : le polyfill coûtait une
+    // requête de plus sur chaque page.
+    modulePreload: { polyfill: false },
     copyPublicDir: !isSsrBuild,
     rolldownOptions: isSsrBuild ? {} : { input: PAGES },
   },
-  plugins: [pwa(), api()],
+  plugins: [woff2Only(), pwa(), api()],
   test: { include: ["tests/**/*.test.ts"] },
 }));
