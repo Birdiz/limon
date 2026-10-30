@@ -14,14 +14,15 @@ const TYPES: Record<string, string> = {
   ".png": "image/png",
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
-  ".woff": "font/woff",
   ".map": "application/json; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
   ".xml": "application/xml; charset=utf-8",
   ".webp": "image/webp",
   ".jpg": "image/jpeg",
 };
-const COMPRESS = new Set([".html", ".js", ".css", ".json", ".svg", ".map", ".txt", ".xml"]);
+// Pas les .map : ouvertes par le seul outil de développement du navigateur, elles faisaient
+// les quatre cinquièmes du temps de démarrage.
+const COMPRESS = new Set([".html", ".js", ".css", ".json", ".svg", ".txt", ".xml"]);
 
 interface File {
   type: string;
