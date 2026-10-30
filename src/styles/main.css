@@ -160,6 +160,18 @@ body {
   margin: 6vh auto 0;
   padding-inline: 16px;
 }
+.home > * {
+  animation: monte 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.home > :nth-child(2) {
+  animation-delay: 0.06s;
+}
+.home > :nth-child(3) {
+  animation-delay: 0.12s;
+}
+.home > :nth-child(n + 4) {
+  animation-delay: 0.18s;
+}
 .home h1 {
   font-size: clamp(40px, 7vw, 64px);
   line-height: 0.98;
@@ -494,6 +506,15 @@ input[type="range"] {
   font-size: 14.5px;
   line-height: 1.2;
   cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background-color 0.15s,
+    filter 0.15s,
+    transform 0.1s;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.98);
 }
 .btn:hover {
   border-color: var(--chalk);
@@ -517,21 +538,6 @@ input[type="range"] {
   min-height: 56px;
   border-radius: 10px;
   font-size: 18px;
-}
-.turn {
-  width: 17px;
-  height: 17px;
-  flex: none;
-}
-.turn path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 12;
-  stroke-linecap: round;
-}
-.turn path.h {
-  fill: currentColor;
-  stroke: none;
 }
 /* Choix du point de vue : un seul bouton enfoncé */
 .seg {
@@ -1000,6 +1006,13 @@ td.low {
 .dlg::backdrop {
   background: rgba(10, 14, 20, 0.45);
 }
+/* Les dialogues se posent au lieu d'apparaître d'un coup. */
+.dlg[open] {
+  animation: monte 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.dlg[open]::backdrop {
+  animation: fondu 0.22s ease-out;
+}
 .dlg > * + * {
   margin-top: 16px;
 }
@@ -1263,6 +1276,12 @@ a.btn {
 .sec[open] summary::after,
 .atsec[open] summary::after {
   transform: rotate(45deg);
+}
+/* Ce qu'une section ouvre glisse en place, en pas à pas comme en mode complet. */
+.sec[open] > :not(summary),
+.atsec[open] > :not(summary),
+.privacy[open] > :not(summary) {
+  animation: deplie 0.25s ease-out;
 }
 .sh {
   font-family: var(--f-display);
@@ -1666,6 +1685,13 @@ body.avance .auto {
     display: none;
   }
 
+  /* Le panneau choisi dans la barre d'onglets paraît en fondu. */
+  .side,
+  #view3d,
+  #viewPlan,
+  .main > :not(.views) {
+    animation: fondu 0.2s ease-out;
+  }
   body:not([data-tab="reglages"]) .side,
   body[data-tab="reglages"] .main,
   body:not([data-tab="vue3d"]) #view3d,

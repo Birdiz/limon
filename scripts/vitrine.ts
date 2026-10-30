@@ -76,7 +76,11 @@ class Page {
 
   async theme(dark: boolean): Promise<void> {
     await this.send("Emulation.setEmulatedMedia", {
-      features: [{ name: "prefers-color-scheme", value: dark ? "dark" : "light" }],
+      // Sans animations : rien ne se photographie à moitié apparu.
+      features: [
+        { name: "prefers-color-scheme", value: dark ? "dark" : "light" },
+        { name: "prefers-reduced-motion", value: "reduce" },
+      ],
     });
   }
 

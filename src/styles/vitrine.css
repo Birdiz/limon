@@ -2,6 +2,12 @@
    sur ordinateur ; le seul bouton orange est celui qui fait démarrer un escalier. */
 @import "./base.css";
 
+/* Les liens de l'en-tête glissent jusqu'à leur partie au lieu d'y sauter. */
+html {
+  scroll-behavior: smooth;
+  interpolate-size: allow-keywords;
+}
+
 .vitrine {
   --wrap: 1180px;
   --gut: max(16px, env(safe-area-inset-left, 0px));
@@ -36,6 +42,11 @@
   border-bottom: 1px solid var(--rule);
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   backdrop-filter: blur(8px);
+  transition: box-shadow 0.3s;
+}
+/* Une ombre dès que la page défile sous l'en-tête. */
+.vtop.leve {
+  box-shadow: 0 8px 24px -16px rgba(10, 20, 40, 0.45);
 }
 .vtop .mark {
   font-size: 26px;
@@ -69,6 +80,14 @@
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    filter 0.15s,
+    transform 0.1s;
+}
+.vbtn:active {
+  transform: translateY(1px) scale(0.98);
 }
 .vbtn:hover {
   border-color: var(--chalk);
@@ -87,32 +106,6 @@
   color: var(--on-go);
   filter: brightness(1.08);
 }
-.turn {
-  width: 17px;
-  height: 17px;
-  flex: none;
-}
-.turn path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 12;
-  stroke-linecap: round;
-}
-.turn path.h {
-  fill: currentColor;
-  stroke: none;
-}
-/* La flèche fait son quart de tour au survol, comme les sections de l'outil. */
-.vbtn.go:hover .turn {
-  transform: rotate(90deg);
-  transition: transform 0.25s;
-}
-@media (prefers-reduced-motion: reduce) {
-  .vbtn.go:hover .turn {
-    transform: none;
-  }
-}
-
 /* Haut de page */
 .vitrine main > .hero {
   padding-top: 56px;
@@ -152,6 +145,49 @@
   margin: 14px 0 0;
   color: var(--muted);
   font-size: 15px;
+}
+
+/* À l'ouverture, le haut de page arrive par étages ; plus bas, chaque bloc monte à son tour quand il
+   entre à l'écran (classe .monte posée par src/vitrine.ts, .vu quand il paraît ; sans script, tout
+   est là d'emblée). */
+.herotext > *,
+.hero .shot {
+  animation: monte 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.herotext > :nth-child(2) {
+  animation-delay: 0.08s;
+}
+.herotext > :nth-child(3) {
+  animation-delay: 0.16s;
+}
+.herotext > :nth-child(4) {
+  animation-delay: 0.24s;
+}
+.herotext > :nth-child(5) {
+  animation-delay: 0.3s;
+}
+.hero .shot {
+  animation-duration: 0.9s;
+  animation-delay: 0.36s;
+}
+.monte {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+/* Les téléphones finissent leur quart de tour en se posant. */
+.shot.phone.monte {
+  transform: translateY(40px) rotate(-6deg);
+}
+.shot.wide.monte,
+.shot.paper.monte {
+  transform: translateY(36px) scale(0.97);
+}
+.monte.vu {
+  opacity: 1;
+  transform: none;
 }
 
 /* Captures de l'outil */
@@ -387,6 +423,20 @@
   max-width: 760px;
   margin: 0 0 20px;
   color: var(--muted);
+}
+/* La réponse se déplie au lieu d'apparaître d'un coup (hauteur animée là où le navigateur sait le faire). */
+.faq details[open] p {
+  animation: deplie 0.3s ease-out;
+}
+.faq details::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition:
+    block-size 0.3s ease-out,
+    content-visibility 0.3s allow-discrete;
+}
+.faq details[open]::details-content {
+  block-size: auto;
 }
 
 /* Dernier appel */

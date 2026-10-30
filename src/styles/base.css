@@ -124,3 +124,55 @@ select {
   stroke-width: 7;
   stroke-linecap: round;
 }
+
+/* La flèche du logo, portée par chaque bouton orange (l'action qui fait avancer) : elle fait son
+   quart de tour au survol, comme les sections de l'outil. Un masque plutôt qu'un SVG dans la page,
+   pour qu'aucun bouton ne l'oublie, même ceux dont le texte change. */
+.btn.go::after,
+.vbtn.go::after {
+  content: "";
+  flex: none;
+  width: 0.95em;
+  height: 0.95em;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M14 12A74 74 0 0 1 85.8 68.1' fill='none' stroke='%23000' stroke-width='12' stroke-linecap='round'/%3E%3Cpath d='M96 82 98 60 74 70Z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M14 12A74 74 0 0 1 85.8 68.1' fill='none' stroke='%23000' stroke-width='12' stroke-linecap='round'/%3E%3Cpath d='M96 82 98 60 74 70Z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transition: transform 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.btn.go:hover:not(:disabled)::after,
+.vbtn.go:hover::after {
+  transform: rotate(90deg);
+}
+
+/* Mouvements : courts, jamais pour attendre. Celui qui les a coupés sur son appareil n'en a aucun. */
+@keyframes monte {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes deplie {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes fondu {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
