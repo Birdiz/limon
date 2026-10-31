@@ -27,6 +27,8 @@ export interface HomeHost {
   /** Escalier d'exemple, déjà calculé. */
   example(): void;
   signedIn(): boolean;
+  /** Un compte a déjà servi sur cet appareil : l'invitation propose de s'y connecter. */
+  known(): boolean;
   /** L'onglet Compte s'affiche. */
   account(): void;
 }
@@ -142,6 +144,7 @@ export class Home {
     back.hidden = !cur;
     if (cur) back.textContent = `Revenir à « ${cur.nom} »`;
     byId("homeInvite").hidden = this.host.signedIn();
+    byId("homeAcct").textContent = this.host.known() ? "me connecter" : "créer mon compte";
     byId("pjExport").hidden = !cur;
     const all = await this.store.list();
     // Premier lancement : l'accueil invite à commencer.

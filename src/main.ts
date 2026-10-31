@@ -254,6 +254,7 @@ const home = new Home(store, {
   open: openProject,
   example: () => void example(),
   signedIn: () => store.account() !== null,
+  known: () => store.known(),
   account: () => void account.show(),
 });
 const atelierPanel = new AtelierPanel(atelier, {
