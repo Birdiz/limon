@@ -163,6 +163,8 @@ async function main(): Promise<void> {
     await page.go(`${site}app/?exemple`);
     await page.until(READY);
     await sleep(800);
+    // Escalier dit terminé : la fiche montrée ne porte pas la mention « brouillon ».
+    await page.click("#etatBtn");
     await page.click("#ficheDl");
     const pdf = await waitFile(tmp, ".pdf");
     execFileSync("qlmanage", ["-t", "-s", "1400", "-o", tmp, pdf], { stdio: "ignore" });

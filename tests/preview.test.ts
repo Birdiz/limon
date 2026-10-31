@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Vertex } from "../src/core/vec";
-import { bulgePts } from "../src/ui/cnc-panel";
+import { bulgePts, type Vertex } from "../src/core/vec";
 
 describe("aperçu des arcs", () => {
   it("découpe un quart de cercle (bulge tan(π/8)) en points sur le cercle", () => {

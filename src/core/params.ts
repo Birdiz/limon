@@ -130,7 +130,7 @@ export const DEFAULTS: Readonly<Params> = {
   mcH: 70,
   bs: 30,
   tL: 3200,
-  tX: 1850,
+  tX: 1845,
   tY: 2550,
   tForme: "rect",
   tbD: 950,

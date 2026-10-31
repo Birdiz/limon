@@ -184,43 +184,276 @@ body {
   font-size: 14px;
 }
 
-/* Accueil : premier lancement, ou retour par le logo */
+/* Accueil : onglets Escaliers, Mon atelier, Mon compte, à la place des dialogues */
 .home {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  width: min(640px, 100%);
-  margin: 6vh auto 0;
+  gap: 22px;
+  width: min(900px, 100%);
+  margin: 3vh auto 0;
   padding-inline: 16px;
 }
-.home > * {
-  animation: monte 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+.dtabs {
+  display: flex;
+  gap: 4px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--panel);
 }
-.home > :nth-child(2) {
-  animation-delay: 0.06s;
+.dtabs button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 15.5px;
+  white-space: nowrap;
+  cursor: pointer;
 }
-.home > :nth-child(3) {
-  animation-delay: 0.12s;
+.dtabs button:hover {
+  color: var(--ink);
 }
-.home > :nth-child(n + 4) {
-  animation-delay: 0.18s;
+.dtabs button[aria-selected="true"] {
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow:
+    inset 0 0 0 1px var(--rule),
+    inset 0 -3px 0 var(--chalk);
+}
+.dpanel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+}
+.dpanel[hidden] {
+  display: none;
+}
+.dpanel > * {
+  animation: monte 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.dpanel > :nth-child(2) {
+  animation-delay: 0.05s;
+}
+.dpanel > :nth-child(n + 3) {
+  animation-delay: 0.1s;
+}
+.dpanel > .actions,
+.dpanel > .copied {
+  align-self: flex-start;
+}
+.dpanel > .acview {
+  max-width: 560px;
 }
 .home h1 {
-  font-size: clamp(40px, 7vw, 64px);
+  font-size: clamp(34px, 6vw, 54px);
   line-height: 0.98;
   text-transform: uppercase;
+}
+.home .lead {
+  margin-top: -6px;
+}
+.home .btn.back {
+  align-self: flex-start;
+}
+.newp small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.homelist h2 .count {
+  margin-left: 4px;
+  color: var(--chalk);
+}
+/* Escaliers en cartes : vignette du plan, nom, forme, état */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cards li {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+.cards li:hover {
+  border-color: var(--chalk);
+}
+.cards li.cur {
+  box-shadow: inset 0 3px 0 var(--chalk);
+}
+.cardopen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.thumb {
+  display: grid;
+  place-items: center;
+  height: 150px;
+  padding: 12px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+.thumb svg {
+  width: 100%;
+  height: 100%;
+}
+.thumb .pl-walk {
+  stroke-width: 1.4;
+  stroke-dasharray: 4 3;
+}
+.ctxt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 14px 4px;
+}
+.ctxt b {
+  font-weight: 600;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+.ctxt small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.cardopen .pjcur {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--chalk);
+  color: var(--paper);
+  font-weight: 600;
+}
+.cards .pjbtns {
+  justify-content: flex-end;
+  padding: 6px 10px 10px;
+}
+.cards .pjbtns .btn {
+  min-height: 36px;
+  padding-inline: 12px;
+  font-size: 14px;
+}
+/* Téléphone : vignette à gauche, pour voir plusieurs escaliers d'un coup. */
+@media (max-width: 600px) {
+  .cardopen {
+    flex-direction: row;
+  }
+  .thumb {
+    flex: none;
+    width: 104px;
+    height: 104px;
+    padding: 8px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 0;
+  }
+  .ctxt {
+    padding: 12px 12px 4px;
+  }
+  .cardopen .pjcur {
+    top: 6px;
+    left: 6px;
+    right: auto;
+  }
+}
+/* État de l'escalier : brouillon, ou terminé */
+.etat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 1px 9px;
+  border: 1px dashed var(--muted);
+  border-radius: 99px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.etat.fini {
+  border: 1px solid color-mix(in srgb, var(--ok) 55%, transparent);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  color: var(--ok);
+}
+.etat.fini::before {
+  content: "✓";
+  font-weight: 700;
+}
+.etat:empty {
+  display: none;
+}
+.pjtop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+}
+.pjtop .etat {
+  margin: 0;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.etatbox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 18px;
+  padding: 12px 16px;
+  border: 1px dashed var(--muted);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+.etatbox p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+}
+.etatbox b {
+  color: var(--ink);
+}
+.etatbox.fini {
+  border: 1px solid color-mix(in srgb, var(--ok) 55%, transparent);
+  background: color-mix(in srgb, var(--ok) 8%, var(--panel));
+}
+.etatbox.fini b {
+  color: var(--ok);
+}
+.atbody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
 }
 .lead {
   margin: 0;
   font-size: 19px;
   color: var(--muted);
   max-width: 44ch;
-}
-.homeacts {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
 }
 .homelist {
   display: flex;
@@ -229,7 +462,7 @@ body {
   margin-top: 10px;
 }
 .homelist h2,
-.dlg h3,
+.home h3,
 .adv b {
   font-size: 14px;
   letter-spacing: 0.1em;
@@ -405,10 +638,11 @@ input[type="range"] {
 
 .shapes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 6px;
 }
-.shapes input {
+.shapes input,
+.sens input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
@@ -442,6 +676,58 @@ input[type="range"] {
 }
 .shapes input:checked + label svg {
   stroke: var(--chalk);
+}
+/* Les pictogrammes sont dessinés à droite ; à gauche, leur miroir. */
+.sbody:has(#s-g:checked) .shapes svg.tourne {
+  transform: scaleX(-1);
+}
+/* Sens du tournant : deux boutons côte à côte, sous les formes qui tournent. */
+.sensrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15.5px;
+  font-weight: 500;
+}
+.sens {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--paper);
+}
+.sens label {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.sens input:checked + label {
+  background: var(--chalk-soft);
+  color: var(--chalk);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--chalk);
+}
+.sens input:focus-visible + label {
+  outline: 2px solid var(--chalk);
+  outline-offset: 2px;
+}
+/* Différence entre les deux formes en U, sous les cases, dans les deux modes. */
+.formenote {
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+.formenote b {
+  color: var(--ink);
+  font-weight: 600;
 }
 .shapes input:focus-visible + label,
 .choice:has(input:focus-visible) {
@@ -814,6 +1100,9 @@ input[type="range"] {
 .pl-dimtxt {
   fill: var(--muted);
   font-family: var(--f-data);
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-linejoin: round;
 }
 .pl-tremie {
   fill: none;
@@ -1186,31 +1475,6 @@ td.low {
   border-color: var(--bad);
   color: var(--bad);
 }
-.dlg {
-  width: min(640px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
-  padding: 22px 24px 20px;
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  background: var(--paper);
-  color: var(--ink);
-}
-.dlg::backdrop {
-  background: rgba(10, 14, 20, 0.45);
-}
-/* Les dialogues se posent au lieu d'apparaître d'un coup. */
-.dlg[open] {
-  animation: monte 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-.dlg[open]::backdrop {
-  animation: fondu 0.22s ease-out;
-}
-.dlg > * + * {
-  margin-top: 16px;
-}
-.dlg .shead h2 {
-  font-size: 30px;
-}
 .newp {
   display: flex;
   flex-direction: column;
@@ -1328,13 +1592,7 @@ a.btn {
 .acview .plist {
   align-self: stretch;
 }
-/* Mon atelier et les outils à venir, dans le dialogue du compte */
-.atsec {
-  border-top: 1px solid var(--rule);
-}
-.atsec .sbody {
-  padding-bottom: 6px;
-}
+/* Les outils à venir, dans l'onglet Mon compte */
 .soon {
   padding: 14px 16px;
   border: 1px solid var(--rule);
@@ -1421,24 +1679,12 @@ a.btn {
   color: var(--chalk);
   padding-inline: 6px;
 }
-@media (max-width: 600px) {
-  .dlg {
-    width: 100vw;
-    max-width: 100vw;
-    height: 100dvh;
-    max-height: 100dvh;
-    margin: 0;
-    border-radius: 0;
-  }
-}
 
 /* Sections de réglage */
-.sec,
-.atsec {
+.sec {
   border-bottom: 1px solid var(--rule);
 }
-.sec summary,
-.atsec summary {
+.sec summary {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -1447,13 +1693,11 @@ a.btn {
   list-style: none;
   position: relative;
 }
-.sec summary::-webkit-details-marker,
-.atsec summary::-webkit-details-marker {
+.sec summary::-webkit-details-marker {
   display: none;
 }
 /* La flèche des sections tourne d'un quart de tour à l'ouverture. */
-.sec summary::after,
-.atsec summary::after {
+.sec summary::after {
   content: "";
   position: absolute;
   right: 6px;
@@ -1465,13 +1709,11 @@ a.btn {
   transform: rotate(-45deg);
   transition: transform 0.2s;
 }
-.sec[open] summary::after,
-.atsec[open] summary::after {
+.sec[open] summary::after {
   transform: rotate(45deg);
 }
 /* Ce qu'une section ouvre glisse en place, en pas à pas comme en mode complet. */
 .sec[open] > :not(summary),
-.atsec[open] > :not(summary),
 .privacy[open] > :not(summary) {
   animation: deplie 0.25s ease-out;
 }
@@ -1483,8 +1725,7 @@ a.btn {
   letter-spacing: 0.08em;
   color: var(--ink);
 }
-.sec summary:hover .sh,
-.atsec summary:hover .sh {
+.sec summary:hover .sh {
   color: var(--chalk);
 }
 .sum {
@@ -1493,8 +1734,7 @@ a.btn {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.sec[open] .sum,
-.atsec[open] .sum {
+.sec[open] .sum {
   display: none;
 }
 .sbody {
@@ -1627,6 +1867,7 @@ body.avance .auto {
   cursor: default;
 }
 .guided #sheetBox,
+.guided #etatBox,
 .guided #cnc,
 .guided #atKeep,
 .guided #reset {
@@ -1945,9 +2186,11 @@ body.avance .auto {
   .tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  /* Sur le plan, seul le point le plus bas : les trois côtés restent dans les tuiles. */
+  /* Sur le plan, seul le point le plus bas : les trois côtés restent dans les tuiles. Cotes de détail
+     (position et branches de la trémie) masquées : les réglages les donnent. */
   .pl-ech-cote,
-  .pl-echtxt-cote {
+  .pl-echtxt-cote,
+  .pl-detail {
     display: none;
   }
   .shead .actions {
@@ -1971,10 +2214,5 @@ body.avance .auto {
   }
   .guided .sec.done summary {
     grid-template-columns: 7.6rem minmax(0, 1fr) auto;
-  }
-}
-@media (max-width: 600px) {
-  .dlg .shead h2 {
-    font-size: 26px;
   }
 }

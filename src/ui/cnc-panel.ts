@@ -3,27 +3,7 @@ import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist
 import type { Entity } from "../cnc/entities";
 import { fmt } from "../core/format";
 import type { Stair } from "../core/stair";
-import { V, bbox, type Pt, type Vertex } from "../core/vec";
-
-/** Arcs DXF (bulge en troisième coordonnée) découpés en segments pour l'aperçu. */
-export function bulgePts(pts: readonly Vertex[]): Vertex[] {
-  const out: Vertex[] = [];
-  pts.forEach((q, i) => {
-    out.push(q);
-    if (!q[2]) return;
-    const a: Pt = [q[0], q[1]],
-      nx = pts[(i + 1) % pts.length]!;
-    const b = q[2],
-      c = V.sub([nx[0], nx[1]], a);
-    const ctr = V.add(V.add(a, V.mul(c, 0.5)), V.mul([-c[1], c[0]], (1 - b * b) / (4 * b)));
-    const a0 = Math.atan2(q[1] - ctr[1], q[0] - ctr[0]),
-      th = 4 * Math.atan(b),
-      r = V.len(V.sub(a, ctr));
-    for (let k = 1; k < 8; k++)
-      out.push([ctr[0] + r * Math.cos(a0 + (th * k) / 8), ctr[1] + r * Math.sin(a0 + (th * k) / 8)]);
-  });
-  return out;
-}
+import { bbox, bulgePts, type Vertex } from "../core/vec";
 
 /** Aperçu SVG d'un jeu d'entités DXF (y vers le haut). */
 export function previewSVG(ents: readonly Entity[], label: string): string {

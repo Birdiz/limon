@@ -4,7 +4,7 @@
 import { fmt, ceil10 } from "./format";
 import { headroomUnder, type Headroom, type NoseSeg } from "./headroom";
 import { TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
-import { BOIS_SOUS_LOGEMENT, cncFrame, stringerPockets } from "./pockets";
+import { BOIS_SOUS_LOGEMENT, cncFrame, stringerPockets, type PocketOf } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import { GC, railing, type Railing } from "./railing";
 import { V, bbox, clamp, interp, type Pt, type Vertex } from "./vec";
@@ -109,6 +109,8 @@ export interface Tenon {
 export interface StringerPiece extends StringerGeom {
   /** Logements, dans le plan du limon. */
   pockets: Vertex[][];
+  /** Pièce reçue par chaque logement. */
+  pocketOf: PocketOf[];
   /** Hauteur qui garde 20 mm de bois sous le logement le plus bas. */
   need: number;
   /** Hauteur retenue pour cette pièce. */

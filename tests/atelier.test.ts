@@ -60,7 +60,7 @@ describe("profil gardé sur l'appareil", () => {
   });
 });
 
-describe("Mon atelier dans le dialogue du compte", () => {
+describe("Mon atelier dans l'accueil", () => {
   let store: AtelierStore;
   let saved: number;
   let panel: AtelierPanel;
@@ -76,7 +76,7 @@ describe("Mon atelier dans le dialogue du compte", () => {
     expect(field("at-et").value).toBe("40");
     expect(field("at-ess").value).toBe("chene");
     expect(field("at-cm").checked).toBe(true);
-    expect(document.getElementById("atSum")!.textContent).toBe("comme l'exemple");
+    expect(document.getElementById("atSum")!.textContent).toBe("Pour l'instant, les réglages de l'escalier d'exemple.");
   });
 
   it("enregistre un champ modifié et annonce qu'il faut l'envoyer", () => {
@@ -84,7 +84,9 @@ describe("Mon atelier dans le dialogue du compte", () => {
     field("at-el").dispatchEvent(new Event("change", { bubbles: true }));
     expect(store.get()!.defauts.el).toBe(60);
     expect(saved).toBe(1);
-    expect(document.getElementById("atSum")!.textContent).toBe("chêne, marches de 40 mm, limons de 60 mm");
+    expect(document.getElementById("atSum")!.textContent).toBe(
+      "En ce moment : chêne, marches de 40 mm, limons de 60 mm.",
+    );
   });
 
   it("garde un champ vide à sa valeur enregistrée", () => {

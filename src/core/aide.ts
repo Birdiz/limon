@@ -9,8 +9,9 @@ import { CONFORT, ECHAPPEE, ECHAPPEE_MIN, FOULEE_MAX } from "./stair";
  * conseillée quand le calcul en a une. Les chiffres viennent des constantes des contrôles, jamais recopiés.
  */
 
-/** Réglage qui a une aide : une clé de Params, ou un champ calculé (« tour », marches droites avant le tour). */
-export type AideKey = keyof Params | "tour";
+/** Réglage qui a une aide : une clé de Params, un champ calculé (« tour », marches droites avant le tour) ou le sens
+    du tournant, choisi à part de la forme. */
+export type AideKey = keyof Params | "tour" | "sens";
 
 export interface AideTexte {
   /** Définition, une ou deux phrases. */
@@ -47,7 +48,13 @@ const mp: AideTexte = {
 export const AIDE: Partial<Record<AideKey, AideTexte>> = {
   forme: {
     texte:
-      "Droit : une seule volée. Quart tournant : la volée tourne d'un angle droit, à gauche ou à droite en montant. Double quart tournant : elle tourne deux fois dans le même sens, en U. Demi-tournant : le même U autour d'un jour étroit. Les marches des tours sont balancées.",
+      "Droit : une seule volée. Quart tournant : la volée tourne d'un angle droit. Double quart tournant : elle tourne deux fois dans le même sens, en U, avec une volée au fond entre les deux tournants ; on mesure les trois côtés. Demi-tournant : les deux volées côte à côte, séparées par un jour étroit, et le demi-tour d'un coup au fond ; on mesure les deux côtés et le jour.",
+    conseil:
+      "Un double quart dont le fond rétrécit devient un demi-tournant : choisissez celui qui se mesure le mieux sur le chantier.",
+  },
+  sens: {
+    texte:
+      "Le côté vers lequel on tourne quand on monte l'escalier. Le plan et la 3D se retournent aussitôt : comparez-les au croquis du chantier.",
   },
   H: {
     texte:
