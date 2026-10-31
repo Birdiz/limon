@@ -66,8 +66,9 @@ describe("plan coté", () => {
     const t = cotes(R);
     // Du départ au bord côté départ, du mur au bord côté jour : deux cotes de détail.
     for (const v of [R.A + el - 1800, R.B + el - 1200]) expect(t.find((c) => c.text === fmt(v))?.detail).toBe(true);
-    // L'exemple : 1 850 saisis, mais la trémie s'arrête au mur.
-    const E = stairOf({ forme: "quart-d" });
+    // L'exemple va du bord du palier au mur ; plus large, la trémie s'arrête au mur.
+    expect(find(stairOf({ forme: "quart-d" }), "trémie ")[1]!.text).toBe(`trémie ${fmt(DEFAULTS.tX)}`);
+    const E = stairOf({ forme: "quart-d", tX: 1900 });
     expect(find(E, "trémie ")[1]!.text).toBe(`trémie ${fmt(E.B + el)}`);
     // Trémie calculée : les cotes retenues.
     const A = stairOf({ forme: "quart-d", tAuto: true });

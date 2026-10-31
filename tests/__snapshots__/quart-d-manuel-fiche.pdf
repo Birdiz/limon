@@ -75,7 +75,7 @@ BT /F2 9.5 Tf 1 0 0 1 248.26 664.89 Tm 0 Tr 0.09 0.11 0.13 rg (850 mm) Tj ET
 42 660.39 m 283.64 660.39 l
 S
 BT /F1 9.5 Tf 1 0 0 1 42 649.89 Tm 0 Tr 0.34 0.38 0.42 rg (Tr\351mie) Tj ET
-BT /F2 9.5 Tf 1 0 0 1 186.21 649.89 Tm 0 Tr 0.09 0.11 0.13 rg (2 550 mm \327 1 850 mm) Tj ET
+BT /F2 9.5 Tf 1 0 0 1 186.21 649.89 Tm 0 Tr 0.09 0.11 0.13 rg (2 550 mm \327 1 845 mm) Tj ET
 0.4 w [] 0 d 0.8 0.82 0.85 RG
 42 645.39 m 283.64 645.39 l
 S
@@ -172,7 +172,7 @@ BT /F1 9.5 Tf 1 0 0 1 54 484.89 Tm 0 Tr 0.09 0.11 0.13 rg (Progressivit\351 limi
 [] 0 d 0.34 0.38 0.42 rg
 42 470.89 5 5 re
 f
-BT /F1 9.5 Tf 1 0 0 1 54 469.39 Tm 0 Tr 0.09 0.11 0.13 rg (Tr\351mie minimale pour 2 000 mm d'\351chapp\351e : 2 470 mm c\364t\351 d\351part, avec 1 850 mm c\364t\351 arriv\351e.) Tj ET
+BT /F1 9.5 Tf 1 0 0 1 54 469.39 Tm 0 Tr 0.09 0.11 0.13 rg (Tr\351mie minimale pour 2 000 mm d'\351chapp\351e : 2 470 mm c\364t\351 d\351part, avec 1 845 mm c\364t\351 arriv\351e.) Tj ET
 0.6 w [] 0 d 0.8 0.82 0.85 RG
 42 63.89 511.28 380 re
 s
