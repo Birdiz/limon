@@ -1,6 +1,6 @@
 import { fmt } from "./format";
 import type { Essence, Forme, GardeCorps, Params, Pose } from "./params";
-import { echSidesShown, echStatus, type EchCote, type Headroom, type Stair, type Status } from "./stair";
+import { CONFORT, echSidesShown, echStatus, type EchCote, type Headroom, type Stair, type Status } from "./stair";
 
 export const FORME_LABEL: Record<Forme, string> = {
   droit: "Droit",
@@ -88,7 +88,7 @@ export function checks(R: Stair): Check[] {
   return [
     c("Hauteur de marche", fmt(R.h, 1), "mm", `${R.n} hauteurs`, R.st.h),
     c("Giron", fmt(R.g, 1), "mm", `${R.n - 1} marches · foulée`, R.st.g),
-    c("Blondel 2h + g", fmt(R.blondel), "mm", "cible 600 à 640", R.st.bl),
+    c("Blondel 2h + g", fmt(R.blondel), "mm", `cible ${CONFORT.blondel.min} à ${CONFORT.blondel.max}`, R.st.bl),
     c("Pente", fmt(R.pente, 1), "°", `foulée ${fmt(R.Lw)} mm`, R.st.pente),
     ...(echSidesShown(R) ? ECH_COTES.map(([cote, k]) => ech(k, R.echCotes[cote])) : [ech("Échappée", R.ech, R.st.ech)]),
     R.bal

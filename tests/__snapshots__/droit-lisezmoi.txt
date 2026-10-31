@@ -22,5 +22,6 @@ limons.dxf : chaque limon développé, vu depuis la face côté marches, haut en
   TEXTE       nom de la pièce et cotes brutes
 
 fiche-marches.csv : girons et longueurs de nez de chaque marche.
+liste-debit.csv : liste de débit (essence, épaisseur, cotes brutes, quantité, volume) pour le tableur.
 
 À vérifier avant usinage : sens des pièces, assemblage des limons sur le poteau et au palier.

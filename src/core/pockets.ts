@@ -53,10 +53,13 @@ export function cncFrame(R: Pick<StairGeom, "inner" | "outer">, p: Params): Fram
   return { inOff, outOff, at, riserBand };
 }
 
+/** Bois gardé sous le logement le plus bas d'un limon, en mm. */
+export const BOIS_SOUS_LOGEMENT = 20;
+
 /** Logements d'un limon dans son plan (u le long du limon, z en hauteur), et hauteur nécessaire. */
 export interface StringerPockets {
   pockets: Vertex[][];
-  /** Hauteur de limon qui garde 20 mm de bois sous le logement le plus bas. */
+  /** Hauteur de limon qui garde BOIS_SOUS_LOGEMENT sous le logement le plus bas. */
   need: number;
 }
 
@@ -115,7 +118,7 @@ export function stringerPockets(R: StairGeom, p: Params, F: Frame): StringerPock
               [u0, hi],
             ],
       );
-      if (z0 > 0.5) need = Math.max(need, topAt(u0) - lo + 20, topAt(u1) - lo + 20);
+      if (z0 > 0.5) need = Math.max(need, topAt(u0) - lo + BOIS_SOUS_LOGEMENT, topAt(u1) - lo + BOIS_SOUS_LOGEMENT);
     };
     R.treads.forEach((t) => pocket(F.at(R.lines[t.j - 1]!, 0), F.at(R.lines[t.j]!, bo), t.top - p.et, t.top, true));
     if (p.cm)

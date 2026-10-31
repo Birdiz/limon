@@ -8,6 +8,7 @@ import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./styles/main.css";
 
 import { buildCNC, tightBoards, type CNC } from "./cnc/build";
+import { cutListCSV } from "./cnc/cutlist";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { DEFAULTS, type Params } from "./core/params";
@@ -23,6 +24,7 @@ import { planSVG } from "./ui/plan";
 import { notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
 import { AccountDialog } from "./ui/account";
+import { Aide } from "./ui/aide";
 import { AtelierPanel, AtelierStore } from "./ui/atelier";
 import { fmt } from "./core/format";
 import { Home } from "./ui/home";
@@ -36,6 +38,7 @@ import { leaveOldHost, storeMoved, takeMoved } from "./ui/move";
 import { LocalStore, browserStorage, newId } from "./ui/store";
 import { SyncStore } from "./ui/sync";
 import { Tabs } from "./ui/tabs";
+import { Undo } from "./ui/undo";
 
 const api = new Api();
 const atelier = new AtelierStore();
@@ -106,6 +109,7 @@ function update(): void {
     project = { ...project, params, modifie: Date.now() };
     void store.save(project);
   }
+  undo.record(params);
   const hash = paramsToHash(params);
   if (location.hash.slice(1) !== hash) history.replaceState(null, "", hash ? `#${hash}` : location.pathname);
   current = compute(params);
@@ -129,6 +133,24 @@ function schedule(): void {
   requestAnimationFrame(update);
 }
 
+/** Réglages changés d'un coup (correction d'une note, retour à l'exemple, annuler) : la saisie en attente passe avant. */
+function setParams(p: Params): void {
+  if (queued) update();
+  undo.touched(null);
+  params = p;
+  writeInputs(params);
+  update();
+}
+const undo = new Undo(
+  {
+    flush: () => {
+      if (queued) update();
+    },
+    apply: setParams,
+  },
+  params,
+);
+
 /** Croquis des cotes : celle du champ en cours de saisie, sinon la première de la section. */
 function sketches(focused = document.activeElement?.id): void {
   document.querySelectorAll<HTMLElement>("[data-sketch]").forEach((fig) => showSketch(fig, params.forme, focused));
@@ -146,6 +168,8 @@ function openProject(p: Project | null): void {
   setCNC(false);
   atelierPanel.refresh();
   update();
+  // L'historique appartient à l'escalier ouvert.
+  undo.reset(params);
 }
 
 const steps = new Steps((mode, etape) => {
@@ -200,6 +224,8 @@ const atelierPanel = new AtelierPanel(atelier, {
   params: () => (project ? params : null),
   saved: () => store.atelierChanged(),
 });
+// Après Mon atelier, dont les lignes sont créées par le panneau.
+new Aide(() => params.forme).attach();
 byId("atKeep").addEventListener("click", () => atelierPanel.keep(byId("sharemsg")));
 byId("homeBtn").addEventListener("click", () => void home.show());
 byId("pjNew").addEventListener("click", () => void startNew());
@@ -254,9 +280,13 @@ startPWA(() => {
 });
 
 /* ---------- Événements ---------- */
+const edited = (e: Event) => {
+  undo.touched(e.target);
+  schedule();
+};
 for (const el of [document.querySelector<HTMLElement>(".side")!, byId("cncBody")]) {
-  el.addEventListener("input", schedule);
-  el.addEventListener("change", schedule);
+  el.addEventListener("input", edited);
+  el.addEventListener("change", edited);
 }
 document.querySelector<HTMLElement>(".side")!.addEventListener("focusin", (e) => {
   if ((e.target as HTMLElement).matches("input[type=number]")) sketches((e.target as HTMLElement).id);
@@ -270,17 +300,13 @@ byId<HTMLInputElement>("tour").addEventListener("input", (e) => {
   byId<HTMLInputElement>("B").value = String(ab.B);
 });
 byId("reset").addEventListener("click", () => {
-  params = { ...DEFAULTS };
-  writeInputs(params);
-  schedule();
+  setParams({ ...DEFAULTS });
 });
 byId("notes").addEventListener("click", (ev) => {
   const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>("button[data-fix]");
   const fix = btn && current?.ok ? current.stair.notes[Number(btn.dataset.fix)]?.[2] : undefined;
   if (!fix) return;
-  params = { ...params, ...fix.set };
-  writeInputs(params);
-  schedule();
+  setParams({ ...params, ...fix.set });
 });
 /** Un lien de projet devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert. */
 async function openShared(p: Params): Promise<void> {
@@ -309,8 +335,11 @@ byId("vtop").addEventListener("click", () => view3d(true));
 byId("ficheDl").addEventListener("click", () => {
   if (!current?.ok) return;
   const base = fileBase(project?.nom ?? NOM_PAR_DEFAUT);
-  if (byId<HTMLSelectElement>("ficheFmt").value === "csv")
-    downloadBytes(new TextEncoder().encode("\ufeff" + treadsCSV(current.stair)), `${base} - marches.csv`, "text/csv");
+  const kind = byId<HTMLSelectElement>("ficheFmt").value;
+  const csv = (text: string, nom: string) =>
+    downloadBytes(new TextEncoder().encode("\ufeff" + text), `${base} - ${nom}.csv`, "text/csv");
+  if (kind === "csv") csv(treadsCSV(current.stair), "marches");
+  else if (kind === "debit") csv(cutListCSV(cnc ?? buildCNC(current.stair), current.stair), "liste de débit");
   else {
     const vue3d = scene?.snapshot() ?? undefined;
     const date = new Date().toLocaleDateString("fr-FR");
@@ -321,7 +350,7 @@ byId("ficheDl").addEventListener("click", () => {
       "application/pdf",
     );
   }
-  flash(byId("ficheMsg"), "Fiche enregistrée");
+  flash(byId("ficheMsg"), kind === "debit" ? "Liste de débit enregistrée" : "Fiche enregistrée");
 });
 /** Confirmation avant d'exporter des limons dont les logements débordent sous le bord. */
 const confirmTight = (c: CNC): boolean =>

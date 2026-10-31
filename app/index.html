@@ -42,6 +42,14 @@
         <input id="pjName" class="pjname" type="text" maxlength="80" aria-label="Nom de l'escalier" />
       </div>
       <span class="saved" id="saved" role="status"></span>
+      <span class="undo idle" id="undoBox">
+        <button class="ibtn" id="undo" type="button" aria-label="Annuler" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h8.5a4.5 4.5 0 0 1 0 9H9" /></svg>
+        </button>
+        <button class="ibtn" id="redo" type="button" aria-label="Rétablir" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m13 4 4 4-4 4m4-4H8.5a4.5 4.5 0 0 0 0 9H11" /></svg>
+        </button>
+      </span>
       <span class="grow"></span>
       <button class="btn hbtn" id="pjNew" type="button">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg><span>Nouvel escalier</span>
@@ -154,7 +162,7 @@
           <summary><span class="sh">Trémie</span><span class="sum" id="sum-tremie"></span></summary>
           <div class="sbody">
             <p class="hint">L'ouverture dans le plancher du haut. Est-elle déjà faite ?</p>
-            <div class="choices" role="radiogroup" aria-label="La trémie est-elle déjà faite ?">
+            <div class="choices" role="radiogroup" aria-label="La trémie est-elle déjà faite ?" data-aide="tAuto">
               <label class="choice"
                 ><input type="radio" name="tre" id="tKnown" /><span
                   ><b>Oui, je la mesure</b><small>je donne ses cotes</small></span
@@ -380,7 +388,8 @@
               <label class="visually-hidden" for="ficheFmt">Format de la fiche</label>
               <select id="ficheFmt" class="fmtsel">
                 <option value="pdf">Fiche PDF</option>
-                <option value="csv">Tableau CSV</option></select
+                <option value="csv">Marches (tableur)</option>
+                <option value="debit">Liste de débit (tableur)</option></select
               ><button class="btn go" id="ficheDl" type="button">Télécharger</button>
             </div>
           </div>
