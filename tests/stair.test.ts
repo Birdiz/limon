@@ -71,7 +71,13 @@ describe("trémie à calculer", () => {
 
   it("garde la trémie saisie sinon", () => {
     const R = stairOf({ forme: "droit" });
-    expect(R.treDims).toEqual({ tL: DEFAULTS.tL, tX: DEFAULTS.tX, tY: DEFAULTS.tY });
+    expect(R.treDims).toEqual({
+      tL: DEFAULTS.tL,
+      tX: DEFAULTS.tX,
+      tY: DEFAULTS.tY,
+      tbD: DEFAULTS.tbD,
+      tbA: DEFAULTS.tbA,
+    });
   });
 });
 

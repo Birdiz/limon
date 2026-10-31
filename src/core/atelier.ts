@@ -2,8 +2,8 @@ import { DEFAULTS, sanitizeParams, type Params } from "./params";
 
 /**
  * Profil de l'atelier : les réglages qui tiennent à l'habitude de l'artisan, repris par chaque nouvel
- * escalier. Les cotes du chantier (hauteur, reculement, emmarchement, trémie, nombre de marches) n'en
- * font pas partie : elles changent à chaque escalier.
+ * escalier, marche palière comprise. Les cotes du chantier (hauteur, reculement, emmarchement, trémie,
+ * nombre de marches) n'en font pas partie : elles changent à chaque escalier.
  */
 export const ATELIER_KEYS = [
   "ess",
@@ -25,6 +25,9 @@ export const ATELIER_KEYS = [
   "mcL",
   "mcH",
   "bs",
+  "mp",
+  "mpP",
+  "mpE",
 ] as const satisfies readonly (keyof Params)[];
 
 export type AtelierKey = (typeof ATELIER_KEYS)[number];
@@ -39,8 +42,9 @@ export interface Atelier {
 
 /** Les réglages d'atelier d'un escalier. */
 export function atelierDefauts(p: Params): AtelierDefauts {
-  const { ess, et, deb, rn, cm, ecm, el, hl, hljAuto, ps, enc, jeu, pL, pW, gc, gcPose, mcL, mcH, bs } = p;
-  return { ess, et, deb, rn, cm, ecm, el, hl, hljAuto, ps, enc, jeu, pL, pW, gc, gcPose, mcL, mcH, bs };
+  const { ess, et, deb, rn, cm, ecm, el, hl, hljAuto, ps, enc, jeu, pL, pW, gc, gcPose, mcL, mcH, bs, mp, mpP, mpE } =
+    p;
+  return { ess, et, deb, rn, cm, ecm, el, hl, hljAuto, ps, enc, jeu, pL, pW, gc, gcPose, mcL, mcH, bs, mp, mpP, mpE };
 }
 
 /** Réglages de départ d'un nouvel escalier : ceux de l'atelier, le reste comme l'exemple. */

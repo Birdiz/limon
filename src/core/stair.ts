@@ -6,7 +6,7 @@ import type { NumericKey, Params } from "./params";
 import { cncFrame, stringerPockets } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import { GC, railing, type Railing } from "./railing";
-import { V, clamp, interp, type Pt, type Vertex } from "./vec";
+import { V, bbox, clamp, inPolygon, interp, type Pt, type Vertex } from "./vec";
 
 export type Status = "ok" | "warn" | "bad";
 export type NoteLevel = Status | "info";
@@ -49,6 +49,23 @@ export interface Tread {
   /** Longueur de nez. */
   nez: number;
   balanced: boolean;
+}
+
+/** Marche palière : du dernier nez jusqu'au plancher d'arrivée, logée dans les limons prolongés. */
+export interface LandingTread {
+  /** Dessus, au niveau du sol fini du haut. */
+  top: number;
+  /** Épaisseur. */
+  e: number;
+  /** Profondeur depuis le nez. */
+  depth: number;
+  /** Rayon du nez appliqué (au plus la moitié de son épaisseur). */
+  rn: number;
+  plan: Pt[];
+  solid: Pt[];
+  nose: Tread["nose"];
+  /** Longueur de nez. */
+  nez: number;
 }
 
 export interface Riser {
@@ -121,6 +138,16 @@ export interface Newel {
   faces: NewelFace[];
 }
 
+/** Cotes de la trémie retenue, saisies ou calculées. */
+export interface TreDims {
+  tL: number;
+  tX: number;
+  tY: number;
+  /** Largeurs des branches de la trémie en L. */
+  tbD: number;
+  tbA: number;
+}
+
 export interface Rect {
   x0: number;
   x1: number;
@@ -188,12 +215,17 @@ export interface Stair {
   newel: Newel | null;
   /** Garde-corps côté jour ; null sans garde-corps. */
   rail: Railing | null;
+  /** Marche palière ; null sans marche palière. */
+  mp: LandingTread | null;
   slab: Rect;
+  /** Contour de la trémie (rectangle ou L) et sa boîte englobante. */
+  trePoly: Pt[];
   tre: Rect;
+  /** Trémie en L retenue (quart tournant). */
+  treL: boolean;
   /** Trémie calculée plutôt que saisie. */
   tAuto: boolean;
-  /** Cotes de la trémie retenue, saisies ou calculées. */
-  treDims: { tL: number; tX: number; tY: number };
+  treDims: TreDims;
   /** Hauteur de la sous-face du plancher. */
   ceil: number;
   ech: Headroom | null;
@@ -297,6 +329,14 @@ function validate(p: Params, quart: boolean): InputError[] {
     )
       err("mcL", "La main courante déborde du poteau : réduisez sa largeur ou élargissez le poteau.");
   }
+  if (p.mp) {
+    if (!(p.mpP >= 150)) err("mpP", "La marche palière doit faire au moins 150 mm de profondeur.");
+    if (!(p.mpE >= 18)) err("mpE", "La marche palière doit faire au moins 18 mm d'épaisseur.");
+  }
+  if (quart && p.tForme === "L" && !p.tAuto) {
+    if (!(p.tbD >= 100)) err("tbD", "La branche côté départ doit faire au moins 100 mm.");
+    if (!(p.tbA >= 100)) err("tbA", "La branche côté arrivée doit faire au moins 100 mm.");
+  }
   if (!(p.ep >= 0 && p.ep < H - 500))
     err("ep", "L'épaisseur du plancher doit rester inférieure à la hauteur à monter moins 500 mm.");
   return errors;
@@ -327,6 +367,62 @@ function runFix(p: Params, quart: boolean, Lw: number, n: number, nAuto: number)
     `Longueur côté ${key === "A" ? "départ" : "arrivée"} conseillée : ${fmt(v)} mm, ${detail}.`,
     { set: { [key]: v, ...auto }, label: `Passer à ${fmt(v)} mm` },
   ];
+}
+
+/** Contour de la trémie, adossé au bord du plancher d'arrivée (reculé de la marche palière, mpD) ;
+    en quart tournant, aussi au mur face à la montée. En L, le coin au-dessus du jour, hors de l'escalier,
+    reste plancher. */
+export function tremieContour(p: Params, d: TreDims, mpD: number): Pt[] {
+  const { A, B, L, W, el } = p,
+    quart = p.forme !== "droit";
+  const r = quart
+    ? { x0: Math.max(-el, B + mpD - d.tX), x1: B + mpD, y0: Math.max(-300, A + el - d.tY), y1: A + el }
+    : { x0: -el, x1: W + el, y0: Math.max(-300, L + mpD - d.tL), y1: L + mpD };
+  const rect: Pt[] = [
+    [r.x0, r.y0],
+    [r.x1, r.y0],
+    [r.x1, r.y1],
+    [r.x0, r.y1],
+  ];
+  const xb = r.x0 + d.tbD,
+    yb = r.y1 - d.tbA;
+  if (!quart || p.tForme !== "L" || !(xb < r.x1 - 0.5 && yb > r.y0 + 0.5)) return rect;
+  return [
+    [r.x0, r.y0],
+    [xb, r.y0],
+    [xb, yb],
+    [r.x1, yb],
+    [r.x1, r.y1],
+    [r.x0, r.y1],
+  ];
+}
+
+type Edge = { sIn: number; sOut: number };
+
+/** Marche palière : de la ligne de nez d'arrivée ln jusqu'à depth en arrière, nez arrondi de rayon r. */
+function landingTread(
+  ln: NoseLine,
+  top: number,
+  e: number,
+  depth: number,
+  r: number,
+  g: {
+    cutOff: (ln: NoseLine, off: number) => Edge;
+    region: (fr: Edge, bk: Edge) => Pt[];
+    noseSpan: (ln: NoseLine, r: number) => NonNullable<Tread["nose"]>;
+  },
+): LandingTread {
+  const back = g.cutOff(ln, depth);
+  return {
+    top,
+    e,
+    depth,
+    rn: r,
+    plan: g.region(ln, back),
+    solid: g.region(r > 0 ? g.cutOff(ln, r) : ln, back),
+    nose: r > 0 ? g.noseSpan(ln, r) : null,
+    nez: V.len(V.sub(ln.O, ln.Q)),
+  };
 }
 
 /** Calcule l'escalier ; suggest ajoute aux notes les corrections chiffrées (calculs supplémentaires). */
@@ -454,15 +550,14 @@ export function compute(p: Params, suggest = true): ComputeResult {
       b = polyCut(outer, pt, ln.dir, "ahead");
     return { sIn: a ? a.s : ln.sIn, sOut: b ? b.s : ln.sOut };
   };
-  type Edge = { sIn: number; sOut: number };
   const region = (fr: Edge, bk: Edge) => [...polyPath(inner, fr.sIn, bk.sIn), ...polyPath(outer, bk.sOut, fr.sOut)];
 
   const bo = p.deb + (p.cm ? p.ecm : 0);
   // Nez arrondi : bande de largeur rn derrière la ligne de nez, dessinée à part en 3D.
   const rn = clamp(p.rn, 0, p.et / 2);
-  const noseSpan = (ln: NoseLine) => {
+  const noseSpan = (ln: NoseLine, r = rn) => {
     const d2: Pt = [ln.nr[1], -ln.nr[0]],
-      c = cutOff(ln, rn);
+      c = cutOff(ln, r);
     const us = [polyAt(inner, ln.sIn), polyAt(outer, ln.sOut), polyAt(inner, c.sIn), polyAt(outer, c.sOut)].map((q) =>
       V.dot(V.sub(q, ln.Q), d2),
     );
@@ -487,11 +582,27 @@ export function compute(p: Params, suggest = true): ComputeResult {
       balanced: !!bal && j > bal.a && j <= bal.b,
     });
   }
+  // Marche palière : dans le prolongement du plancher d'arrivée, son nez sur la dernière ligne de nez.
+  const mpD = p.mp ? p.mpP : 0;
+  if (mpD && !(p.mpE <= h - 20))
+    return {
+      ok: false,
+      errors: [
+        {
+          key: "mpE",
+          message: `La marche palière doit rester plus mince que la hauteur de marche moins 20 mm (${fmt(h - 20)} mm).`,
+        },
+      ],
+    };
+  const mp = mpD
+    ? landingTread(lines[n - 1]!, n * h, p.mpE, mpD, Math.min(rn, p.mpE / 2), { cutOff, region, noseSpan })
+    : null;
   const risers: Riser[] = [];
   if (p.cm)
     for (let j = 1; j <= n; j++) {
       const ln = lines[j - 1]!;
-      risers.push({ z0: (j - 1) * h, z1: j * h - p.et, plan: region(cutOff(ln, p.deb), cutOff(ln, p.deb + p.ecm)) });
+      const z1 = j * h - (j === n && mp ? mp.e : p.et);
+      risers.push({ z0: (j - 1) * h, z1, plan: region(cutOff(ln, p.deb), cutOff(ln, p.deb + p.ecm)) });
     }
   if (treads.some((t) => t.gIn <= 1 || t.gOut <= 1)) {
     return {
@@ -536,7 +647,8 @@ export function compute(p: Params, suggest = true): ComputeResult {
         s1 = P.cum[i + 1]!,
         segL = s1 - s0;
       const lo = i === 0 ? Math.min(s0, arr[0]!) : s0 + post;
-      const hi = i === N - 2 ? Math.max(s1, arr[arr.length - 1]!) : s1 - post;
+      // Avec une marche palière, le dernier tronçon se prolonge à l'horizontale pour la loger.
+      const hi = i === N - 2 ? Math.max(s1, arr[arr.length - 1]!) + mpD : s1 - post;
       const ss = [lo, ...arr.filter((v) => v > lo + 1e-6 && v < hi - 1e-6), hi];
       const prof = ss.map((v): Pt => [v - s0, zf(v)]);
       if (isOuter && i < N - 2) prof.push([segL + el, zf(s1)]);
@@ -591,7 +703,15 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const postFaces = quart ? [face([W, 0], [0, 1], sK - ps, sK - ps), face([W, sK], [1, 0], 0, sK)] : [];
   // Logements de chaque limon et hauteur qui garde 20 mm de bois sous le plus bas.
   // Le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.
-  const geo = { inner, outer, lines, treads, risers, stringers: [...geoms, ...postFaces] };
+  const geo = {
+    inner,
+    outer,
+    lines,
+    treads,
+    risers,
+    stringers: [...geoms, ...postFaces],
+    mp: mp && { line: lines[n - 1]!, top: mp.top, e: mp.e, depth: mp.depth },
+  };
   const isJour = (sp: StringerGeom) => quart && sp.side === "in";
   let pk: ReturnType<typeof stringerPockets>;
   try {
@@ -674,6 +794,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
     cum: inner.cum,
     noseS: lines.map((l) => l.sIn),
     noseZ: lines.map((l) => (l.k + 1) * h),
+    mpD,
   });
   const mcMortise = (idx: number) => {
     const hr = rail?.handrails.find((r) => r.idx === idx);
@@ -726,17 +847,13 @@ export function compute(p: Params, suggest = true): ComputeResult {
         ],
       }
     : null;
-  // Plancher haut et trémie (rectangle adossé au bord du palier ; en quart tournant, aussi au mur face à la montée).
+  // Plancher haut et trémie (voir tremieContour).
   const slab: Rect = quart
-    ? { x0: -el - 300, x1: B + 900, y0: -400, y1: A + el + 300 }
-    : { x0: -el - 300, x1: W + el + 300, y0: -400, y1: L + 900 };
-  const treOf = (tL: number, tX: number, tY: number): Rect =>
-    quart
-      ? { x0: Math.max(-el, B - tX), x1: B, y0: Math.max(-300, A + el - tY), y1: A + el }
-      : { x0: -el, x1: W + el, y0: Math.max(-300, L - tL), y1: L };
+    ? { x0: -el - 300, x1: B + mpD + 900, y0: -400, y1: A + el + 300 }
+    : { x0: -el - 300, x1: W + el + 300, y0: -400, y1: L + mpD + 900 };
   // Échappée : distance verticale entre la ligne des nez et la sous-face du plancher, sur toute la largeur.
   const ceil = H - p.ep;
-  const headroom = (t: Rect): Headroom | null => {
+  const headroom = (t: Pt[]): Headroom | null => {
     let best: Headroom | null = null;
     for (let k = 0; k < n - 1; k++) {
       const L0 = lines[k]!,
@@ -746,7 +863,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
           p1 = V.add(L1.Q, V.mul(V.sub(L1.O, L1.Q), a / 8));
         for (let b = 0; b <= 24; b++) {
           const pt = V.add(p0, V.mul(V.sub(p1, p0), b / 24));
-          if (pt[0] >= t.x0 - 1e-6 && pt[0] <= t.x1 + 1e-6 && pt[1] >= t.y0 - 1e-6 && pt[1] <= t.y1 + 1e-6) continue;
+          if (inPolygon(t, pt)) continue;
           const z = (k + 1) * h + (b / 24) * h,
             c = ceil - z;
           if (!best || c < best.c) best = { c, pt, z, j: k + 1 };
@@ -755,12 +872,12 @@ export function compute(p: Params, suggest = true): ComputeResult {
     }
     return best;
   };
-  const echOk = (t: Rect) => {
+  const echOk = (t: Pt[]) => {
     const r = headroom(t);
     return !r || r.c >= ECHAPPEE;
   };
   // Plus petite ouverture (au cm) qui donne l'échappée visée, par dichotomie.
-  const minOpening = (make: (v: number) => Rect, max: number) => {
+  const minOpening = (make: (v: number) => Pt[], max: number) => {
     if (!echOk(make(max))) return null;
     let lo = 0,
       hi = max;
@@ -771,19 +888,27 @@ export function compute(p: Params, suggest = true): ComputeResult {
     }
     return ceil10(hi);
   };
-  // Trémie à calculer : la plus courte qui suffit ; en quart tournant, sur tout le côté arrivée.
-  const treDims = { tL: p.tL, tX: p.tX, tY: p.tY };
+  // Trémie à calculer : la plus courte qui suffit ; en quart tournant, sur tout le côté arrivée,
+  // et en L, des branches juste assez larges pour l'escalier (limons, poteau et garde-corps compris).
+  const treL = quart && p.tForme === "L";
+  const treDims: TreDims = { tL: p.tL, tX: p.tX, tY: p.tY, tbD: p.tbD, tbA: p.tbA };
+  const treAt = (d: Partial<TreDims>) => tremieContour(p, { ...treDims, ...d }, mpD);
   if (p.tAuto) {
     if (quart) {
-      treDims.tX = B + el;
-      treDims.tY = minOpening((v) => treOf(0, treDims.tX, v), A + el + 300) ?? A + el + 300;
-    } else treDims.tL = minOpening((v) => treOf(v, 0, 0), L + 300) ?? L + 300;
+      if (treL) {
+        const jour = Math.max(el, ps, rail ? rail.off + Math.max(p.mcL, p.bs) / 2 : 0);
+        treDims.tbD = treDims.tbA = ceil10(el + W + jour);
+      }
+      treDims.tX = B + el + mpD;
+      treDims.tY = minOpening((v) => treAt({ tY: v }), A + el + 300) ?? A + el + 300;
+    } else treDims.tL = minOpening((v) => treAt({ tL: v }), L + mpD + 300) ?? L + mpD + 300;
   }
-  const tre = treOf(treDims.tL, treDims.tX, treDims.tY);
-  const ech = headroom(tre);
-  const tLmin = quart ? null : minOpening((v) => ({ ...tre, y0: Math.max(-300, L - v) }), L + 300);
-  const tYmin = quart ? minOpening((v) => ({ ...tre, y0: Math.max(-300, A + el - v) }), A + el + 300) : null;
-  const tXmin = quart ? minOpening((v) => ({ ...tre, x0: Math.max(-el, B - v) }), B + el) : null;
+  const trePoly = treAt({});
+  const tre: Rect = bbox(trePoly);
+  const ech = headroom(trePoly);
+  const tLmin = quart ? null : minOpening((v) => treAt({ tL: v }), L + mpD + 300);
+  const tYmin = quart ? minOpening((v) => treAt({ tY: v }), A + el + 300) : null;
+  const tXmin = quart ? minOpening((v) => treAt({ tX: v }), B + el + mpD) : null;
 
   // Contrôles
   const gInMin = Math.min(...treads.map((t) => t.gIn));
@@ -879,7 +1004,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
     N.push([
       "info",
       quart
-        ? `Trémie à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté départ, sur tout le côté arrivée (${fmt(treDims.tX)} mm).`
+        ? `Trémie${treL ? " en L" : ""} à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté départ, sur tout le côté arrivée (${fmt(treDims.tX)} mm)${treL ? `, branches de ${fmt(treDims.tbD)} mm` : ""}.`
         : `Trémie à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tL)} mm de long.`,
     ]);
   } else if (quart ? tYmin != null : tLmin != null) {
@@ -950,8 +1075,11 @@ export function compute(p: Params, suggest = true): ComputeResult {
       needM,
       newel,
       rail,
+      mp,
       slab,
+      trePoly,
       tre,
+      treL,
       tAuto: p.tAuto,
       treDims,
       ceil,

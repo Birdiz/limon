@@ -152,7 +152,9 @@ const undo = new Undo(
 
 /** Croquis des cotes : celle du champ en cours de saisie, sinon la première de la section. */
 function sketches(focused = document.activeElement?.id): void {
-  document.querySelectorAll<HTMLElement>("[data-sketch]").forEach((fig) => showSketch(fig, params.forme, focused));
+  document
+    .querySelectorAll<HTMLElement>("[data-sketch]")
+    .forEach((fig) => showSketch(fig, params.forme, focused, params.tForme));
 }
 
 /** Ouvre un escalier ; null quand il n'en reste aucun : l'accueil prend alors la page. */

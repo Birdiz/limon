@@ -270,6 +270,11 @@ export class Scene3D {
       g.add(extrudePlan(t.solid, t.top - p.et, p.et, wood));
       if (t.nose) g.add(noseMesh(t.nose, t.top - p.et, p.et, R.rn, wood));
     });
+    if (R.mp) {
+      const m = R.mp;
+      g.add(extrudePlan(m.solid, m.top - m.e, m.e, wood));
+      if (m.nose) g.add(noseMesh(m.nose, m.top - m.e, m.e, m.rn, wood));
+    }
     R.risers.forEach((r) => g.add(extrudePlan(r.plan, r.z0, Math.max(1, r.z1 - r.z0), wood)));
     R.stringers.forEach((sp) => g.add(stringerMesh(sp, woodDark)));
     railingMeshes(R, wood).forEach((m) => g.add(m));
@@ -279,8 +284,7 @@ export class Scene3D {
       g.add(nb);
     }
     // Plancher haut, translucide pour garder l'escalier lisible, percé de la trémie.
-    const S = R.slab,
-      Tr = R.tre;
+    const S = R.slab;
     const outline = new THREE.Shape(
       v2([
         [S.x0, S.y0],
@@ -289,16 +293,7 @@ export class Scene3D {
         [S.x0, S.y1],
       ]),
     );
-    outline.holes.push(
-      new THREE.Path(
-        v2([
-          [Tr.x0, Tr.y0],
-          [Tr.x1, Tr.y0],
-          [Tr.x1, Tr.y1],
-          [Tr.x0, Tr.y1],
-        ]),
-      ),
-    );
+    outline.holes.push(new THREE.Path(v2(R.trePoly)));
     const sg = new THREE.ExtrudeGeometry(outline, { depth: p.ep, bevelEnabled: false });
     sg.rotateX(-Math.PI / 2);
     sg.translate(0, R.ceil, 0);

@@ -79,8 +79,9 @@ export function planShapes(R: Stair): PlanDrawing {
       "pl-str",
     );
   }
-  // Marches
+  // Marches et marche palière
   R.treads.forEach((t) => poly(t.plan, t.balanced ? "pl-bal" : "pl-tread"));
+  if (R.mp) poly(R.mp.plan, "pl-tread");
   // Garde-corps, au-dessus des marches : main courante et balustres ou montants.
   const G = R.rail;
   if (G) {
@@ -94,16 +95,7 @@ export function planShapes(R: Stair): PlanDrawing {
     G.posts.forEach((q) => box(q.idx, q.u - p.bs / 2, q.u + p.bs / 2, p.bs));
   }
   // Trémie, au-dessus des marches
-  const Tr = R.tre;
-  poly(
-    [
-      [Tr.x0, Tr.y0],
-      [Tr.x1, Tr.y0],
-      [Tr.x1, Tr.y1],
-      [Tr.x0, Tr.y1],
-    ],
-    "pl-tremie",
-  );
+  poly(R.trePoly, "pl-tremie");
   // Ligne de foulée
   const wp: Pt[] = [],
     steps = 120;

@@ -52,3 +52,19 @@ export function bbox(pts: readonly Vertex[]): Box {
     ys = pts.map((q) => q[1]);
   return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
 }
+
+/** Point dans un polygone, bords compris (à 1e-6 mm près). */
+export function inPolygon(poly: readonly Pt[], q: Pt): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[j]!,
+      b = poly[i]!;
+    const ab = V.sub(b, a),
+      aq = V.sub(q, a),
+      l2 = V.dot(ab, ab);
+    const t = l2 > 0 ? clamp(V.dot(aq, ab) / l2, 0, 1) : 0;
+    if (V.len(V.sub(aq, V.mul(ab, t))) <= 1e-6) return true;
+    if (a[1] > q[1] !== b[1] > q[1] && q[0] < a[0] + ((q[1] - a[1]) * ab[0]) / ab[1]) inside = !inside;
+  }
+  return inside;
+}

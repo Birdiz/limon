@@ -82,3 +82,30 @@ describe("garde-corps", () => {
     expect(rows().some(Boolean)).toBe(false);
   });
 });
+
+describe("marche palière et trémie en L", () => {
+  it("relisent leurs champs", () => {
+    const p = { ...DEFAULTS, mp: true, mpP: 320, mpE: 50, tForme: "L" as const, tbD: 1000, tbA: 1100 };
+    writeInputs(p);
+    expect(readInputs(DEFAULTS).params).toEqual(p);
+  });
+
+  it("montrent les branches du L en quart tournant seulement, et la marche palière quand elle est cochée", () => {
+    const branche = () => field("tbD").closest<HTMLElement>(".row")!.hidden;
+    const epaisseur = () => field("mpE").closest<HTMLElement>(".row")!.hidden;
+    syncInputs({ ...DEFAULTS, forme: "quart-d" }, null);
+    expect([branche(), epaisseur(), field("mpP").disabled]).toEqual([true, true, true]);
+    syncInputs({ ...DEFAULTS, forme: "quart-d", tForme: "L", mp: true }, null);
+    expect([branche(), epaisseur(), field("mpP").disabled]).toEqual([false, false, false]);
+    syncInputs({ ...DEFAULTS, forme: "droit", tForme: "L" }, null);
+    expect(branche()).toBe(true);
+  });
+
+  it("affichent les branches calculées d'une trémie à calculer", () => {
+    const R = stairOf({ forme: "quart-d", tForme: "L", tAuto: true });
+    syncInputs(R.params, R);
+    expect(field("tbD").disabled).toBe(true);
+    expect(field("tbD").value).toBe(String(R.treDims.tbD));
+    expect(field("tbA").value).toBe(String(R.treDims.tbA));
+  });
+});

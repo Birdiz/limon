@@ -180,6 +180,13 @@
               </div>
             </div>
             <div class="row" data-show="quart">
+              <label for="tForme">Forme de la trémie<small>en L, le coin au-dessus du jour reste plancher</small></label
+              ><select id="tForme">
+                <option value="rect">Rectangle</option>
+                <option value="L">En L</option>
+              </select>
+            </div>
+            <div class="row" data-show="quart">
               <label for="tX">Trémie côté arrivée<small>depuis le bord du palier</small></label>
               <div class="num">
                 <input id="tX" type="number" inputmode="numeric" step="10" min="0" /><span>mm</span>
@@ -189,6 +196,18 @@
               <label for="tY">Trémie côté départ<small>depuis le mur face à la montée</small></label>
               <div class="num">
                 <input id="tY" type="number" inputmode="numeric" step="10" min="0" /><span>mm</span>
+              </div>
+            </div>
+            <div class="row" data-show="quart" data-tre="L">
+              <label for="tbD">Branche côté départ<small>largeur, depuis le mur du départ</small></label>
+              <div class="num">
+                <input id="tbD" type="number" inputmode="numeric" step="10" min="100" /><span>mm</span>
+              </div>
+            </div>
+            <div class="row" data-show="quart" data-tre="L">
+              <label for="tbA">Branche côté arrivée<small>largeur, depuis le mur face à la montée</small></label>
+              <div class="num">
+                <input id="tbA" type="number" inputmode="numeric" step="10" min="100" /><span>mm</span>
               </div>
             </div>
             <div class="row">
@@ -244,6 +263,25 @@
                 ><input id="prog" type="range" min="0" max="100" step="5" />
               </div>
             </div>
+            <div class="sub">
+              <h4>Arrivée</h4>
+              <div class="row">
+                <div>
+                  <label for="mpP">Marche palière<small>profondeur depuis le nez, logée dans les limons</small></label
+                  ><label class="check"><input type="checkbox" id="mp" /> avec</label>
+                </div>
+                <div class="num">
+                  <input id="mpP" type="number" inputmode="numeric" step="10" min="150" /><span>mm</span>
+                </div>
+              </div>
+              <div class="row" data-mp>
+                <label for="mpE">Épaisseur de marche palière</label>
+                <div class="num">
+                  <input id="mpE" type="number" inputmode="numeric" step="1" min="18" /><span>mm</span>
+                </div>
+              </div>
+            </div>
+            <figure class="croquis" data-sketch></figure>
           </div>
         </details>
         <details class="sec" data-step="bois">

@@ -1,8 +1,8 @@
 import { DEFAULTS, type Params } from "../src/core/params";
 import { compute, type Stair } from "../src/core/stair";
 
-/** Configurations de référence : l'exemple par défaut dans les trois formes, plus des réglages manuels
-    et chaque garde-corps. */
+/** Configurations de référence : l'exemple par défaut dans les trois formes, plus des réglages manuels,
+    chaque garde-corps, la marche palière et la trémie en L. */
 export const CASES: Record<string, Partial<Params>> = {
   droit: { forme: "droit" },
   "quart-g": { forme: "quart-g" },
@@ -14,6 +14,20 @@ export const CASES: Record<string, Partial<Params>> = {
   "quart-d-balustres": { forme: "quart-d", gc: "balustres" },
   "droit-anglaise": { forme: "droit", gc: "balustres", gcPose: "anglaise" },
   "quart-g-lisses": { forme: "quart-g", gc: "lisses" },
+  "droit-palier": { forme: "droit", mp: true, mpE: 50, gc: "balustres", tAuto: true },
+  "quart-d-palier-l": { forme: "quart-d", mp: true, tForme: "L", tAuto: true, gc: "lisses" },
+  "quart-g-palier-l": {
+    forme: "quart-g",
+    mp: true,
+    mpP: 350,
+    tForme: "L",
+    tX: 2200,
+    tbD: 1000,
+    tbA: 1000,
+    gc: "balustres",
+    gcPose: "anglaise",
+  },
+  "quart-d-l": { forme: "quart-d", tForme: "L", tbD: 1000, tbA: 1000 },
 };
 
 export function stairOf(over: Partial<Params>): Stair {

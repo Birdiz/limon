@@ -1,7 +1,7 @@
 /* Lien de projet : les réglages qui diffèrent de l'exemple, en paramètres d'URL (après le #). */
 import { BOOLEAN_KEYS, DEFAULTS, NUMERIC_KEYS, sanitizeParams, type Params } from "./params";
 
-const TEXT_KEYS = ["forme", "ess", "gc", "gcPose"] as const;
+const TEXT_KEYS = ["forme", "ess", "gc", "gcPose", "tForme"] as const;
 const KEYS = [...TEXT_KEYS, ...NUMERIC_KEYS, ...BOOLEAN_KEYS] as const;
 
 /** Valeurs recalculées quand leur case « automatique » est cochée : inutiles dans le lien. */

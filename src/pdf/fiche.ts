@@ -182,7 +182,9 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
 
   const colW = (CW - 28) / 2;
   heading(pg, M, 114, "Cotes");
-  const tre = R.quart ? `${mm(R.treDims.tY)} × ${mm(R.treDims.tX)}` : mm(R.treDims.tL);
+  const tre = R.quart
+    ? `${mm(R.treDims.tY)} × ${mm(R.treDims.tX)}${R.treL ? `, en L (branches ${fmt(R.treDims.tbD)} et ${fmt(R.treDims.tbA)})` : ""}`
+    : mm(R.treDims.tL);
   const tour = turnSpan(R);
   const cotes: [string, string][] = [
     ["Hauteur à monter", mm(R.H)],
@@ -269,6 +271,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     ["Débord de nez", mm(p.deb)],
     ["Rayon du nez", R.rn > 0 ? mm(R.rn, 1) : "vif"],
     ["Contremarches", p.cm ? mm(p.ecm) : "sans"],
+    ...(R.mp ? ([["Marche palière", `${fmt(R.mp.depth)} × ${fmt(R.mp.e)} mm`]] as [string, string][]) : []),
   ];
   const asm: [string, string][] = [
     ["Épaisseur de limon", mm(p.el)],

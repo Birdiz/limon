@@ -1,11 +1,11 @@
-import type { Forme } from "../core/params";
+import type { Forme, FormeTremie } from "../core/params";
 
 /*
  * Croquis de la cote en cours de saisie, en pas à pas : où prendre la mesure sur le chantier.
  * Dessins de principe sur 150 × 96, coupe pour les hauteurs et le reculement, plan pour le reste.
  */
 
-type Key = "H" | "L" | "A" | "B" | "W" | "tL" | "tX" | "tY" | "ep";
+type Key = "H" | "L" | "A" | "B" | "W" | "tL" | "tX" | "tY" | "tbD" | "tbA" | "ep" | "mpP";
 
 const tick = (x1: number, y1: number, x2: number, y2: number) => {
   // Cote : trait et deux butées perpendiculaires.
@@ -30,7 +30,11 @@ const QUART =
   '<path class="k-ink" d="M24 92V16H146V52H60V92Z"/>' +
   '<path class="k-mut" d="M24 80H60M24 68H60M24 56H60M60 52L24 36M60 52L40 16M60 52L72 16M86 16V52M100 16V52M114 16V52M128 16V52"/>';
 
-const SKETCH: Record<Key, { svg: (quart: boolean) => string; text: string }> = {
+/** Trémie du quart tournant, en pointillés : rectangle, ou en L qui suit l'escalier. */
+const TREMIE = (L: boolean) =>
+  L ? '<path class="k-dash" d="M146 18H26V64H58V50H146"/>' : '<path class="k-dash" d="M26 18H146V64H26Z"/>';
+
+const SKETCH: Record<Key, { svg: (quart: boolean, L: boolean) => string; text: string }> = {
   H: {
     svg: () => COUPE + '<path class="k-mut" d="M140 18H150" stroke-dasharray="2 2"/>' + tick(146, 18, 146, 88),
     text: "<b>Hauteur à monter</b> : du sol fini du bas au sol fini du haut.",
@@ -38,6 +42,14 @@ const SKETCH: Record<Key, { svg: (quart: boolean) => string; text: string }> = {
   L: {
     svg: () => COUPE + tick(20, 95, 96, 95),
     text: "<b>Reculement</b> : du nez de la première marche au nez du palier.",
+  },
+  mpP: {
+    svg: () =>
+      '<path class="k-mut" d="M4 88H146"/>' +
+      '<path class="k-slab" d="M4 18H24V30H4ZM110 18H140V30H110Z"/>' +
+      '<path class="k-ink" d="M20 88V78H31V68H42V58H53V48H64V38H75V28H86M84 18H110V23H84Z"/>' +
+      tick(84, 10, 110, 10),
+    text: "<b>Marche palière</b> : sa profondeur depuis le nez. Le plancher reprend derrière elle.",
   },
   ep: {
     svg: () => COUPE + tick(118, 18, 118, 30),
@@ -60,19 +72,27 @@ const SKETCH: Record<Key, { svg: (quart: boolean) => string; text: string }> = {
     text: "<b>Longueur côté arrivée</b> : côté extérieur, hors limon.",
   },
   tX: {
-    svg: () => QUART + '<path class="k-dash" d="M146 18H26V64H58V50H146"/>' + tick(26, 6, 146, 6),
+    svg: (_, L) => QUART + TREMIE(L) + tick(26, 6, 146, 6),
     text: "<b>Trémie côté arrivée</b> : depuis le bord du palier.",
   },
   tY: {
-    svg: () => QUART + '<path class="k-dash" d="M146 18H26V64H58V50H146"/>' + tick(12, 18, 12, 64),
+    svg: (_, L) => QUART + TREMIE(L) + tick(12, 18, 12, 64),
     text: "<b>Trémie côté départ</b> : depuis le mur face à la montée.",
+  },
+  tbD: {
+    svg: () => QUART + TREMIE(true) + tick(26, 98, 58, 98),
+    text: "<b>Branche côté départ</b> : la largeur de la trémie au-dessus de la volée de départ, depuis le mur.",
+  },
+  tbA: {
+    svg: () => QUART + TREMIE(true) + tick(12, 18, 12, 50),
+    text: "<b>Branche côté arrivée</b> : la largeur de la trémie au-dessus de la volée d'arrivée, depuis le mur face à la montée.",
   },
 };
 
 const isKey = (k: string): k is Key => k in SKETCH;
 
 /** Remplit le croquis d'une section avec la cote du champ donné, ou la première cote visible. */
-export function showSketch(fig: HTMLElement, forme: Forme, focused?: string): void {
+export function showSketch(fig: HTMLElement, forme: Forme, focused?: string, tForme: FormeTremie = "rect"): void {
   const sec = fig.closest(".sbody")!;
   const visible = [...sec.querySelectorAll<HTMLInputElement>("input[type=number]")]
     .filter((el) => !el.closest("[hidden]") && isKey(el.id))
@@ -85,5 +105,5 @@ export function showSketch(fig: HTMLElement, forme: Forme, focused?: string): vo
   const quart = forme !== "droit";
   // Le quart gauche est le miroir du droit.
   const flip = quart && forme === "quart-g" ? ' transform="matrix(-1 0 0 1 150 0)"' : "";
-  fig.innerHTML = `<svg viewBox="0 0 150 100" aria-hidden="true"><g${flip}>${SKETCH[key].svg(quart)}</g></svg><figcaption>${SKETCH[key].text}</figcaption>`;
+  fig.innerHTML = `<svg viewBox="0 0 150 100" aria-hidden="true"><g${flip}>${SKETCH[key].svg(quart, tForme === "L")}</g></svg><figcaption>${SKETCH[key].text}</figcaption>`;
 }
