@@ -754,6 +754,17 @@ input[type="range"] {
 .legend b {
   font-weight: inherit;
 }
+.legend i.dalle {
+  height: 10px;
+  border: 0;
+  border-block: 1px solid var(--ink);
+  background: var(--rule);
+}
+/* Légende du plan selon la vue choisie, de dessus ou de côté. */
+#viewPlan[data-vue="dessus"] [data-vue="cote"],
+#viewPlan[data-vue="cote"] [data-vue="dessus"] {
+  display: none;
+}
 .errbox {
   position: absolute;
   inset: 0;
@@ -849,6 +860,30 @@ input[type="range"] {
 .pl-echtxt.bad,
 .pl-echtxt-cote.bad {
   fill: var(--bad);
+}
+
+/* Vue de côté : plancher coupé, sol, cote d'échappée */
+.sd-dalle {
+  fill: var(--rule);
+  stroke: none;
+}
+.sd-sol {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.4;
+}
+.sd-ech {
+  fill: none;
+  stroke-width: 1.6;
+}
+.sd-ech.ok {
+  stroke: var(--ok);
+}
+.sd-ech.warn {
+  stroke: var(--warn);
+}
+.sd-ech.bad {
+  stroke: var(--bad);
 }
 
 /* Résultats */

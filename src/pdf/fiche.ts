@@ -2,7 +2,8 @@ import { buildCNC } from "../cnc/build";
 import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist";
 import { fmt } from "../core/format";
 import { isDemi } from "../core/params";
-import { planShapes, type PlanRole } from "../core/plan-shapes";
+import { planShapes, type PlanRole, type PlanShape } from "../core/plan-shapes";
+import { sideShapes, type SideRole, type SideShape } from "../core/side-shapes";
 import type { Stair, Status } from "../core/stair";
 import { ESSENCE_LABEL, FORME_LABEL, GC_LABEL, POSE_LABEL, STATUS_LABEL, checks, turnSpans } from "../core/summary";
 import { A4, PdfDoc, hex, wrap, type Page, type RGB, type Stroke } from "./pdf";
@@ -118,18 +119,33 @@ const PLAN_STYLE: Record<PlanRole, Stroke> = {
   "pl-dimtxt": {},
 };
 
-/** Plan vectoriel, ajusté dans le cadre (x, y, w, h). */
-function drawPlan(pg: Page, R: Stair, x: number, y: number, w: number, h: number): void {
-  const { shapes, box } = planShapes(R);
+const SIDE_STYLE: Record<SideRole, Stroke> = {
+  ...PLAN_STYLE,
+  "sd-dalle": { fill: C.rule },
+  "sd-sol": { stroke: C.ink, width: 0.7 },
+  "sd-ech": { width: 0.8 },
+};
+
+/** Dessin vectoriel (plan ou vue de côté), ajusté dans le cadre (x, y, w, h). */
+function drawShapes(
+  pg: Page,
+  { shapes, box }: { shapes: (PlanShape | SideShape)[]; box: [number, number, number, number] },
+  style: Record<string, Stroke>,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
   const sc = Math.min(w / box[2], h / box[3]);
   const ox = x + (w - box[2] * sc) / 2,
     oy = y + (h - box[3] * sc) / 2;
   const P = (q: readonly [number, number]): [number, number] => [ox + (q[0] - box[0]) * sc, oy + (q[1] - box[1]) * sc];
   for (const s of shapes) {
-    const st = PLAN_STYLE[s.role];
+    const st = style[s.role]!;
     if (s.k === "poly") pg.path(s.pts.map(P), st, true);
     else if (s.k === "line") pg.path(s.pts.map(P), st);
-    else if (s.k === "path") for (const seg of s.segs) pg.path(seg.map(P), st);
+    else if (s.k === "path")
+      for (const seg of s.segs) pg.path(seg.map(P), "s" in s && s.s ? { ...st, stroke: ST[s.s] } : st);
     else if (s.k === "circle") {
       const c = P(s.c);
       pg.circle(c[0], c[1], s.r * sc, s.s ? { ...st, stroke: ST[s.s] } : st);
@@ -273,7 +289,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   if (o.vue3d) {
     const bw = (CW - 14) / 2;
     frame(pg, M, y, bw, boxH, "Plan");
-    drawPlan(pg, R, M + 10, y + 26, bw - 20, boxH - 36);
+    drawShapes(pg, planShapes(R), PLAN_STYLE, M + 10, y + 26, bw - 20, boxH - 36);
     frame(pg, M + bw + 14, y, bw, boxH, "Vue 3D");
     const im = doc.jpeg(o.vue3d.data, o.vue3d.w, o.vue3d.h);
     const iw = bw - 20,
@@ -284,7 +300,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     pg.image(im, M + bw + 24 + (iw - w) / 2, y + 26 + (ih - h) / 2, w, h);
   } else {
     frame(pg, M, y, CW, boxH, "Plan");
-    drawPlan(pg, R, M + 10, y + 26, CW - 20, boxH - 36);
+    drawShapes(pg, planShapes(R), PLAN_STYLE, M + 10, y + 26, CW - 20, boxH - 36);
   }
   footer(pg, o.nom, 1, PAGES);
 
@@ -321,6 +337,10 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   yR = keyValues(p2, xR, 106, colW, asm);
 
   y = Math.max(yL, yR) + 14;
+  const sideH = 210;
+  frame(p2, M, y, CW, sideH, "Vue de côté, développée sur la ligne de foulée");
+  drawShapes(p2, sideShapes(R), SIDE_STYLE, M + 10, y + 24, CW - 20, sideH - 32);
+  y += sideH + 22;
   heading(p2, M, y, "Fiche des marches");
   y += 10;
   const cols: [string, (t: Stair["treads"][number]) => string][] = R.quart

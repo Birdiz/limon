@@ -16,11 +16,11 @@ import { NOM_PAR_DEFAUT, fileBase, newProject, type Project } from "./core/proje
 import { paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
 import { fichePDF } from "./pdf/fiche";
-import { compute, turnLengths, type ComputeResult } from "./core/stair";
+import { compute, turnLengths, type ComputeResult, type Stair } from "./core/stair";
 import { SECTIONS, sectionSummaries } from "./core/summary";
 import { cutListHTML, previewSVG, stockFitHTML, stringerFitHTML } from "./ui/cnc-panel";
 import { byId, copyText, downloadBytes, flash } from "./ui/dom";
-import { planSVG } from "./ui/plan";
+import { planSVG, sideSVG } from "./ui/plan";
 import { notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
 import { AccountDialog } from "./ui/account";
@@ -55,6 +55,8 @@ let params: Params = { ...DEFAULTS };
 let current: ComputeResult | null = null;
 let cnc: CNC | null = null;
 let scene: Scene3D | null = null;
+/** Vue du panneau Plan : de dessus, ou de côté (développé sur la ligne de foulée). */
+let planCote = false;
 
 function render(result: ComputeResult): void {
   const errHTML = (e: string) => `<div class="errbox">${e}</div>`;
@@ -74,7 +76,7 @@ function render(result: ComputeResult): void {
     return;
   }
   const R = result.stair;
-  byId("plan").innerHTML = planSVG(R);
+  drawPlan(R);
   byId("tiles").innerHTML = tilesHTML(R);
   byId("notes").innerHTML = notesHTML(R.notes);
   // Pastille sur l'onglet Fiche du téléphone : une règle n'est pas respectée.
@@ -338,6 +340,25 @@ function view3d(top: boolean): void {
 }
 byId("v3d").addEventListener("click", () => view3d(false));
 byId("vtop").addEventListener("click", () => view3d(true));
+
+/** Téléphone : la vue de côté, plus large que haute, y est réduite ; son texte est agrandi. */
+const phone = window.matchMedia("(max-width: 920px)");
+function drawPlan(R: Stair): void {
+  byId("plan").innerHTML = planCote ? sideSVG(R, phone.matches) : planSVG(R);
+}
+/** Vue du plan : un seul des deux boutons enfoncé ; la légende suit. */
+function viewPlan(cote: boolean): void {
+  planCote = cote;
+  byId("pdessus").setAttribute("aria-pressed", String(!cote));
+  byId("pcote").setAttribute("aria-pressed", String(cote));
+  byId("viewPlan").dataset.vue = cote ? "cote" : "dessus";
+  if (current?.ok) drawPlan(current.stair);
+}
+byId("pdessus").addEventListener("click", () => viewPlan(false));
+byId("pcote").addEventListener("click", () => viewPlan(true));
+phone.addEventListener("change", () => {
+  if (planCote && current?.ok) drawPlan(current.stair);
+});
 
 byId("ficheDl").addEventListener("click", () => {
   if (!current?.ok) return;

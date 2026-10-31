@@ -66,7 +66,7 @@ Outil d'escaliers pour un ébéniste et d'autres menuisiers, appelé Limon jusqu
 ## Fiche PDF (voir `fichePDF` dans `src/pdf/fiche.ts`)
 
 - PDF 1.4 écrit à la main (`PdfDoc`, `src/pdf/pdf.ts`) : Helvetica standard en WinAnsiEncoding, chasses AFM codées en dur, pas de compression. Trois pages A4 : cotes, contrôles (`checks`, partagés avec les tuiles), remarques, plan et vue 3D ; bois, assemblage et fiche des marches ; liste de débit, volume et alertes de fabrication (`src/cnc/cutlist.ts`, partagé avec le panneau CNC). C'est la seule fiche imprimable.
-- Le plan vient de `planShapes` (`src/core/plan-shapes.ts`), commun au SVG de l'écran et au PDF. La vue 3D est capturée par `Scene3D.snapshot()` en thème clair.
+- Le plan vient de `planShapes` (`src/core/plan-shapes.ts`), commun au SVG de l'écran et au PDF. La vue de côté vient de `sideShapes` (`src/core/side-shapes.ts`, géométrie dans `sideView`) : développé sur la ligne de foulée, plancher coupé aux bords de trémie, échappée de la ligne de foulée cotée à sa place (rappel de la plus faible si elle tombe ailleurs) ; choix « Dessus / Côté » du panneau Plan, page 2 de la fiche. La vue 3D est capturée par `Scene3D.snapshot()` en thème clair.
 
 ## Tests
 

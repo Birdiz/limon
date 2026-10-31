@@ -478,14 +478,19 @@
             </div>
             <div class="canvas" id="scene"><div class="errbox" id="err3d" hidden></div></div>
           </div>
-          <div class="view" id="viewPlan">
+          <div class="view" id="viewPlan" data-vue="dessus">
             <div class="vhead">
               <h2>Plan</h2>
               <div class="legend">
-                <span><i></i>ligne de foulée</span
+                <span><i></i><b data-vue="dessus">ligne de foulée</b><b data-vue="cote">ligne des nez</b></span
                 ><span data-show="quart"
                   ><i class="bal"></i><b data-bal>marches balancées</b><b data-pal>palier</b></span
-                ><span><i class="tre"></i>trémie</span>
+                ><span data-vue="dessus"><i class="tre"></i>trémie</span
+                ><span data-vue="cote"><i class="dalle"></i>plancher</span>
+              </div>
+              <div class="seg" role="group" aria-label="Vue du plan">
+                <button id="pdessus" type="button" aria-pressed="true">Dessus</button
+                ><button id="pcote" type="button" aria-pressed="false">Côté</button>
               </div>
             </div>
             <div class="canvas" id="plan"></div>
