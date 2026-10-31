@@ -279,7 +279,7 @@ export class Scene3D {
     R.stringers.forEach((sp) => g.add(stringerMesh(sp, woodDark)));
     railingMeshes(R, wood).forEach((m) => g.add(m));
     R.newels.forEach((N) => {
-      const nb = shaded(new THREE.BoxGeometry(N.size, N.h, N.size), woodDark);
+      const nb = shaded(new THREE.BoxGeometry(N.sx, N.h, N.sy), woodDark);
       nb.position.set(N.c[0], N.h / 2, -N.c[1]);
       g.add(nb);
     });

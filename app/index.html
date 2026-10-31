@@ -134,6 +134,22 @@
                   <path d="M7.5 30v-6M5.5 26l2-2 2 2" /></svg
                 >Double quart droit</label
               >
+              <input type="radio" name="forme" id="f-demig" value="demi-g" />
+              <label for="f-demig"
+                ><svg viewBox="0 0 34 34">
+                  <path d="M3 3h28v28H19V15h-4v16H3z" />
+                  <path d="M19 26h12M19 21h12M19 15l12 1M19 15l9-12M17 15V3M15 15L6 3M15 15L3 16M3 21h12" />
+                  <path d="M25 30v-6M23 26l2-2 2 2" /></svg
+                >Demi-tournant gauche</label
+              >
+              <input type="radio" name="forme" id="f-demid" value="demi-d" />
+              <label for="f-demid"
+                ><svg viewBox="0 0 34 34">
+                  <path d="M3 3h28v28H19V15h-4v16H3z" />
+                  <path d="M3 26h12M3 21h12M15 15L3 16M15 15L6 3M17 15V3M19 15l9-12M19 15l12 1M19 21h12" />
+                  <path d="M9 30v-6M7 26l2-2 2 2" /></svg
+                >Demi-tournant droit</label
+              >
             </div>
           </div>
         </details>
@@ -159,10 +175,16 @@
                 <input id="A" type="number" inputmode="numeric" step="10" min="500" /><span>mm</span>
               </div>
             </div>
-            <div class="row" data-show="u">
+            <div class="row" data-show="dq">
               <label for="C">Longueur côté fond<small>entre les deux tournants, côté extérieur</small></label>
               <div class="num">
                 <input id="C" type="number" inputmode="numeric" step="10" min="500" /><span>mm</span>
+              </div>
+            </div>
+            <div class="row" data-show="demi">
+              <label for="J">Jour<small>entre les deux volées, limons compris</small></label>
+              <div class="num">
+                <input id="J" type="number" inputmode="numeric" step="10" min="100" /><span>mm</span>
               </div>
             </div>
             <div class="row" data-show="quart">

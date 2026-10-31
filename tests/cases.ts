@@ -1,9 +1,9 @@
-import { DEFAULTS, EXEMPLE_U, type Params } from "../src/core/params";
+import { DEFAULTS, EXEMPLE_DEMI, EXEMPLE_U, type Params } from "../src/core/params";
 import { compute, type Stair } from "../src/core/stair";
 
 /** Configurations de référence : l'exemple par défaut dans les trois formes, plus des réglages manuels,
-    chaque garde-corps, la marche palière et la trémie en L ; le double quart avec ses cotes d'exemple,
-    et sa trémie en U. */
+    chaque garde-corps, la marche palière et la trémie en L ; le double quart et le demi-tournant avec leurs
+    cotes d'exemple, et la trémie en U. */
 export const CASES: Record<string, Partial<Params>> = {
   droit: { forme: "droit" },
   "quart-g": { forme: "quart-g" },
@@ -34,6 +34,10 @@ export const CASES: Record<string, Partial<Params>> = {
   "dq-d-balustres": { forme: "dq-d", ...EXEMPLE_U, gc: "balustres" },
   "dq-g-anglaise": { forme: "dq-g", ...EXEMPLE_U, gc: "balustres", gcPose: "anglaise", mb: 6, prog: 40 },
   "dq-d-palier-u": { forme: "dq-d", ...EXEMPLE_U, mp: true, tForme: "L", tAuto: true, gc: "balustres" },
+  "demi-d": { forme: "demi-d", ...EXEMPLE_DEMI },
+  "demi-g": { forme: "demi-g", ...EXEMPLE_DEMI },
+  "demi-d-balustres": { forme: "demi-d", ...EXEMPLE_DEMI, gc: "balustres" },
+  "demi-g-large": { forme: "demi-g", ...EXEMPLE_DEMI, J: 400, tX: 2190, gc: "lisses" },
 };
 
 export function stairOf(over: Partial<Params>): Stair {

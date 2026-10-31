@@ -1,5 +1,5 @@
 import { fmt } from "./format";
-import { isLeft } from "./params";
+import { isDemi, isLeft } from "./params";
 import { echSidesShown, echStatus, type Stair, type Status } from "./stair";
 import { V, type Pt } from "./vec";
 
@@ -71,13 +71,14 @@ export function planShapes(R: Stair): PlanDrawing {
   });
   R.newels.forEach((N) => {
     const c = N.c,
-      d = N.size / 2;
+      dx = N.sx / 2,
+      dy = N.sy / 2;
     poly(
       [
-        [c[0] - d, c[1] - d],
-        [c[0] + d, c[1] - d],
-        [c[0] + d, c[1] + d],
-        [c[0] - d, c[1] + d],
+        [c[0] - dx, c[1] - dy],
+        [c[0] + dx, c[1] - dy],
+        [c[0] + dx, c[1] + dy],
+        [c[0] - dx, c[1] + dy],
       ],
       "pl-str",
     );
@@ -210,6 +211,8 @@ export function planShapes(R: Stair): PlanDrawing {
     dim([0, 0], [0, R.A], [-1, 0], fmt(R.A));
     dim([0, R.A], [R.C, R.A], [0, 1], fmt(R.C));
     dim([R.C, R.A], [R.C, R.A - R.B], [1, 0], fmt(R.B));
+    // Demi-tournant : le jour saisi, entre les deux volées.
+    if (isDemi(R.params.forme)) dim([R.W, 0], [R.C - R.W, 0], [0, -1], fmt(R.params.J));
   } else if (R.quart) {
     dim([0, 0], [0, R.A], [-1, 0], fmt(R.A));
     dim([0, R.A], [R.B, R.A], [0, 1], fmt(R.B));

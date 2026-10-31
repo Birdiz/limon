@@ -41,8 +41,11 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
   it("découpe une marche par giron et un limon par tronçon", () => {
     const cut = (ents: typeof cnc.treadEnts) => ents.filter((e) => e.kind === "poly" && e.layer === "DECOUPE");
     expect(cut(cnc.treadEnts)).toHaveLength(R.treads.length + (R.mp ? 1 : 0));
-    // Avec des balustres posés dans le chant, le chant haut de chaque limon de jour est déroulé en plus.
-    const chants = R.rail?.pose === "chant" ? R.stringers.filter((sp) => sp.side === "in").length : 0;
+    // Avec des balustres posés dans le chant, le chant haut de chaque limon de jour qui en porte est déroulé en plus.
+    const chants =
+      R.rail?.pose === "chant"
+        ? R.stringers.filter((sp) => sp.side === "in" && R.rail!.posts.some((q) => q.idx === sp.idx)).length
+        : 0;
     expect(cut(cnc.boardEnts)).toHaveLength(R.stringers.length + chants);
     expect(cnc.riserParts).toHaveLength(R.params.cm ? R.n : 0);
     expect(cut(cnc.riserEnts)).toHaveLength(R.params.cm ? R.n : 0);
@@ -72,7 +75,7 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
 
   it("nomme l'archive d'après la forme et le nombre de hauteurs", () => {
     expect(exportFilename(R)).toMatch(
-      /^escalier-(droit|quart-gauche|quart-droit|double-quart-gauche|double-quart-droit)-\d+h\.zip$/,
+      /^escalier-(droit|quart-gauche|quart-droit|double-quart-gauche|double-quart-droit|demi-tournant-gauche|demi-tournant-droit)-\d+h\.zip$/,
     );
   });
 });
@@ -121,7 +124,7 @@ describe("poteau et raccord des limons", () => {
 
   it("arrête les limons de jour sur les faces du poteau, affleurant côté marches", () => {
     const K = R.A - R.W;
-    expect(N.size).toBe(p.ps);
+    expect([N.sx, N.sy]).toEqual([p.ps, p.ps]);
     expect(N.c).toEqual([R.W + p.ps / 2, K - p.ps / 2]);
     expect(jour[0]!.prof.at(-1)![0]).toBeCloseTo(K - p.ps, 6);
     expect(jour[1]!.prof[0]![0]).toBeCloseTo(p.ps, 6);

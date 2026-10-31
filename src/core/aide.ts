@@ -1,5 +1,5 @@
 import { fmt } from "./format";
-import { DEFAULTS, type Params } from "./params";
+import { DEFAULTS, jourUnPoteau, type Params } from "./params";
 import { BOIS_SOUS_LOGEMENT } from "./pockets";
 import { GC } from "./railing";
 import { CONFORT, ECHAPPEE, ECHAPPEE_MIN, FOULEE_MAX } from "./stair";
@@ -47,7 +47,7 @@ const mp: AideTexte = {
 export const AIDE: Partial<Record<AideKey, AideTexte>> = {
   forme: {
     texte:
-      "Droit : une seule volée. Quart tournant : la volée tourne d'un angle droit, à gauche ou à droite en montant. Double quart tournant : elle tourne deux fois dans le même sens, en U. Les marches des tours sont balancées.",
+      "Droit : une seule volée. Quart tournant : la volée tourne d'un angle droit, à gauche ou à droite en montant. Double quart tournant : elle tourne deux fois dans le même sens, en U. Demi-tournant : le même U autour d'un jour étroit. Les marches des tours sont balancées.",
   },
   H: {
     texte:
@@ -73,6 +73,11 @@ export const AIDE: Partial<Record<AideKey, AideTexte>> = {
     texte:
       "En double quart tournant, longueur du côté du fond, entre les deux tournants, prise côté extérieur, limon non compris. Elle donne la largeur du jour entre les deux volées.",
     conseil: giron,
+  },
+  J: {
+    texte:
+      "En demi-tournant, largeur entre les deux volées, limons de jour compris. Quand le jour est étroit, un seul poteau, de sa largeur, tient les deux tournants.",
+    conseil: `Avec un poteau de ${mm(DEFAULTS.ps)}, un seul poteau en dessous de ${mm(jourUnPoteau(DEFAULTS))} de jour.`,
   },
   W: {
     texte: "Largeur de passage des marches, d'un limon à l'autre, entre leurs faces côté marches.",

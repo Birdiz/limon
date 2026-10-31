@@ -3,7 +3,7 @@
    Tournants calculés à droite (2e volée vers +x, 3e vers −y en double quart) ; la version gauche est un miroir. */
 import { fmt, ceil10 } from "./format";
 import { headroomUnder, type Headroom, type NoseSeg } from "./headroom";
-import { TOURS, type NumericKey, type Params } from "./params";
+import { TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
 import { BOIS_SOUS_LOGEMENT, cncFrame, stringerPockets } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import { GC, railing, type Railing } from "./railing";
@@ -124,6 +124,8 @@ export interface NewelFace {
   dir: Pt;
   u0: number;
   u1: number;
+  /** Volée dont la face reçoit les marches (faces côté marches) ; null pour les faces à mortaises. */
+  volee: number | null;
   /** Logements des marches et contremarches (u, z), sur les faces côté marches. */
   pockets: Vertex[][];
   /** Mortaises du tronçon idx (limon de jour ou main courante), sur sa face d'entrée. */
@@ -132,10 +134,14 @@ export interface NewelFace {
 
 /** Poteau d'un tournant, du sol à h, affleurant les faces des limons de jour côté marches. */
 export interface Newel {
-  /** Tournant reçu : entre les tronçons de limon de jour k et k + 1. */
+  /** Tournant reçu : entre les tronçons de limon de jour k et k + 1 (le poteau unique du demi-tournant
+      reçoit aussi le suivant, entre k + 1 et k + 2). */
   k: number;
+  /** Centre et dimensions en plan, le long de x et de y (avant le miroir) : carré de la section du poteau,
+      ou section × jour pour le poteau unique. */
   c: Pt;
-  size: number;
+  sx: number;
+  sy: number;
   h: number;
   /** Les quatre faces dans l'ordre du tour, en commençant par la face côté marches de la volée qui arrive. */
   faces: NewelFace[];
@@ -360,7 +366,10 @@ function validate(p: Params, tours: number): InputError[] {
   if (quart) {
     if (!(p.A > W + 1)) err("A", "La longueur côté départ doit dépasser l'emmarchement.");
     if (!(p.B > W + 1)) err("B", "La longueur côté arrivée doit dépasser l'emmarchement.");
-    if (tours === 2 && p.ps >= p.el + 30 && !(p.C - 2 * W >= 2 * p.ps + 100))
+    if (isDemi(p.forme)) {
+      if (!(p.J >= 2 * p.el + 20))
+        err("J", `Le jour doit laisser passer les deux limons de jour : au moins ${fmt(2 * p.el + 20)} mm.`);
+    } else if (tours === 2 && p.ps >= p.el + 30 && !(p.C - 2 * W >= 2 * p.ps + 100))
       err(
         "C",
         `Le côté fond doit laisser au moins 100 mm de limon de jour entre les deux poteaux : au moins ${fmt(2 * W + 2 * p.ps + 100)} mm.`,
@@ -382,6 +391,15 @@ function validate(p: Params, tours: number): InputError[] {
       !(p.mcL / 2 + (p.gcPose === "chant" ? p.el / 2 : p.el + p.bs / 2) <= p.ps - 10)
     )
       err("mcL", "La main courante déborde du poteau : réduisez sa largeur ou élargissez le poteau.");
+    else if (
+      isDemi(p.forme) &&
+      p.J < jourUnPoteau(p) &&
+      !(2 * (p.mcL / 2 + (p.gcPose === "chant" ? p.el / 2 : p.el + p.bs / 2)) <= p.J)
+    )
+      err(
+        "mcL",
+        "Les deux mains courantes se touchent contre le poteau : réduisez leur largeur ou élargissez le jour.",
+      );
   }
   if (p.mp) {
     if (!(p.mpP >= 150)) err("mpP", "La marche palière doit faire au moins 150 mm de profondeur.");
@@ -506,7 +524,11 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const errors = validate(p, tours);
   if (errors.length) return { ok: false, errors };
 
-  const { H, W, A, B, C, L } = p;
+  const { H, W, A, B, L } = p;
+  // Demi-tournant : côté fond déduit du jour ; jour étroit, un seul poteau de la largeur du jour.
+  const demi = isDemi(p.forme),
+    C = demi ? 2 * W + p.J : p.C,
+    single = demi && p.J < jourUnPoteau(p);
   const fAuto = quart ? Math.min(W / 2, FOULEE_MAX) : W / 2;
   const f = p.fAuto ? fAuto : clamp(p.f, 100, W - 100);
   const inner = makePoly(
@@ -805,13 +827,14 @@ export function compute(p: Params, suggest = true): ComputeResult {
     }
     return out;
   };
+  // Jour étroit du demi-tournant : le poteau unique prend la place du limon de jour du milieu.
   const geoms = [
     ...pieces(
       inner,
       lines.map((l) => l.sIn),
       zIn,
       false,
-    ),
+    ).filter((sp) => !(single && sp.idx === 1)),
     ...pieces(
       outer,
       lines.map((l) => l.sOut),
@@ -820,15 +843,19 @@ export function compute(p: Params, suggest = true): ComputeResult {
     ),
   ];
   // Faces des poteaux côté marches, traitées comme des bouts de limon pour y loger marches et contremarches.
-  const corners = Array.from({ length: tours }, (_, k) => k);
-  const newelTop = corners.map((k) => ceil10(Math.max(zIn(sIn[k + 1]! - ps), zIn(sIn[k + 1]! + ps)) + TENON.tete));
-  const face = (a: Pt, dir: Pt, u0: number, sLo: number, top: number): StringerGeom => ({
+  // Un poteau par tournant, des angles k0 à k1 : le poteau unique du demi-tournant prend les deux angles,
+  // sa face du fond court sur tout le jour.
+  const posts = single ? [{ k0: 0, k1: 1 }] : Array.from({ length: tours }, (_, k) => ({ k0: k, k1: k }));
+  const newelTop = posts.map(({ k0, k1 }) =>
+    ceil10(Math.max(zIn(sIn[k0 + 1]! - ps), zIn(sIn[k1 + 1]! + ps)) + TENON.tete),
+  );
+  const face = (a: Pt, dir: Pt, u0: number, sLo: number, top: number, w = ps): StringerGeom => ({
     origin: a,
     dir,
     rn: [dir[1], -dir[0]],
     prof: [
       [u0, top],
-      [u0 + ps, top],
+      [u0 + w, top],
     ],
     width: ps,
     side: "in",
@@ -836,12 +863,14 @@ export function compute(p: Params, suggest = true): ComputeResult {
     count: 1,
     a,
     sLo,
-    sHi: sLo + ps,
+    sHi: sLo + w,
   });
-  const postFaces = corners.flatMap((k) => [
-    face(inner.pts[k]!, dirs[k]!, len[k]! - ps, sIn[k + 1]! - ps, newelTop[k]!),
-    face(inner.pts[k + 1]!, dirs[k + 1]!, 0, sIn[k + 1]!, newelTop[k]!),
+  const newelFaces = posts.map(({ k0, k1 }, c) => [
+    face(inner.pts[k0]!, dirs[k0]!, len[k0]! - ps, sIn[k0 + 1]! - ps, newelTop[c]!),
+    ...(k1 > k0 ? [face(inner.pts[k1]!, dirs[k1]!, 0, sIn[k1]!, newelTop[c]!, len[k1]!)] : []),
+    face(inner.pts[k1 + 1]!, dirs[k1 + 1]!, 0, sIn[k1 + 1]!, newelTop[c]!),
   ]);
+  const postFaces = newelFaces.flat();
   // Logements de chaque limon et hauteur qui garde 20 mm de bois sous le plus bas.
   // Le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.
   const geo = {
@@ -858,15 +887,22 @@ export function compute(p: Params, suggest = true): ComputeResult {
   try {
     pk = stringerPockets(geo, p, cncFrame(geo, p));
   } catch {
-    // Une ligne de marche, décalée du débord ou de l'encastrement, sort des limons (balancement trop serré).
+    // Une ligne de marche, décalée du débord ou de l'encastrement, sort des limons (balancement trop serré,
+    // ou jour du demi-tournant trop étroit pour loger les marches qui y pivotent).
     return {
       ok: false,
       errors: [
-        {
-          key: "mb",
-          message:
-            "Géométrie impossible : une marche ne rejoint plus les limons. Augmentez le nombre de marches balancées.",
-        },
+        demi
+          ? {
+              key: "J",
+              message:
+                "Géométrie impossible : une marche ne rejoint plus les limons. Élargissez le jour ou augmentez le nombre de marches balancées.",
+            }
+          : {
+              key: "mb",
+              message:
+                "Géométrie impossible : une marche ne rejoint plus les limons. Augmentez le nombre de marches balancées.",
+            },
       ],
     };
   }
@@ -920,10 +956,13 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const mortise = (idx: number, end: boolean) => {
     const ts = stringers.find((sp) => isJour(sp) && sp.idx === idx)!.tenons,
       t = end ? ts[ts.length - 1]! : ts[0]!;
+    return slot(idx, "limon", t, TENON.fond);
+  };
+  const slot = (idx: number, of: "limon" | "main courante", t: Tenon, fond: number) => {
     return {
       idx,
-      of: "limon" as const,
-      depth: t.u1 - t.u0 + TENON.fond,
+      of,
+      depth: t.u1 - t.u0 + fond,
       pts: [
         [t.t0 - jeu, t.z0 - jeu],
         [t.t1 + jeu, t.z0 - jeu],
@@ -945,68 +984,113 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const mcMortise = (idx: number, end: boolean) => {
     const ts = rail?.handrails.find((r) => r.idx === idx)?.tenons;
     const t = ts?.length ? (end ? ts[ts.length - 1] : ts[0]) : undefined;
-    if (!t) return [];
-    return [
-      {
-        idx,
-        of: "main courante" as const,
-        depth: t.u1 - t.u0 + GC.fond,
-        pts: [
-          [t.t0 - jeu, t.z0 - jeu],
-          [t.t1 + jeu, t.z0 - jeu],
-          [t.t1 + jeu, t.z1 + jeu],
-          [t.t0 - jeu, t.z1 + jeu],
-        ] as Pt[],
-      },
-    ];
+    return t ? [slot(idx, "main courante", t, GC.fond)] : [];
   };
+  // Mortaise d'un limon de jour qui arrive par l'autre bout de la face du fond (poteau unique) : vue de la face,
+  // son épaisseur se compte depuis l'autre arête.
+  const across = (m: ReturnType<typeof slot>, w: number) => ({
+    ...m,
+    pts: m.pts.map(([u, z]): Pt => [w - u, z]).reverse(),
+  });
   // Le poteau monte recevoir la main courante : dessus des deux tronçons à leur bout contre le poteau.
-  const mcTop = (k: number) =>
+  const mcTop = (k0: number, k1: number) =>
     Math.max(
       0,
       ...(rail?.handrails
-        .filter((r) => r.tenons.length && (r.idx === k || r.idx === k + 1))
-        .map((r) => r.z0 + r.b * (r.idx === k ? r.u1 : r.u0)) ?? []),
+        .filter((r) => r.tenons.length && (r.idx === k0 || r.idx === k1 + 1))
+        .map((r) => r.z0 + r.b * (r.idx === k0 ? r.u1 : r.u0)) ?? []),
     );
-  const newels: Newel[] = corners.map((k) => {
-    const K = inner.pts[k + 1]!,
-      d0 = dirs[k]!,
-      d1 = dirs[k + 1]!,
-      back = V.sub(K, V.mul(d0, ps));
+  const newels: Newel[] = posts.map(({ k0, k1 }, c) => {
+    const K = inner.pts[k0 + 1]!,
+      d0 = dirs[k0]!,
+      d1 = dirs[k0 + 1]!,
+      back = V.sub(K, V.mul(d0, ps)),
+      // Largeur le long du jour : la section, ou tout le jour pour le poteau unique.
+      w = k1 > k0 ? len[k1]! : ps;
+    const fi = postFaces.indexOf(newelFaces[c]![0]!),
+      pockets = (i: number) => pk[geoms.length + fi + i]!.pockets;
+    const span = V.add(V.mul(d0, ps), V.mul(d1, w));
+    const sides =
+      k1 > k0
+        ? [
+            // Les deux limons de jour arrivent sur la face du fond, chacun près de son arête.
+            {
+              n: V.sub([0, 0], d0),
+              o: back,
+              dir: d1,
+              u0: 0,
+              u1: w,
+              volee: null,
+              pockets: [],
+              mortises: [
+                mortise(k0, true),
+                ...mcMortise(k0, true),
+                across(mortise(k1 + 1, false), w),
+                ...mcMortise(k1 + 1, false).map((m) => across(m, w)),
+              ],
+            },
+            {
+              n: dirs[k1]!,
+              o: inner.pts[k1 + 1]!,
+              dir: dirs[k1 + 1]!,
+              u0: 0,
+              u1: ps,
+              volee: k1 + 1,
+              pockets: pockets(2),
+              mortises: [],
+            },
+            {
+              n: V.sub([0, 0], dirs[k1 + 1]!),
+              o: K,
+              dir: d1,
+              u0: 0,
+              u1: w,
+              volee: k1,
+              pockets: pockets(1),
+              mortises: [],
+            },
+          ]
+        : [
+            {
+              n: V.sub([0, 0], d0),
+              o: back,
+              dir: d1,
+              u0: 0,
+              u1: ps,
+              volee: null,
+              pockets: [],
+              mortises: [mortise(k0, true), ...mcMortise(k0, true)],
+            },
+            {
+              n: d1,
+              o: V.add(K, V.mul(d1, ps)),
+              dir: V.sub([0, 0], d0),
+              u0: 0,
+              u1: ps,
+              volee: null,
+              pockets: [],
+              mortises: [mortise(k0 + 1, false), ...mcMortise(k0 + 1, false)],
+            },
+            { n: d0, o: K, dir: d1, u0: 0, u1: ps, volee: k0 + 1, pockets: pockets(1), mortises: [] },
+          ];
     return {
-      k,
-      c: V.add(V.sub(K, V.mul(d0, ps / 2)), V.mul(d1, ps / 2)),
-      size: ps,
-      h: rail ? Math.max(newelTop[k]!, ceil10(mcTop(k) + GC.tete)) : newelTop[k]!,
+      k: k0,
+      c: V.add(V.sub(K, V.mul(d0, ps / 2)), V.mul(d1, w / 2)),
+      sx: Math.abs(span[0]),
+      sy: Math.abs(span[1]),
+      h: rail ? Math.max(newelTop[c]!, ceil10(mcTop(k0, k1) + GC.tete)) : newelTop[c]!,
       faces: [
         {
           n: V.sub([0, 0], d1),
-          o: inner.pts[k]!,
+          o: inner.pts[k0]!,
           dir: d0,
-          u0: len[k]! - ps,
-          u1: len[k]!,
-          pockets: pk[geoms.length + 2 * k]!.pockets,
+          u0: len[k0]! - ps,
+          u1: len[k0]!,
+          volee: k0,
+          pockets: pockets(0),
           mortises: [],
         },
-        {
-          n: V.sub([0, 0], d0),
-          o: back,
-          dir: d1,
-          u0: 0,
-          u1: ps,
-          pockets: [],
-          mortises: [mortise(k, true), ...mcMortise(k, true)],
-        },
-        {
-          n: d1,
-          o: V.add(K, V.mul(d1, ps)),
-          dir: V.sub([0, 0], d0),
-          u0: 0,
-          u1: ps,
-          pockets: [],
-          mortises: [mortise(k + 1, false), ...mcMortise(k + 1, false)],
-        },
-        { n: d0, o: K, dir: d1, u0: 0, u1: ps, pockets: pk[geoms.length + 2 * k + 1]!.pockets, mortises: [] },
+        ...sides,
       ],
     };
   });
@@ -1082,7 +1166,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
   // et en L, des branches juste assez larges pour l'escalier (limons, poteau et garde-corps compris).
   const treL = quart && p.tForme === "L";
   const treDims: TreDims = { tL: p.tL, tX: p.tX, tY: p.tY, tbD: p.tbD, tbA: p.tbA };
-  const treAt = (d: Partial<TreDims>) => tremieContour(p, { ...treDims, ...d }, mpD);
+  const treAt = (d: Partial<TreDims>) => tremieContour(p, { ...treDims, ...d }, mpD, C);
   if (p.tAuto) {
     const branches = () => {
       const jour = Math.max(el, ps, rail ? rail.off + Math.max(p.mcL, p.bs) / 2 : 0);
@@ -1099,6 +1183,8 @@ export function compute(p: Params, suggest = true): ComputeResult {
     } else treDims.tL = minOpening((v) => treAt({ tL: v }), L + mpD + 300) ?? L + mpD + 300;
   }
   const trePoly = treAt({});
+  // Trémie qui suit vraiment l'escalier : un jour trop étroit (demi-tournant) la laisse en rectangle.
+  const shaped = trePoly.length > 4;
   const tre: Rect = bbox(trePoly);
   const ech = headroom(trePoly);
   const echCotes = {
@@ -1234,9 +1320,9 @@ export function compute(p: Params, suggest = true): ComputeResult {
     N.push([
       "info",
       U
-        ? `Trémie${treL ? " en U" : ""} à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté arrivée, sur toute la largeur (${fmt(treDims.tX)} mm)${treL ? `, branches de ${fmt(treDims.tbD)} mm` : ""}.`
+        ? `Trémie${shaped ? " en U" : ""} à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté arrivée, sur toute la largeur (${fmt(treDims.tX)} mm)${shaped ? `, branches de ${fmt(treDims.tbD)} mm` : ""}.`
         : quart
-          ? `Trémie${treL ? " en L" : ""} à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté départ, sur tout le côté arrivée (${fmt(treDims.tX)} mm)${treL ? `, branches de ${fmt(treDims.tbD)} mm` : ""}.`
+          ? `Trémie${shaped ? " en L" : ""} à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté départ, sur tout le côté arrivée (${fmt(treDims.tX)} mm)${shaped ? `, branches de ${fmt(treDims.tbD)} mm` : ""}.`
           : `Trémie à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tL)} mm de long.`,
     ]);
   } else if (quart ? tYmin != null : tLmin != null) {
@@ -1315,7 +1401,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       slab,
       trePoly,
       tre,
-      treL,
+      treL: shaped,
       tAuto: p.tAuto,
       treDims,
       ceil,

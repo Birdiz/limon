@@ -1,4 +1,4 @@
-export type Forme = "droit" | "quart-g" | "quart-d" | "dq-g" | "dq-d";
+export type Forme = "droit" | "quart-g" | "quart-d" | "dq-g" | "dq-d" | "demi-g" | "demi-d";
 export type Essence = "chene" | "hetre" | "frene" | "sapin" | "noyer";
 /** Remplissage du garde-corps côté jour. */
 export type GardeCorps = "aucun" | "balustres" | "lisses";
@@ -16,10 +16,12 @@ export interface Params {
   L: number;
   /** Longueur côté départ (quart tournant). */
   A: number;
-  /** Longueur côté arrivée (quart tournant, double quart). */
+  /** Longueur côté arrivée (quart tournant, double quart, demi-tournant). */
   B: number;
   /** Longueur côté fond, entre les deux tournants (double quart). */
   C: number;
+  /** Jour du demi-tournant, entre les faces côté marches des limons de jour : le côté fond vaut 2 W + J. */
+  J: number;
   /** Emmarchement, entre limons. */
   W: number;
   fAuto: boolean;
@@ -98,6 +100,7 @@ export const DEFAULTS: Readonly<Params> = {
   A: 2900,
   B: 1800,
   C: 2400,
+  J: 200,
   W: 850,
   fAuto: true,
   f: 425,
@@ -138,9 +141,22 @@ export const DEFAULTS: Readonly<Params> = {
   pW: 600,
 };
 
-export const FORMES: readonly Forme[] = ["droit", "quart-g", "quart-d", "dq-g", "dq-d"];
+export const FORMES: readonly Forme[] = ["droit", "quart-g", "quart-d", "dq-g", "dq-d", "demi-g", "demi-d"];
 /** Nombre de tournants de chaque forme, tous du même sens. */
-export const TOURS: Record<Forme, number> = { droit: 0, "quart-g": 1, "quart-d": 1, "dq-g": 2, "dq-d": 2 };
+export const TOURS: Record<Forme, number> = {
+  droit: 0,
+  "quart-g": 1,
+  "quart-d": 1,
+  "dq-g": 2,
+  "dq-d": 2,
+  "demi-g": 2,
+  "demi-d": 2,
+};
+/** Demi-tournant : la forme en U saisie par son jour, avec un seul poteau quand le jour est étroit. */
+export const isDemi = (f: Forme): boolean => f.startsWith("demi-");
+/** Jour au-dessous duquel le demi-tournant n'a qu'un poteau, de la largeur du jour : deux poteaux
+    y laisseraient moins de 100 mm de limon de jour entre eux. */
+export const jourUnPoteau = (p: Pick<Params, "ps">): number => 2 * p.ps + 100;
 /** Forme qui tourne à gauche : calculée à droite, puis vue en miroir. */
 export const isLeft = (f: Forme): boolean => f.endsWith("-g");
 /** Cotes de l'exemple pour une forme en U, reprises en passant d'une autre forme au double quart :
@@ -153,9 +169,24 @@ export const EXEMPLE_U: Readonly<Pick<Params, "A" | "B" | "C" | "tX" | "tY">> = 
   tY: 1950,
 };
 
-/** Réglages après un changement de forme : en entrant dans une forme en U, ses cotes d'exemple. */
+/** Cotes de l'exemple du demi-tournant : deux volées côte à côte autour d'un jour étroit. */
+export const EXEMPLE_DEMI: Readonly<Pick<Params, "A" | "B" | "J" | "tX" | "tY">> = {
+  A: 2600,
+  B: 2600,
+  J: 200,
+  tX: 1990,
+  tY: 2650,
+};
+
+/** Réglages après un changement de forme : en entrant dans une forme en U, ses cotes d'exemple.
+    Du double quart au demi-tournant et retour, le même escalier : le jour suit le côté fond. */
 export function changeForme(prev: Params, next: Params): Params {
-  return TOURS[next.forme] === 2 && TOURS[prev.forme] !== 2 ? { ...next, ...EXEMPLE_U } : next;
+  if (TOURS[next.forme] !== 2) return next;
+  if (TOURS[prev.forme] !== 2) return { ...next, ...(isDemi(next.forme) ? EXEMPLE_DEMI : EXEMPLE_U) };
+  if (isDemi(next.forme) === isDemi(prev.forme)) return next;
+  return isDemi(next.forme)
+    ? { ...next, J: next.C - 2 * next.W }
+    : { ...next, C: 2 * next.W + Math.max(next.J, jourUnPoteau(next)) };
 }
 export const ESSENCES: readonly Essence[] = ["chene", "hetre", "frene", "sapin", "noyer"];
 export const GARDE_CORPS: readonly GardeCorps[] = ["aucun", "balustres", "lisses"];
@@ -171,6 +202,7 @@ export const NUMERIC_KEYS = [
   "A",
   "B",
   "C",
+  "J",
   "W",
   "f",
   "n",

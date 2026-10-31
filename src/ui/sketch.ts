@@ -6,7 +6,7 @@ import { TOURS, isLeft, type Forme, type FormeTremie } from "../core/params";
  * Les mêmes dessins, et quelques détails de fabrication, illustrent l'aide des champs.
  */
 
-type Key = "H" | "L" | "A" | "B" | "C" | "W" | "tL" | "tX" | "tY" | "tbD" | "tbA" | "ep" | "mpP";
+type Key = "H" | "L" | "A" | "B" | "C" | "J" | "W" | "tL" | "tX" | "tY" | "tbD" | "tbA" | "ep" | "mpP";
 
 const tick = (x1: number, y1: number, x2: number, y2: number) => {
   // Cote : trait et deux butées perpendiculaires.
@@ -87,6 +87,10 @@ const SKETCH: Record<Key, { svg: (tours: number, L: boolean) => string; text: st
     C: {
       svg: () => DQ + tick(24, 4, 126, 4),
       text: "<b>Longueur côté fond</b> : entre les deux tournants, côté extérieur, hors limon.",
+    },
+    J: {
+      svg: () => DQ + tick(58, 88, 92, 88),
+      text: "<b>Jour</b> : entre les deux volées, limons de jour compris.",
     },
 
     tX: {
