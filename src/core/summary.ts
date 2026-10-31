@@ -63,9 +63,12 @@ export function sectionSummaries(p: Params, R: Stair | null): Record<Section, st
     ? `${(R ? R.treL : p.tForme === "L") ? (tours === 2 ? "en U, " : "en L, ") : ""}${fmt(tre.tY)} × ${fmt(tre.tX)}`
     : fmt(tre.tL);
   const spans = R ? turnSpans(R) : [];
+  const pals = R?.paliers ?? [];
   const tourTxt = spans.length
     ? ` · tour${spans.length > 1 ? "s" : ""} ${spans.map((t) => `de ${fmt(t.z0)} à ${fmt(t.z1)}`).join(" et ")}`
-    : "";
+    : pals.length
+      ? ` · palier${pals.length > 1 ? "s" : ""} à ${pals.map((q) => fmt(q.j * R!.h)).join(" et ")}`
+      : "";
   return {
     forme: FORME_LABEL[p.forme],
     dimensions: `${fmt(p.H)} de haut · ${isDemi(p.forme) ? `${fmt(p.A)} × ${fmt(p.B)}, jour ${fmt(p.J)}` : tours === 2 ? `${fmt(p.A)} × ${fmt(p.C)} × ${fmt(p.B)}` : quart ? `${fmt(p.A)} × ${fmt(p.B)}` : `${fmt(p.L)} de long`} · ${fmt(p.W)} de large`,
@@ -119,6 +122,14 @@ export function checks(R: Stair): Check[] {
             .join(" et ")}`,
           R.st.gIn,
         )
-      : c("Reculement", fmt(R.L), "mm", `emmarchement ${fmt(R.W)}`, null),
+      : R.paliers.length
+        ? c(
+            R.paliers.length > 1 ? "Paliers" : "Palier",
+            R.paliers.map((q) => fmt(R.W + q.reste)).join(" et "),
+            "mm",
+            `profondeur · marche${R.paliers.length > 1 ? "s" : ""} ${R.paliers.map((q) => q.j).join(" et ")}`,
+            null,
+          )
+        : c("Reculement", fmt(R.L), "mm", `emmarchement ${fmt(R.W)}`, null),
   ];
 }

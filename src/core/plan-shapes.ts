@@ -83,8 +83,8 @@ export function planShapes(R: Stair): PlanDrawing {
       "pl-str",
     );
   });
-  // Marches et marche palière
-  R.treads.forEach((t) => poly(t.plan, t.balanced ? "pl-bal" : "pl-tread"));
+  // Marches et marche palière ; marches balancées et paliers en teinte : les deux passent le tournant.
+  R.treads.forEach((t) => poly(t.plan, t.balanced || t.palier ? "pl-bal" : "pl-tread"));
   if (R.mp) poly(R.mp.plan, "pl-tread");
   // Garde-corps, au-dessus des marches : main courante et balustres ou montants.
   const G = R.rail;
@@ -123,7 +123,9 @@ export function planShapes(R: Stair): PlanDrawing {
   });
   // Numéros de marche
   R.treads.forEach((t) => {
-    const q = T(R.walkAt((t.j - 0.5) * R.g));
+    // Autour d'un palier, les nez ne sont plus espacés d'un giron sur la ligne de foulée.
+    const tm = R.paliers.length ? (R.lines[t.j - 1]!.t + R.lines[t.j]!.t) / 2 : (t.j - 0.5) * R.g;
+    const q = T(R.walkAt(tm));
     shapes.push({
       k: "text",
       role: "pl-num",

@@ -1,9 +1,16 @@
 import { DEFAULTS, EXEMPLE_DEMI, EXEMPLE_U, type Params } from "../src/core/params";
 import { compute, type Stair } from "../src/core/stair";
 
+/** Cotes confortables à palier : 15 hauteurs de 180 mm, trémie calculée. */
+export const PALIER = {
+  quart: { A: 2550, B: 2700, tAuto: true },
+  dq: { A: 1950, C: 2550, B: 2100, tAuto: true },
+  demi: { A: 2600, B: 2800, J: 200, tAuto: true },
+} satisfies Record<string, Partial<Params>>;
+
 /** Configurations de référence : l'exemple par défaut dans les trois formes, plus des réglages manuels,
     chaque garde-corps, la marche palière et la trémie en L ; le double quart et le demi-tournant avec leurs
-    cotes d'exemple, et la trémie en U. */
+    cotes d'exemple, et la trémie en U ; puis à palier. */
 export const CASES: Record<string, Partial<Params>> = {
   droit: { forme: "droit" },
   "quart-g": { forme: "quart-g" },
@@ -38,6 +45,12 @@ export const CASES: Record<string, Partial<Params>> = {
   "demi-g": { forme: "demi-g", ...EXEMPLE_DEMI },
   "demi-d-balustres": { forme: "demi-d", ...EXEMPLE_DEMI, gc: "balustres" },
   "demi-g-large": { forme: "demi-g", ...EXEMPLE_DEMI, J: 400, tX: 2190, gc: "lisses" },
+  "quart-d-a-palier": { forme: "quart-d", tournant: "palier", ...PALIER.quart },
+  "quart-g-a-palier-balustres": { forme: "quart-g", tournant: "palier", ...PALIER.quart, gc: "balustres" },
+  "dq-d-a-palier": { forme: "dq-d", tournant: "palier", ...PALIER.dq },
+  "demi-d-a-palier-balustres": { forme: "demi-d", tournant: "palier", ...PALIER.demi, gc: "balustres" },
+  "dq-g-a-palier-mp-u": { forme: "dq-g", tournant: "palier", ...PALIER.dq, mp: true, tForme: "L", gc: "balustres" },
+  "demi-g-a-palier-large": { forme: "demi-g", tournant: "palier", ...PALIER.demi, J: 400, gc: "balustres", cm: false },
 };
 
 export function stairOf(over: Partial<Params>): Stair {

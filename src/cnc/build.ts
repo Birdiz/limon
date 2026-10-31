@@ -5,7 +5,7 @@
    Poteaux : leurs quatre faces vues de l'extérieur, couchées pied à gauche, avec logements et mortaises. */
 import { fmt } from "../core/format";
 import { cncFrame, type Section } from "../core/pockets";
-import { polyPath } from "../core/poly";
+import { polyPath, type Cut } from "../core/poly";
 import { isLeft } from "../core/params";
 import { GC } from "../core/railing";
 import { PERCAGE, type NewelFace, type NoseLine, type Stair } from "../core/stair";
@@ -20,6 +20,8 @@ export interface TreadPart {
   L: number;
   /** Profondeur hors tout (hauteur pour une contremarche). */
   l: number;
+  /** Palier d'un tournant, débité et logé comme une marche. */
+  palier?: true;
 }
 
 export interface BoardPart {
@@ -103,7 +105,14 @@ export function buildCNC(R: Stair): CNC {
   // Une marche, du nez lnF jusqu'à la coupe arrière bk, placée à la suite des précédentes.
   const tread = (lnF: NoseLine, bk: Section, marks: [Layer, Pt[]][], label: string, nose: string): Piece => {
     const fr = at(lnF, 0);
-    const outline = closeRing([...polyPath(inOff, fr.inD.s, bk.inD.s), ...polyPath(outOff, bk.outD.s, fr.outD.s)]);
+    // Nez qui part du coin du jour, après un palier : le fond de son logement est sur le prolongement du segment.
+    const ext = (c: Cut) => (c.outside ? [c.p] : []);
+    const outline = closeRing([
+      ...ext(fr.inD),
+      ...polyPath(inOff, fr.inD.s, bk.inD.s),
+      ...ext(bk.inD),
+      ...polyPath(outOff, bk.outD.s, fr.outD.s),
+    ]);
     // Repère local : nez sur l'axe x, montée vers +y, vu de dessus.
     const ref = M(fr.inF.p),
       nr = M(lnF.nr),
@@ -141,8 +150,14 @@ export function buildCNC(R: Stair): CNC {
           ["CM_DESSUS", riserBand(lnB).quad],
         ]
       : [];
-    const part = tread(lnF, at(lnB, bo), marks, `M${t.j}`, R.rn > 0 ? `nez R${fmt(R.rn, 1)}` : "nez");
-    treadParts.push({ j: t.j, ...part });
+    const part = tread(
+      lnF,
+      at(lnB, bo),
+      marks,
+      t.palier ? "PALIER" : `M${t.j}`,
+      R.rn > 0 ? `nez R${fmt(R.rn, 1)}` : "nez",
+    );
+    treadParts.push({ j: t.j, ...part, ...(t.palier ? { palier: true as const } : {}) });
   });
   // Marche palière : du dernier nez jusqu'au bout des limons, encastrée comme les marches.
   const mp = R.mp,

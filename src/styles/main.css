@@ -751,6 +751,9 @@ input[type="range"] {
 .legend i.tre {
   border-top: 2px dashed var(--ink);
 }
+.legend b {
+  font-weight: inherit;
+}
 .errbox {
   position: absolute;
   inset: 0;

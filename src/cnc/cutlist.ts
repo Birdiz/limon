@@ -44,7 +44,21 @@ export function cutRows(cnc: CNC, R: Stair): CutRow[] {
       e: p.el,
       q: 1,
     })),
-    ...group(cnc.treadParts, "Marche", "Marches", p.et),
+    ...group(
+      cnc.treadParts.filter((q) => !q.palier),
+      "Marche",
+      "Marches",
+      p.et,
+    ),
+    ...cnc.treadParts
+      .filter((q) => q.palier)
+      .map((q, i, all) => ({
+        name: all.length > 1 ? `Palier ${i + 1}` : "Palier",
+        q: 1,
+        L: Math.ceil(q.L),
+        l: Math.ceil(q.l),
+        e: p.et,
+      })),
     ...(cnc.mpPart ? [{ name: "Marche palière", q: 1, L: up(cnc.mpPart.L), l: up(cnc.mpPart.l), e: p.mpE }] : []),
     ...group(cnc.riserParts, "Contremarche", "Contremarches", p.ecm),
     ...(cnc.rail
@@ -135,7 +149,17 @@ export function stockNotes(cnc: CNC, R: Stair): [Status, string][] {
         `${long.length > 1 ? many : one} ${list(long)} plus longue${long.length > 1 ? "s" : ""} que le plateau (jusqu'à ${fmt(Math.ceil(Math.max(...long.map((q) => q.L))))} mm pour ${fmt(pL)}).`,
       );
   };
-  glued(big.treads, "Marche", "Marches");
+  glued(
+    big.treads.filter((q) => !q.palier),
+    "Marche",
+    "Marches",
+  );
+  // Palier : un plateau de l'épaisseur des marches, toujours plus profond qu'une planche.
+  const pals = cnc.treadParts.filter((q) => q.palier && q.l > pW + 0.5);
+  if (pals.length)
+    notes.push(
+      `${pals.length > 1 ? "Paliers" : "Palier"} de ${pals.map((q) => `${fmt(Math.ceil(q.L))} × ${fmt(Math.ceil(q.l))}`).join(" et ")} mm : plateau collé à chant, fil le long du nez, logé comme une marche.`,
+    );
   glued(big.risers, "Contremarche", "Contremarches");
   const mp = cnc.mpPart;
   if (mp && (mp.L > pL + 0.5 || mp.l > pW + 0.5))

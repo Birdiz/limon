@@ -50,6 +50,8 @@ export interface Tread {
   /** Longueur de nez. */
   nez: number;
   balanced: boolean;
+  /** Palier d'un tournant, à la place des marches balancées. */
+  palier: boolean;
 }
 
 /** Marche palière : du dernier nez jusqu'au plancher d'arrivée, logée dans les limons prolongés. */
@@ -246,6 +248,9 @@ export interface Stair {
   bal: Balance | null;
   /** Balancement de chaque tournant. */
   bals: Balance[];
+  /** Paliers, dans l'ordre de la montée : marche j, et reste de la division ajouté à sa profondeur côté arrivée
+      de la volée qui y monte. */
+  paliers: { j: number; reste: number }[];
   blondel: number;
   pente: number;
   gInMin: number;
@@ -338,22 +343,65 @@ export function comfortableRun(H: number, Lw: number, nFixed?: number): { Lw: nu
   return null;
 }
 
+/** Écart au confort d'une hauteur h et d'un giron g : Blondel (2h + g ≈ 630 mm), pénalités hors des plages. */
+const runScore = (h: number, g: number) =>
+  Math.abs(2 * h + g - CONFORT.blondel.cible) +
+  6 * Math.max(0, h - 190) +
+  6 * Math.max(0, 155 - h) +
+  3 * Math.max(0, 230 - g) +
+  3 * Math.max(0, g - 320);
+
 /** Nombre de hauteurs qui approche le mieux Blondel (2h + g ≈ 630 mm) dans les plages de confort. */
 export function pickN(H: number, Lw: number): number {
   let best: { n: number; score: number } | null = null;
   for (let n = Math.max(3, Math.ceil(H / 230)); n <= Math.floor(H / 120); n++) {
-    const h = H / n,
-      g = Lw / (n - 1),
-      bl = 2 * h + g;
-    const score =
-      Math.abs(bl - CONFORT.blondel.cible) +
-      6 * Math.max(0, h - 190) +
-      6 * Math.max(0, 155 - h) +
-      3 * Math.max(0, 230 - g) +
-      3 * Math.max(0, g - 320);
+    const score = runScore(H / n, Lw / (n - 1));
     if (!best || score < best.score) best = { n, score };
   }
   return best ? best.n : Math.max(3, Math.round(H / 175));
+}
+
+/** Volées d'un escalier à palier : m girons sur la volée d'arrivée, qui fixent le giron g ; counts girons sur
+    chaque volée qui monte à un palier, reste ajouté à la profondeur du palier ; n hauteurs, palier compris. */
+export interface PalierLayout {
+  n: number;
+  g: number;
+  m: number;
+  counts: number[];
+  rest: number[];
+}
+
+/** Répartition la plus confortable des girons autour des paliers ; nFixed impose le nombre de hauteurs
+    (le reste des paliers peut alors dépasser un giron). runs : volées qui montent à un palier ; last : volée d'arrivée ;
+    rMin : reste minimal, pour que la contremarche sous le nez du palier reste devant le coin du jour. */
+export function palierLayout(
+  H: number,
+  runs: readonly number[],
+  last: number,
+  rMin: number,
+  nFixed?: number,
+): PalierLayout | null {
+  let best: (PalierLayout & { score: number }) | null = null;
+  for (let m = 1; m <= 40; m++) {
+    const g = last / m,
+      counts = runs.map((r) => Math.floor((r - rMin) / g + 1e-9));
+    if (counts.some((c) => c < 0)) continue;
+    const lines = () => counts.reduce((a, c) => a + c + 1, 0) + m + 1;
+    if (nFixed != null) {
+      // Trop de lignes : les volées qui montent aux paliers perdent des girons, le palier s'allonge d'autant.
+      for (let i = 0; i < counts.length && lines() > nFixed; i++)
+        counts[i] = Math.max(0, counts[i]! - (lines() - nFixed));
+      if (lines() !== nFixed) continue;
+    }
+    const n = lines(),
+      rest = runs.map((r, i) => Math.max(0, r - counts[i]! * g));
+    if (n < 3) continue;
+    const score = runScore(H / n, g) + (nFixed != null ? rest.reduce((a, v) => a + v, 0) / 100 : 0);
+    if (!best || score < best.score) best = { n, g, m, counts, rest, score };
+  }
+  if (!best) return null;
+  const { n, g, m, counts, rest } = best;
+  return { n, g, m, counts, rest };
 }
 
 function validate(p: Params, tours: number): InputError[] {
@@ -517,6 +565,31 @@ function landingTread(
   };
 }
 
+/** Longueur côté arrivée qui rend confortable un escalier à palier : elle donne le giron. */
+function palierFix(p: Params, runs: readonly number[], last: number, rMin: number, n: number): [string, Fix] | null {
+  const ok = (L: PalierLayout | null): L is PalierLayout =>
+    !!L && Object.values(comfortStatus(p.H / L.n, L.g)).every((s) => s === "ok");
+  const auto = palierLayout(p.H, runs, last, rMin);
+  if (!p.nAuto && ok(auto))
+    return [
+      `Le calcul automatique (${auto.n} hauteurs) rend l'escalier confortable sans changer les longueurs.`,
+      { set: { nAuto: true }, label: "Revenir en automatique" },
+    ];
+  for (const nFixed of p.nAuto ? [undefined] : [n, undefined])
+    for (let d = 10; d <= 3000; d += 10)
+      for (const v of [p.B - d, p.B + d]) {
+        if (!(v > p.W + 1)) continue;
+        const L = palierLayout(p.H, runs, last + v - p.B, rMin, nFixed);
+        if (!ok(L)) continue;
+        const auto = nFixed == null && !p.nAuto ? { nAuto: true } : {};
+        return [
+          `Longueur côté arrivée conseillée : ${fmt(v)} mm, soit ${L.n} hauteurs de ${fmt(p.H / L.n, 1)} mm et un giron de ${fmt(L.g, 1)} mm.`,
+          { set: { B: v, ...auto }, label: `Passer à ${fmt(v)} mm` },
+        ];
+      }
+  return null;
+}
+
 /** Calcule l'escalier ; suggest ajoute aux notes les corrections chiffrées (calculs supplémentaires). */
 export function compute(p: Params, suggest = true): ComputeResult {
   const tours = TOURS[p.forme],
@@ -612,10 +685,36 @@ export function compute(p: Params, suggest = true): ComputeResult {
     return dirs[i]!;
   };
 
-  const nAuto = pickN(H, Lw);
-  const n = p.nAuto ? nAuto : clamp(Math.round(p.n), 3, 40);
+  // Palier à chaque tournant (un seul, sur tout le fond, en demi-tournant) : même giron sur toutes les volées,
+  // donné par la volée d'arrivée ; le reste de chaque volée qui monte à un palier s'ajoute à sa profondeur.
+  const pal = quart && p.tournant === "palier";
+  const into = !pal ? [] : demi ? [0] : Array.from({ length: tours }, (_, i) => i);
+  const runs = into.map((i) => len[i]!);
+  // Le nez du palier reste au moins à la contremarche et à l'encastrement du coin du jour : elle se loge dans le poteau.
+  const rMin = p.deb + (p.cm ? p.ecm : 0) + Math.max(0, p.enc) + 1;
+  const layAuto = pal ? palierLayout(H, runs, len[tours]!, rMin) : null;
+  if (pal && !layAuto) return { ok: false, errors: [{ key: "B", message: "Palier impossible avec ces longueurs." }] };
+  const nAuto = layAuto ? layAuto.n : pickN(H, Lw);
+  const lay = layAuto && !p.nAuto ? palierLayout(H, runs, len[tours]!, rMin, clamp(Math.round(p.n), 3, 40)) : layAuto;
+  if (pal && !lay)
+    return { ok: false, errors: [{ key: "n", message: "Ce nombre de hauteurs ne tient pas avec un palier." }] };
+  const n = lay ? lay.n : p.nAuto ? nAuto : clamp(Math.round(p.n), 3, 40);
   const h = H / n,
-    g = Lw / (n - 1);
+    g = lay ? lay.g : Lw / (n - 1);
+  // Abscisse de chaque nez sur la ligne de foulée : régulière, ou volée par volée autour des paliers.
+  const ts: number[] = [];
+  const paliers: { j: number; reste: number }[] = [],
+    palSeg: number[] = [];
+  if (lay) {
+    into.forEach((i, q) => {
+      const t0 = i ? tB[i - 1]! : 0;
+      for (let c = 0; c <= lay.counts[q]!; c++) ts.push(t0 + c * g);
+      paliers.push({ j: ts.length, reste: lay.rest[q]! });
+      palSeg.push(demi ? tours : i + 1);
+    });
+    for (let c = 0; c <= lay.m; c++) ts.push(tB[tours - 1]! + c * g);
+  } else for (let k = 0; k < n; k++) ts.push(k * g);
+  const isPalier = (j: number) => paliers.some((q) => q.j === j);
 
   // Position de chaque nez sur le limon du jour : perpendiculaire en partie droite, puis balancement.
   const sPerp = (t: number) => {
@@ -624,10 +723,10 @@ export function compute(p: Params, suggest = true): ComputeResult {
     if (i < tours && t > tA[i]!) return sIn[i + 1]!;
     return i ? sIn[i]! + (t - tB[i - 1]!) : t;
   };
-  const s = Array.from({ length: n }, (_, k) => sPerp(k * g));
+  const s = ts.map(sPerp);
   // Zone balancée de chaque tournant : mb marches centrées sur l'arc, étendues pour le couvrir tout entier.
   const m0 = clamp(Math.round(p.mb), 2, n - 1);
-  const zones = tA.map((t1, i) => {
+  const zones = (pal ? [] : tA).map((t1, i) => {
     const t2 = tB[i]!;
     // « || 0 » : pas de zéro négatif pour la première marche du tour, affichée et comparée telle quelle.
     let a = Math.round((t1 + t2) / 2 / g - m0 / 2) || 0,
@@ -690,7 +789,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
   // Lignes de nez : du point sur le jour, passant par la ligne de foulée, jusqu'au limon extérieur.
   const lines: NoseLine[] = [];
   for (let k = 0; k < n; k++) {
-    const t = k * g,
+    const t = ts[k]!,
       Q = polyAt(inner, s[k]!),
       P = walkAt(t);
     const dir = V.norm(V.sub(P, Q));
@@ -737,9 +836,10 @@ export function compute(p: Params, suggest = true): ComputeResult {
       nose: rn > 0 ? noseSpan(fr) : null,
       gIn: bk.sIn - fr.sIn,
       gOut: bk.sOut - fr.sOut,
-      gWalk: g,
+      gWalk: isPalier(j) ? bk.t - fr.t : g,
       nez: V.len(V.sub(fr.O, fr.Q)),
       balanced: bals.some((z) => j > z.a && j <= z.b),
+      palier: isPalier(j),
     });
   }
   // Marche palière : dans le prolongement du plancher d'arrivée, son nez sur la dernière ligne de nez.
@@ -780,18 +880,26 @@ export function compute(p: Params, suggest = true): ComputeResult {
   // Limons : arête haute à LIFT au-dessus de la ligne des nez.
   const el = p.el,
     hl = p.hl;
-  const zIn = (v: number) =>
-    interp(
-      lines.map((l) => l.sIn),
-      lines.map((l) => (l.k + 1) * h + LIFT),
-      v,
-    );
-  const zOut = (v: number) =>
-    interp(
-      lines.map((l) => l.sOut),
-      lines.map((l) => (l.k + 1) * h + LIFT),
-      v,
-    );
+  // Hauteur des nez le long d'un côté. Sur un palier, elle reste à plat jusqu'à un giron avant le premier nez
+  // de la volée suivante, sans revenir sur le tronçon d'avant : le limon suit le palier, puis la volée.
+  const noses = (side: "sIn" | "sOut", P: Poly) => {
+    const xs: number[] = [],
+      zs: number[] = [];
+    lines.forEach((l, k) => {
+      xs.push(l[side]);
+      zs.push((k + 1) * h);
+      const q = paliers.findIndex((pl) => pl.j === k + 1),
+        nx = lines[k + 1];
+      if (q < 0 || !nx) return;
+      xs.push(Math.max(l[side], P.cum[palSeg[q]!]!, nx[side] - g));
+      zs.push((k + 1) * h);
+    });
+    return { xs, zs };
+  };
+  const nosesIn = noses("sIn", inner),
+    nosesOut = noses("sOut", outer);
+  const zIn = (v: number) => interp(nosesIn.xs, nosesIn.zs, v) + LIFT;
+  const zOut = (v: number) => interp(nosesOut.xs, nosesOut.zs, v) + LIFT;
   // Poteau affleurant les faces côté marches, à chaque coin du jour : les limons de jour s'arrêtent sur ses faces.
   const ps = p.ps;
   const pieces = (P: Poly, arr: number[], zf: (v: number) => number, isOuter: boolean): StringerGeom[] => {
@@ -829,18 +937,8 @@ export function compute(p: Params, suggest = true): ComputeResult {
   };
   // Jour étroit du demi-tournant : le poteau unique prend la place du limon de jour du milieu.
   const geoms = [
-    ...pieces(
-      inner,
-      lines.map((l) => l.sIn),
-      zIn,
-      false,
-    ).filter((sp) => !(single && sp.idx === 1)),
-    ...pieces(
-      outer,
-      lines.map((l) => l.sOut),
-      zOut,
-      true,
-    ),
+    ...pieces(inner, nosesIn.xs, zIn, false).filter((sp) => !(single && sp.idx === 1)),
+    ...pieces(outer, nosesOut.xs, zOut, true),
   ];
   // Faces des poteaux côté marches, traitées comme des bouts de limon pour y loger marches et contremarches.
   // Un poteau par tournant, des angles k0 à k1 : le poteau unique du demi-tournant prend les deux angles,
@@ -977,8 +1075,8 @@ export function compute(p: Params, suggest = true): ComputeResult {
     quart,
     jour: stringers.filter((sp) => sp.side === "in"),
     cum: inner.cum,
-    noseS: lines.map((l) => l.sIn),
-    noseZ: lines.map((l) => (l.k + 1) * h),
+    noseS: nosesIn.xs,
+    noseZ: nosesIn.zs,
     mpD,
   });
   const mcMortise = (idx: number, end: boolean) => {
@@ -1205,7 +1303,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       : null;
 
   // Contrôles
-  const gInMin = Math.min(...treads.map((t) => t.gIn));
+  const gInMin = Math.min(...treads.filter((t) => !t.palier).map((t) => t.gIn));
   const blondel = 2 * h + g;
   const pente = (Math.atan2(h, g) * 180) / Math.PI;
   const st: Stair["st"] = {
@@ -1235,7 +1333,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
     ]);
   if (st.pente !== "ok") N.push([st.pente, `Escalier raide (${fmt(pente, 1)}°).`]);
   if (suggest && [st.h, st.g, st.bl, st.pente].some((s) => s !== "ok")) {
-    const fix = runFix(p, quart, Lw, n, nAuto);
+    const fix = pal ? palierFix(p, runs, len[tours]!, rMin, n) : runFix(p, quart, Lw, n, nAuto);
     if (fix) N.push(["info", fix[0], fix[1]]);
   }
   if (quart && st.gIn !== "ok") {
@@ -1261,6 +1359,17 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const prMin = bals.reduce<Balance | null>((m, z) => (!m || z.pr < m.pr ? z : m), null);
   if (prMin && prMin.pr + 0.01 < prMin.want)
     N.push(["warn", `Progressivité limitée à ${fmt(prMin.pr * 100)} % pour garder au moins 100 mm au jour.`]);
+  // Reste de la division des girons, ajouté à la profondeur de chaque palier : la cote qui l'annule.
+  paliers.forEach(({ reste }, q) => {
+    const key = into[q] === 1 ? "C" : "A",
+      v = Math.ceil(p[key] - (reste - rMin) - 1e-6);
+    if (v >= p[key]) return;
+    N.push([
+      "info",
+      `${paliers.length > 1 ? `Palier ${q + 1}` : "Palier"} de ${fmt(W + reste)} mm de profondeur : le reste de la division des girons s'y ajoute. Longueur côté ${key === "A" ? "départ" : "fond"} de ${fmt(v)} mm pour le palier le plus court.`,
+      { set: { [key]: v }, label: `Passer à ${fmt(v)} mm` },
+    ]);
+  });
   if (p.rn > p.et / 2 + 0.01)
     N.push(["info", `Rayon du nez ramené à ${fmt(rn, 1)} mm, la moitié de l'épaisseur de marche (demi-rond).`]);
   if (p.cm && rn > p.deb)
@@ -1412,6 +1521,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       tYmin,
       bal,
       bals,
+      paliers,
       blondel,
       pente,
       gInMin,

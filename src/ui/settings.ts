@@ -8,6 +8,7 @@ import {
   type GardeCorps,
   type NumericKey,
   type Pose,
+  type Tournant,
   type Params,
   TOURS,
   isDemi,
@@ -31,6 +32,7 @@ export function writeInputs(p: Params): void {
   byId<HTMLSelectElement>("gc").value = p.gc;
   byId<HTMLSelectElement>("gcPose").value = p.gcPose;
   byId<HTMLSelectElement>("tForme").value = p.tForme;
+  byId<HTMLSelectElement>("tournant").value = p.tournant;
 }
 
 /** Réglages lus dans le formulaire ; un champ vide ou invalide garde sa valeur précédente et figure dans missing. */
@@ -49,6 +51,7 @@ export function readInputs(prev: Params): { params: Params; missing: NumericKey[
   p.gc = byId<HTMLSelectElement>("gc").value as GardeCorps;
   p.gcPose = byId<HTMLSelectElement>("gcPose").value as Pose;
   p.tForme = byId<HTMLSelectElement>("tForme").value as FormeTremie;
+  p.tournant = byId<HTMLSelectElement>("tournant").value as Tournant;
   return { params: p, missing };
 }
 
@@ -106,6 +109,9 @@ export function syncInputs(p: Params, stair: Stair | null): void {
   byId<HTMLSelectElement>("tForme").querySelector<HTMLOptionElement>('option[value="L"]')!.textContent =
     TOURS[p.forme] === 2 ? "En U" : "En L";
   document.querySelectorAll<HTMLElement>("[data-mp]").forEach((el) => (el.hidden = !p.mp));
+  const pal = p.tournant === "palier";
+  document.querySelectorAll<HTMLElement>("[data-bal]").forEach((el) => (el.hidden = pal));
+  document.querySelectorAll<HTMLElement>("[data-pal]").forEach((el) => (el.hidden = !pal));
   input("n").disabled = p.nAuto;
   input("f").disabled = p.fAuto;
   input("hlj").disabled = p.hljAuto;

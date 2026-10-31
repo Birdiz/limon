@@ -16,7 +16,15 @@ export function treadsCSV(R: Stair): string {
     ],
   ];
   R.treads.forEach((t) =>
-    rows.push([t.j, f1(t.top), f1(t.gIn), f1(t.gWalk), f1(t.gOut), f1(t.nez), t.balanced ? "oui" : "non"]),
+    rows.push([
+      t.j,
+      f1(t.top),
+      f1(t.gIn),
+      f1(t.gWalk),
+      f1(t.gOut),
+      f1(t.nez),
+      t.palier ? "palier" : t.balanced ? "oui" : "non",
+    ]),
   );
   return rows.map((r) => r.join(";")).join("\n");
 }
