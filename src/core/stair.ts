@@ -3,7 +3,7 @@
    Quart tournant calculé à droite (2e volée vers +x) ; la version gauche est un miroir. */
 import { fmt, ceil10 } from "./format";
 import type { NumericKey, Params } from "./params";
-import { cncFrame, stringerPockets } from "./pockets";
+import { BOIS_SOUS_LOGEMENT, cncFrame, stringerPockets } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import { GC, railing, type Railing } from "./railing";
 import { V, bbox, clamp, inPolygon, interp, type Pt, type Vertex } from "./vec";
@@ -249,6 +249,21 @@ export type ComputeResult = { ok: true; stair: Stair } | { ok: false; errors: In
 
 /** Échappée visée. */
 export const ECHAPPEE = 2000;
+/** Échappée en dessous de laquelle l'escalier est hors norme. */
+export const ECHAPPEE_MIN = 1900;
+/**
+ * Plages des contrôles de confort, en mm (pente en degrés) : hors de min…max, « Limite » ;
+ * au-delà de bad, « Hors norme ». gIn : giron côté jour des marches balancées.
+ */
+export const CONFORT = {
+  h: { min: 155, max: 185, bad: 200 },
+  g: { min: 240, max: 320, bad: 210 },
+  blondel: { min: 600, max: 640, cible: 630, badMin: 580, badMax: 660 },
+  pente: { max: 38, bad: 45 },
+  gIn: { min: 100, bad: 60 },
+} as const;
+/** Ligne de foulée automatique du quart tournant : au plus à cette distance du jour. */
+export const FOULEE_MAX = 500;
 /** Hauteur du bord haut des limons au-dessus de la ligne des nez. */
 export const LIFT = 50;
 /** Assemblage des limons de jour dans le poteau : longueur de tenon visée, épaulements haut et bas,
@@ -259,13 +274,19 @@ export const PERCAGE = 10;
 
 /** Statuts de confort d'une hauteur de marche h et d'un giron g. */
 export function comfortStatus(h: number, g: number): Pick<Stair["st"], "h" | "g" | "bl" | "pente"> {
+  const C = CONFORT;
   const blondel = 2 * h + g,
     pente = (Math.atan2(h, g) * 180) / Math.PI;
   return {
-    h: h > 200 ? "bad" : h > 185 || h < 155 ? "warn" : "ok",
-    g: g < 210 ? "bad" : g < 240 || g > 320 ? "warn" : "ok",
-    bl: blondel < 580 || blondel > 660 ? "bad" : blondel < 600 || blondel > 640 ? "warn" : "ok",
-    pente: pente > 45 ? "bad" : pente > 38 ? "warn" : "ok",
+    h: h > C.h.bad ? "bad" : h > C.h.max || h < C.h.min ? "warn" : "ok",
+    g: g < C.g.bad ? "bad" : g < C.g.min || g > C.g.max ? "warn" : "ok",
+    bl:
+      blondel < C.blondel.badMin || blondel > C.blondel.badMax
+        ? "bad"
+        : blondel < C.blondel.min || blondel > C.blondel.max
+          ? "warn"
+          : "ok",
+    pente: pente > C.pente.bad ? "bad" : pente > C.pente.max ? "warn" : "ok",
   };
 }
 
@@ -292,7 +313,7 @@ export function pickN(H: number, Lw: number): number {
       g = Lw / (n - 1),
       bl = 2 * h + g;
     const score =
-      Math.abs(bl - 630) +
+      Math.abs(bl - CONFORT.blondel.cible) +
       6 * Math.max(0, h - 190) +
       6 * Math.max(0, 155 - h) +
       3 * Math.max(0, 230 - g) +
@@ -432,7 +453,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
   if (errors.length) return { ok: false, errors };
 
   const { H, W, A, B, L } = p;
-  const fAuto = quart ? (W <= 1000 ? W / 2 : 500) : W / 2;
+  const fAuto = quart ? Math.min(W / 2, FOULEE_MAX) : W / 2;
   const f = p.fAuto ? fAuto : clamp(p.f, 100, W - 100);
   const inner = makePoly(
     quart
@@ -512,7 +533,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
     const c = (i: number) => (m >= 2 ? Math.cos((2 * Math.PI * (i + 0.5)) / m) : 0);
     let pr = clamp(p.prog / 100, 0, 1);
     const want = pr;
-    const minW = 100;
+    const minW = CONFORT.gIn.min;
     if (amp > 0 && m >= 2) {
       let cmin = 0;
       for (let i = 0; i < m; i++) cmin = Math.min(cmin, c(i));
@@ -916,25 +937,29 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const pente = (Math.atan2(h, g) * 180) / Math.PI;
   const st: Stair["st"] = {
     ...comfortStatus(h, g),
-    gIn: gInMin < 60 ? "bad" : gInMin < 100 ? "warn" : "ok",
-    ech: !ech ? "ok" : ech.c < 1900 ? "bad" : ech.c < ECHAPPEE ? "warn" : "ok",
+    gIn: gInMin < CONFORT.gIn.bad ? "bad" : gInMin < CONFORT.gIn.min ? "warn" : "ok",
+    ech: !ech ? "ok" : ech.c < ECHAPPEE_MIN ? "bad" : ech.c < ECHAPPEE ? "warn" : "ok",
   };
   const N: Note[] = [];
   if (st.h !== "ok")
     N.push([
       st.h,
-      h > 185
+      h > CONFORT.h.max
         ? `Marches hautes (${fmt(h, 1)} mm) : ajoutez une hauteur ou allongez le reculement.`
         : `Marches basses (${fmt(h, 1)} mm) : retirez une hauteur.`,
     ]);
   if (st.g !== "ok")
     N.push([
       st.g,
-      g < 240
+      g < CONFORT.g.min
         ? `Giron court (${fmt(g)} mm) sur la ligne de foulée : il manque de la longueur au sol.`
         : `Giron long (${fmt(g)} mm) : ajoutez une hauteur pour un pas plus naturel.`,
     ]);
-  if (st.bl !== "ok") N.push([st.bl, `Loi de Blondel hors plage : 2h + g = ${fmt(blondel)} mm, visez 600 à 640 mm.`]);
+  if (st.bl !== "ok")
+    N.push([
+      st.bl,
+      `Loi de Blondel hors plage : 2h + g = ${fmt(blondel)} mm, visez ${CONFORT.blondel.min} à ${CONFORT.blondel.max} mm.`,
+    ]);
   if (st.pente !== "ok") N.push([st.pente, `Escalier raide (${fmt(pente, 1)}°).`]);
   if (suggest && [st.h, st.g, st.bl, st.pente].some((s) => s !== "ok")) {
     const fix = runFix(p, quart, Lw, n, nAuto);
@@ -945,7 +970,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
     let mb: number | null = null;
     for (let m = p.mb + 1; suggest && m <= 12 && mb == null; m++) {
       const r = compute({ ...p, mb: m }, false);
-      if (r.ok && r.stair.gInMin >= 100) mb = m;
+      if (r.ok && r.stair.gInMin >= CONFORT.gIn.min) mb = m;
     }
     N.push([
       st.gIn,
@@ -966,7 +991,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
   if (hl < needM - 0.5)
     N.push([
       "warn",
-      `Limon${quart ? " de mur" : ""} trop étroit : ${fmt(hl)} mm pour des marches de ${fmt(h)} mm, prévoyez au moins ${fmt(ceil10(needM))} mm pour garder 20 mm de bois sous les logements.`,
+      `Limon${quart ? " de mur" : ""} trop étroit : ${fmt(hl)} mm pour des marches de ${fmt(h)} mm, prévoyez au moins ${fmt(ceil10(needM))} mm pour garder ${BOIS_SOUS_LOGEMENT} mm de bois sous les logements.`,
       { set: { hl: ceil10(needM) }, label: `Passer à ${fmt(ceil10(needM))} mm` },
     ]);
   if (quart && hlj < needJ - 0.5)

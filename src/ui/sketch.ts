@@ -3,6 +3,7 @@ import type { Forme, FormeTremie } from "../core/params";
 /*
  * Croquis de la cote en cours de saisie, en pas à pas : où prendre la mesure sur le chantier.
  * Dessins de principe sur 150 × 96, coupe pour les hauteurs et le reculement, plan pour le reste.
+ * Les mêmes dessins, et quelques détails de fabrication, illustrent l'aide des champs.
  */
 
 type Key = "H" | "L" | "A" | "B" | "W" | "tL" | "tX" | "tY" | "tbD" | "tbA" | "ep" | "mpP";
@@ -91,6 +92,38 @@ const SKETCH: Record<Key, { svg: (quart: boolean, L: boolean) => string; text: s
 
 const isKey = (k: string): k is Key => k in SKETCH;
 
+/** Nez de marche en coupe : marche à nez arrondi, contremarche dessous, contremarche suivante au fond. */
+const NEZ =
+  '<path class="k-ink" d="M146 36H31A7 7 0 0 0 24 43V49A7 7 0 0 0 31 56H146M54 56V98M62 56V98M118 2V36M126 2V36"/>' +
+  '<path class="k-mut" d="M54 56V24" stroke-dasharray="2 2"/>';
+
+/** Détails de fabrication, pour l'aide seulement (pas de cote à prendre sur le chantier). */
+const DETAIL: Record<string, (quart: boolean) => string> = {
+  // Ligne de foulée : trait mixte, cotée depuis le jour.
+  f: (quart) =>
+    quart
+      ? QUART + '<path class="k-dash" d="M42 92V44Q42 34 52 34H146"/>' + tick(42, 86, 60, 86)
+      : DROIT + '<path class="k-dash" d="M78 90V8"/>' + tick(78, 95, 98, 95),
+  deb: () => NEZ + tick(24, 20, 54, 20),
+  rn: () => NEZ + '<path class="k-dim" d="M31 36A7 7 0 0 0 24 43M24 49A7 7 0 0 0 31 56"/>',
+  // Coupe en travers du limon : la marche entre dans son logement.
+  enc: () =>
+    '<path class="k-ink" d="M20 20H44V44H34V60H44V92H20Z"/>' +
+    '<path class="k-ink" d="M146 44H34V60H146"/>' +
+    '<path class="k-mut" d="M34 44V10M44 20V10" stroke-dasharray="2 2"/>' +
+    tick(34, 12, 44, 12),
+};
+
+/** Croquis d'un champ pour son aide, sans légende ; null si le champ n'en a pas. */
+export function sketchSVG(key: string, forme: Forme, tForme: FormeTremie = "rect"): string | null {
+  const draw = isKey(key) ? SKETCH[key].svg : DETAIL[key];
+  if (!draw) return null;
+  const quart = forme !== "droit";
+  // Le quart gauche est le miroir du droit.
+  const flip = quart && forme === "quart-g" ? ' transform="matrix(-1 0 0 1 150 0)"' : "";
+  return `<svg viewBox="0 0 150 100" aria-hidden="true"><g${flip}>${draw(quart, tForme === "L")}</g></svg>`;
+}
+
 /** Remplit le croquis d'une section avec la cote du champ donné, ou la première cote visible. */
 export function showSketch(fig: HTMLElement, forme: Forme, focused?: string, tForme: FormeTremie = "rect"): void {
   const sec = fig.closest(".sbody")!;
@@ -102,8 +135,5 @@ export function showSketch(fig: HTMLElement, forme: Forme, focused?: string, tFo
     fig.innerHTML = "";
     return;
   }
-  const quart = forme !== "droit";
-  // Le quart gauche est le miroir du droit.
-  const flip = quart && forme === "quart-g" ? ' transform="matrix(-1 0 0 1 150 0)"' : "";
-  fig.innerHTML = `<svg viewBox="0 0 150 100" aria-hidden="true"><g${flip}>${SKETCH[key].svg(quart, tForme === "L")}</g></svg><figcaption>${SKETCH[key].text}</figcaption>`;
+  fig.innerHTML = `${sketchSVG(key, forme, tForme)!}<figcaption>${SKETCH[key].text}</figcaption>`;
 }
