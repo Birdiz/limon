@@ -111,6 +111,8 @@ const PLAN_STYLE: Record<PlanRole, Stroke> = {
   "pl-num": {},
   "pl-ech": { width: 1.1 },
   "pl-echtxt": {},
+  "pl-ech-cote": { width: 0.8 },
+  "pl-echtxt-cote": {},
   "pl-dim": { stroke: C.muted, width: 0.4 },
   "pl-dimtxt": {},
 };

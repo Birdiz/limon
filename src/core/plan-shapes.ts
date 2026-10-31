@@ -1,5 +1,5 @@
 import { fmt } from "./format";
-import type { Stair, Status } from "./stair";
+import { echSidesShown, echStatus, type Stair, type Status } from "./stair";
 import { V, type Pt } from "./vec";
 
 /** Rôle d'un élément du plan, qui décide de son aspect (classe CSS à l'écran, couleurs dans la fiche PDF). */
@@ -14,6 +14,8 @@ export type PlanRole =
   | "pl-num"
   | "pl-ech"
   | "pl-echtxt"
+  | "pl-ech-cote"
+  | "pl-echtxt-cote"
   | "pl-dim"
   | "pl-dimtxt";
 
@@ -138,7 +140,24 @@ export function planShapes(R: Stair): PlanDrawing {
       text: String(t.j),
     });
   });
-  // Point le plus bas sous le plancher
+  // Point le plus bas sous le plancher ; sur grand écran et dans la fiche, aussi celui de chaque côté.
+  if (R.ech && echSidesShown(R))
+    for (const e of Object.values(R.echCotes)) {
+      if (!e || V.len(V.sub(e.pt, R.ech.pt)) < 1) continue;
+      const q = T(e.pt),
+        s = echStatus(e);
+      shapes.push({ k: "circle", role: "pl-ech-cote", c: q, r: fs * 0.3, fine: true, s });
+      shapes.push({
+        k: "text",
+        role: "pl-echtxt-cote",
+        at: [q[0] + mx * fs * 0.55, q[1]],
+        size: fs * 0.56,
+        halo: fs * 0.22,
+        anchor: mx > 0 ? "start" : "end",
+        text: fmt(e.c),
+        s,
+      });
+    }
   if (R.ech) {
     const q = T(R.ech.pt),
       s = R.st.ech;
