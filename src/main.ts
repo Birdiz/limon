@@ -36,6 +36,7 @@ import { leaveOldHost, storeMoved, takeMoved } from "./ui/move";
 import { LocalStore, browserStorage, newId } from "./ui/store";
 import { SyncStore } from "./ui/sync";
 import { Tabs } from "./ui/tabs";
+import { Undo } from "./ui/undo";
 
 const api = new Api();
 const atelier = new AtelierStore();
@@ -106,6 +107,7 @@ function update(): void {
     project = { ...project, params, modifie: Date.now() };
     void store.save(project);
   }
+  undo.record(params);
   const hash = paramsToHash(params);
   if (location.hash.slice(1) !== hash) history.replaceState(null, "", hash ? `#${hash}` : location.pathname);
   current = compute(params);
@@ -129,6 +131,24 @@ function schedule(): void {
   requestAnimationFrame(update);
 }
 
+/** Réglages changés d'un coup (correction d'une note, retour à l'exemple, annuler) : la saisie en attente passe avant. */
+function setParams(p: Params): void {
+  if (queued) update();
+  undo.touched(null);
+  params = p;
+  writeInputs(params);
+  update();
+}
+const undo = new Undo(
+  {
+    flush: () => {
+      if (queued) update();
+    },
+    apply: setParams,
+  },
+  params,
+);
+
 /** Croquis des cotes : celle du champ en cours de saisie, sinon la première de la section. */
 function sketches(focused = document.activeElement?.id): void {
   document.querySelectorAll<HTMLElement>("[data-sketch]").forEach((fig) => showSketch(fig, params.forme, focused));
@@ -146,6 +166,8 @@ function openProject(p: Project | null): void {
   setCNC(false);
   atelierPanel.refresh();
   update();
+  // L'historique appartient à l'escalier ouvert.
+  undo.reset(params);
 }
 
 const steps = new Steps((mode, etape) => {
@@ -254,9 +276,13 @@ startPWA(() => {
 });
 
 /* ---------- Événements ---------- */
+const edited = (e: Event) => {
+  undo.touched(e.target);
+  schedule();
+};
 for (const el of [document.querySelector<HTMLElement>(".side")!, byId("cncBody")]) {
-  el.addEventListener("input", schedule);
-  el.addEventListener("change", schedule);
+  el.addEventListener("input", edited);
+  el.addEventListener("change", edited);
 }
 document.querySelector<HTMLElement>(".side")!.addEventListener("focusin", (e) => {
   if ((e.target as HTMLElement).matches("input[type=number]")) sketches((e.target as HTMLElement).id);
@@ -270,17 +296,13 @@ byId<HTMLInputElement>("tour").addEventListener("input", (e) => {
   byId<HTMLInputElement>("B").value = String(ab.B);
 });
 byId("reset").addEventListener("click", () => {
-  params = { ...DEFAULTS };
-  writeInputs(params);
-  schedule();
+  setParams({ ...DEFAULTS });
 });
 byId("notes").addEventListener("click", (ev) => {
   const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>("button[data-fix]");
   const fix = btn && current?.ok ? current.stair.notes[Number(btn.dataset.fix)]?.[2] : undefined;
   if (!fix) return;
-  params = { ...params, ...fix.set };
-  writeInputs(params);
-  schedule();
+  setParams({ ...params, ...fix.set });
 });
 /** Un lien de projet devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert. */
 async function openShared(p: Params): Promise<void> {
