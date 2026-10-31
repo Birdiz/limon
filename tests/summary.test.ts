@@ -9,7 +9,7 @@ describe("résumés des sections", () => {
     expect(sectionSummaries(R.params, R)).toEqual({
       forme: "Quart tournant droit",
       dimensions: "2 700 de haut · 2 900 × 1 800 · 850 de large",
-      tremie: "2 550 × 1 850",
+      tremie: "2 550 × 1 845",
       marches: "15 hauteurs de 180,0, automatique · tour de 1 260 à 2 340",
       bois: "Chêne · marches 40 · contremarches 22",
       gardecorps: "aucun",

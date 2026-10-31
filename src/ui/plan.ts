@@ -7,7 +7,7 @@ const raw = (q: Pt) => `${q[0]},${q[1]}`;
 const NS = ' vector-effect="non-scaling-stroke"';
 
 function shapeSVG(s: PlanShape): string {
-  const cls = "s" in s && s.s ? `${s.role} ${s.s}` : s.role;
+  const cls = ("s" in s && s.s ? `${s.role} ${s.s}` : s.role) + (s.detail ? " pl-detail" : "");
   switch (s.k) {
     case "poly":
       return s.fine
@@ -21,7 +21,7 @@ function shapeSVG(s: PlanShape): string {
       return `<path class="${cls}"${NS} d="${s.segs.map(([a, b]) => `M${raw(a)}L${raw(b)}`).join("")}"/>`;
     case "text":
       return s.rot !== undefined
-        ? `<text class="${cls}" font-size="${s.size}" text-anchor="${s.anchor}" dominant-baseline="central" transform="translate(${raw(s.at)}) rotate(${s.rot})">${s.text}</text>`
+        ? `<text class="${cls}" font-size="${s.size}" text-anchor="${s.anchor}" dominant-baseline="central"${s.halo ? ` stroke-width="${s.halo}"` : ""} transform="translate(${raw(s.at)}) rotate(${s.rot})">${s.text}</text>`
         : `<text class="${cls}" x="${s.at[0]}" y="${s.at[1]}" font-size="${s.size}" stroke-width="${s.halo}" text-anchor="${s.anchor}" dominant-baseline="central">${s.text}</text>`;
   }
 }

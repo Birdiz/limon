@@ -20,26 +20,29 @@ export type PlanRole =
   | "pl-dim"
   | "pl-dimtxt";
 
-/** Éléments du plan, déjà dans le repère du dessin (montée vers le haut, y vers le bas). */
+/** Éléments du plan, déjà dans le repère du dessin (montée vers le haut, y vers le bas) ;
+    detail : élément secondaire, masqué sur téléphone. */
 export type PlanShape =
   /** Polygone ; fine : trait d'épaisseur constante, coordonnées au dixième. */
-  | { k: "poly"; role: PlanRole; pts: Pt[]; fine: boolean }
-  | { k: "line"; role: PlanRole; pts: Pt[] }
-  | { k: "circle"; role: PlanRole; c: Pt; r: number; fine: boolean; s?: Status }
-  /** Segments de cote. */
-  | { k: "path"; role: PlanRole; segs: [Pt, Pt][] }
-  /** Texte centré verticalement ; halo : épaisseur du détourage ; rot : texte tourné autour de at. */
-  | {
-      k: "text";
-      role: PlanRole;
-      at: Pt;
-      size: number;
-      text: string;
-      anchor: "start" | "middle" | "end";
-      halo?: number;
-      rot?: number;
-      s?: Status;
-    };
+  (
+    | { k: "poly"; role: PlanRole; pts: Pt[]; fine: boolean }
+    | { k: "line"; role: PlanRole; pts: Pt[] }
+    | { k: "circle"; role: PlanRole; c: Pt; r: number; fine: boolean; s?: Status }
+    /** Segments de cote. */
+    | { k: "path"; role: PlanRole; segs: [Pt, Pt][] }
+    /** Texte centré verticalement ; halo : épaisseur du détourage ; rot : texte tourné autour de at. */
+    | {
+        k: "text";
+        role: PlanRole;
+        at: Pt;
+        size: number;
+        text: string;
+        anchor: "start" | "middle" | "end";
+        halo?: number;
+        rot?: number;
+        s?: Status;
+      }
+  ) & { detail?: boolean };
 
 export interface PlanDrawing {
   shapes: PlanShape[];
@@ -121,6 +124,15 @@ export function planShapes(R: Stair): PlanDrawing {
       [e1[0] - ah * Math.cos(ang + 0.4), e1[1] - ah * Math.sin(ang + 0.4)],
     ],
   });
+  // Numéros de marche, flèche d'arrivée, repères d'échappée et leurs étiquettes : les cotes posées sur le dessin les évitent.
+  type Box = [number, number, number, number];
+  const occupe: Box[] = [];
+  const boite = (q: Pt, w: number, h: number): Box => [q[0] - w / 2, q[1] - h / 2, q[0] + w / 2, q[1] + h / 2];
+  const largeur = (text: string, size: number) => text.length * size * 0.6;
+  const etiquette = (q: Pt, dx: number, size: number, text: string) => {
+    const w = dx + largeur(text, size);
+    occupe.push(boite([q[0] + (mx * w) / 2, q[1]], w, size));
+  };
   // Numéros de marche
   R.treads.forEach((t) => {
     // Autour d'un palier, les nez ne sont plus espacés d'un giron sur la ligne de foulée.
@@ -135,7 +147,9 @@ export function planShapes(R: Stair): PlanDrawing {
       anchor: "middle",
       text: String(t.j),
     });
+    occupe.push(boite(q, largeur(String(t.j), fs * 0.72), fs * 0.72));
   });
+  occupe.push(boite(e1, ah * 2, ah * 2));
   // Point le plus bas sous le plancher ; sur grand écran et dans la fiche, aussi celui de chaque côté.
   if (R.ech && echSidesShown(R))
     for (const e of Object.values(R.echCotes)) {
@@ -153,6 +167,7 @@ export function planShapes(R: Stair): PlanDrawing {
         text: fmt(e.c),
         s,
       });
+      etiquette(q, fs * 0.55, fs * 0.56, fmt(e.c));
     }
   if (R.ech) {
     const q = T(R.ech.pt),
@@ -168,12 +183,15 @@ export function planShapes(R: Stair): PlanDrawing {
       text: `échappée ${fmt(R.ech.c)}`,
       s,
     });
+    etiquette(q, fs * 0.7, fs * 0.62, `échappée ${fmt(R.ech.c)}`);
   }
-  // Cotes
-  const dim = (a: Pt, b: Pt, o: Pt, label: string) => {
-    const d = R.stringers[0]!.width + fs * 1.6;
-    const A2 = V.add(a, V.mul(o, d)),
-      B2 = V.add(b, V.mul(o, d));
+  // Cotes. at : position de la ligne de cote le long de o ; par défaut, au premier rang, à l'écart des limons.
+  // detail : masquée sur téléphone, où les réglages la donnent. Texte détouré, lisible même sur un trait.
+  const d1 = R.stringers[0]!.width + fs * 1.6,
+    d2 = d1 + fs * 1.9;
+  const dim = (a: Pt, b: Pt, o: Pt, label: string, at?: number, detail = false) => {
+    const A2 = V.add(a, V.mul(o, at === undefined ? d1 : at - V.dot(a, o))),
+      B2 = V.add(b, V.mul(o, at === undefined ? d1 : at - V.dot(b, o)));
     const ta = T(a),
       tb = T(b),
       tA = T(A2),
@@ -196,6 +214,7 @@ export function planShapes(R: Stair): PlanDrawing {
     if (deg > 90) deg -= 180;
     if (deg <= -90) deg += 180;
     const mid = T(V.add(V.mul(V.add(A2, B2), 0.5), V.mul(o, fs * 0.55)));
+    const fin = detail ? { detail } : {};
     shapes.push({
       k: "path",
       role: "pl-dim",
@@ -204,11 +223,41 @@ export function planShapes(R: Stair): PlanDrawing {
         [tb, tB3],
         [tA, tB],
       ],
+      ...fin,
     });
-    shapes.push({ k: "path", role: "pl-dim", segs: [tick(tA)] });
-    shapes.push({ k: "path", role: "pl-dim", segs: [tick(tB)] });
-    shapes.push({ k: "text", role: "pl-dimtxt", at: mid, size: fs * 0.62, anchor: "middle", rot: deg, text: label });
+    shapes.push({ k: "path", role: "pl-dim", segs: [tick(tA)], ...fin });
+    shapes.push({ k: "path", role: "pl-dim", segs: [tick(tB)], ...fin });
+    shapes.push({
+      k: "text",
+      role: "pl-dimtxt",
+      at: mid,
+      size: fs * 0.62,
+      anchor: "middle",
+      rot: deg,
+      text: label,
+      halo: fs * 0.22,
+      ...fin,
+    });
   };
+  // Étiquette d'une cote parallèle à un axe, dans le repère du dessin ; libre : elle ne touche aucun numéro ni repère.
+  const texte = (a: Pt, b: Pt, o: Pt, at: number, label: string): Box => {
+    const m = V.mul(V.add(a, b), 0.5),
+      c = T(V.add(m, V.mul(o, at - V.dot(m, o) + fs * 0.55))),
+      w = largeur(label, fs * 0.62);
+    return Math.abs(o[0]) > 0.5 ? boite(c, fs * 0.62, w) : boite(c, w, fs * 0.62);
+  };
+  const libre = (b: Box, e = fs * 0.3) =>
+    occupe.every((c) => b[2] + e <= c[0] || c[2] + e <= b[0] || b[3] + e <= c[1] || c[3] + e <= b[1]);
+  // Ligne de cote posée sur le dessin : la plus proche de at, entre lo et hi, dont l'étiquette est libre.
+  const place = (a: Pt, b: Pt, o: Pt, at: number, label: string, lo: number, hi: number) => {
+    for (let k = 0; k <= 60; k++)
+      for (const v of k ? [at + k * fs * 0.1, at - k * fs * 0.1] : [at])
+        if (v >= lo && v <= hi && libre(texte(a, b, o, v, label))) return v;
+    return at;
+  };
+  // Cote posée sur le dessin, masquée sur téléphone.
+  const dedans = (a: Pt, b: Pt, o: Pt, label: string, at: number, lo: number, hi: number) =>
+    dim(a, b, o, label, place(a, b, o, at, label, lo, hi), true);
   if (R.tours === 2) {
     dim([0, 0], [0, R.A], [-1, 0], fmt(R.A));
     dim([0, R.A], [R.C, R.A], [0, 1], fmt(R.C));
@@ -220,6 +269,57 @@ export function planShapes(R: Stair): PlanDrawing {
     dim([0, R.A], [R.B, R.A], [0, 1], fmt(R.B));
   } else dim([0, 0], [0, R.L], [-1, 0], fmt(R.L));
   dim([0, 0], [R.W, 0], [0, -1], fmt(R.W));
+
+  // Trémie, au deuxième rang : le long du côté départ, depuis le départ ; en travers, depuis le mur du départ
+  // (x = −el) ; en U, depuis le mur du fond quand elle ne l'atteint pas. Cotes de la trémie dessinée : celles retenues,
+  // bornées par les murs.
+  const { x0: tx0, x1: tx1, y0: ty0, y1: ty1 } = R.tre,
+    el = R.params.el,
+    murFond = R.A + el;
+  const left: Pt = [-1, 0],
+    up: Pt = [0, 1],
+    atTop = R.quart ? R.A + d2 : ty1 + d1;
+  if (Math.abs(ty0) >= 1) dim([0, 0], [tx0, ty0], left, fmt(Math.abs(ty0)), d2, true);
+  dim([tx0, ty0], [tx0, ty1], left, `trémie ${fmt(ty1 - ty0)}`, d2);
+  if (R.tours === 2 && ty1 < murFond - 1) dim([tx0, ty1], [-el, murFond], left, fmt(murFond - ty1), d2, true);
+  if (tx0 > -el + 1) dim([-el, ty1], [tx0, ty1], up, fmt(tx0 + el), atTop, true);
+  dim([tx0, ty1], [tx1, ty1], up, `trémie ${fmt(tx1 - tx0)}`, atTop);
+  // Branches du L et du U, dans la trémie, mesurées depuis le mur jusqu'au coin du plancher qui reste : en L, près du
+  // bord du plancher d'arrivée ; en U, sous la bande du fond, ce bord étant près du départ et de ses cotes.
+  const tp = R.trePoly;
+  if (tp.length === 6) {
+    const xa = tp[1]![0],
+      yb = tp[2]![1],
+      bD = `branche ${fmt(xa - tx0)}`,
+      bA = `branche ${fmt(ty1 - yb)}`;
+    dedans([tx0, ty0], [xa, ty0], up, bD, ty0 + fs * 1.4, ty0 + fs * 0.8, yb - fs * 1.2);
+    dedans([tx1, yb], [tx1, ty1], left, bA, fs * 1.4 - tx1, fs * 0.8 - tx1, -xa - fs * 1.2);
+  } else if (tp.length === 8) {
+    const xa = tp[1]![0],
+      yb = tp[2]![1],
+      xb = tp[3]![0],
+      down: Pt = [0, -1],
+      [lo, hi] = [fs * 0.8 - yb, -ty0 - fs * 1.2];
+    dedans([tx0, yb], [xa, yb], down, `branche ${fmt(xa - tx0)}`, fs * 1.4 - yb, lo, hi);
+    dedans([xb, yb], [tx1, yb], down, `branche ${fmt(tx1 - xb)}`, fs * 1.4 - yb, lo, hi);
+    dedans([xa, yb], [xa, ty1], [1, 0], `bande ${fmt(ty1 - yb)}`, xa + fs * 1.4, xa + fs * 0.8, xb - fs * 1.2);
+  }
+
+  // Giron, sur une marche droite (nez parallèles) : de nez à nez sur la ligne de foulée, coté du côté du jour, hors du limon ;
+  // dans la marche, entre le jour et la foulée, quand le jour du U est trop étroit pour la cote. Sur la marche la plus
+  // proche du départ, après la première, dont l'étiquette est libre.
+  const dehors = R.tours < 2 || R.C - 2 * R.W - 2 * R.params.el > 2 * d1;
+  const girons = R.treads.flatMap((t) => {
+    const a = R.lines[t.j - 1]!,
+      b = R.lines[t.j]!;
+    if (t.balanced || t.palier || V.dot(a.dir, b.dir) < 1 - 1e-9) return [];
+    const o = dehors ? V.mul(a.dir, -1) : a.dir,
+      at = V.dot(a.Q, o) + (dehors ? d1 : V.len(V.sub(a.P, a.Q)) / 2 - fs * 0.3),
+      label = `giron ${fmt(V.dot(V.sub(b.P, a.P), a.nr), 1)}`;
+    return [{ j: t.j, a: a.Q, b: b.Q, o, at, label, libre: libre(texte(a.Q, b.Q, o, at, label)) }];
+  });
+  const gm = girons.find((c) => c.j > 1 && c.libre) ?? girons.find((c) => c.libre) ?? girons[0];
+  if (gm) dim(gm.a, gm.b, gm.o, gm.label, gm.at);
 
   const xs = pts.map((q) => q[0]),
     ys = pts.map((q) => q[1]);
