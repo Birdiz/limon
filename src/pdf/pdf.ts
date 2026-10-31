@@ -106,6 +106,8 @@ export interface TextStyle {
   rot?: number;
   /** Détourage sous le texte, pour le détacher d'un trait. */
   halo?: { color: RGB; width: number };
+  /** Lettres seulement tracées, de cette épaisseur, pour laisser voir ce qu'elles couvrent. */
+  contour?: number;
 }
 
 export class Page {
@@ -173,6 +175,10 @@ export class Page {
       Y = this.y(y) + dx * sin;
     const set = `/${bold ? "F2" : "F1"} ${n(ts.size)} Tf ${n(cos)} ${n(sin)} ${n(-sin)} ${n(cos)} ${n(X)} ${n(Y)} Tm`;
     const str = pdfString(s, bold);
+    if (ts.contour) {
+      this.ops.push(`[] 0 d ${n(ts.contour)} w ${rgb(ts.color ?? [0, 0, 0])} RG BT ${set} 1 Tr ${str} Tj ET`);
+      return;
+    }
     if (ts.halo)
       this.ops.push(`[] 0 d 1 j ${n(ts.halo.width)} w ${rgb(ts.halo.color)} RG BT ${set} 1 Tr ${str} Tj ET 0 j`);
     this.ops.push(`BT ${set} 0 Tr ${rgb(ts.color ?? [0, 0, 0])} rg ${str} Tj ET`);

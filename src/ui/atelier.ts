@@ -170,7 +170,7 @@ export interface AtelierHost {
   saved(): void;
 }
 
-/** « Mon atelier » dans le dialogue du compte : les réglages gardés d'un escalier à l'autre. */
+/** Onglet « Mon atelier » de l'accueil : les réglages gardés d'un escalier à l'autre. */
 export class AtelierPanel {
   private body = byId("atBody");
   private msg = byId("atMsg");
@@ -218,8 +218,8 @@ export class AtelierPanel {
     const cur = this.host.params();
     byId<HTMLButtonElement>("atTake").disabled = !cur;
     byId("atSum").textContent = isDefaultAtelier(d)
-      ? "comme l'exemple"
-      : `${ESSENCE_LABEL[d.ess].toLowerCase()}, marches de ${fmt(d.et)} mm, limons de ${fmt(d.el)} mm`;
+      ? "Pour l'instant, les réglages de l'escalier d'exemple."
+      : `En ce moment : ${ESSENCE_LABEL[d.ess].toLowerCase()}, marches de ${fmt(d.et)} mm, limons de ${fmt(d.el)} mm.`;
   }
 
   /** Champs lus ; un champ vide garde la valeur enregistrée. */

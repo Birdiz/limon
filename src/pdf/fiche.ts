@@ -22,6 +22,7 @@ const C = {
   ok: hex("#2e7d4f"),
   warn: hex("#856a00"),
   bad: hex("#b42318"),
+  draft: hex("#e6a8a1"),
 } satisfies Record<string, RGB>;
 const ST: Record<Status | "info", RGB> = { ok: C.ok, warn: C.warn, bad: C.bad, info: C.muted };
 
@@ -37,6 +38,8 @@ export interface FicheOptions {
   date: string;
   /** Capture de la vue 3D en JPEG, si elle est disponible. */
   vue3d?: { data: Uint8Array; w: number; h: number };
+  /** Escalier pas encore dit fini : mention en tête et filigrane sur chaque page. */
+  brouillon?: boolean;
 }
 
 const mm = (v: number, d = 0) => `${fmt(v, d)} mm`;
@@ -98,9 +101,20 @@ function logo(pg: Page, x: number, y: number, s: number): void {
   pg.path([P(88.5, 78.8), P(92.6, 66.4), P(79, 69.8)], { fill: C.chalk }, true);
 }
 
-function footer(pg: Page, nom: string, i: number, count: number): void {
-  pg.text(M, A4.h - 24, `Quart de tour · ${nom}`, { size: 7.5, color: C.muted });
+function footer(pg: Page, o: FicheOptions, i: number, count: number): void {
+  pg.text(M, A4.h - 24, `Quart de tour · ${o.nom}`, { size: 7.5, color: C.muted });
   pg.text(A4.w - M, A4.h - 24, `page ${i}/${count}`, { size: 7.5, color: C.muted, anchor: "end" });
+  // Filigrane en lettres creuses, posé en dernier : il ne cache rien de la page. Le long de la diagonale ;
+  // la ligne de base descend d'une demi-hauteur de capitale pour centrer les lettres sur la page.
+  if (o.brouillon)
+    pg.text(A4.w / 2 + 29, A4.h / 2 + 20, "BROUILLON", {
+      size: 96,
+      bold: true,
+      color: C.draft,
+      rot: -55,
+      anchor: "middle",
+      contour: 1.4,
+    });
 }
 
 const PLAN_STYLE: Record<PlanRole, Stroke> = {
@@ -260,7 +274,11 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   // Bandeau de la marque, comme l'en-tête de la page : logo et nom à gauche, date à droite.
   logo(pg, M, 22, 22);
   pg.text(M + 28, 39, "QUART DE TOUR", { size: 11, bold: true, color: C.ink });
-  pg.text(A4.w - M, 33, `Fiche escalier · ${o.date}`, { size: 8.5, color: C.muted, anchor: "end" });
+  pg.text(A4.w - M, 33, `Fiche escalier${o.brouillon ? " · brouillon" : ""} · ${o.date}`, {
+    size: 8.5,
+    color: C.muted,
+    anchor: "end",
+  });
   pg.text(A4.w - M, 44, "quart-de-tour.fr", { size: 8.5, color: C.muted, anchor: "end" });
   pg.path(
     [
@@ -381,7 +399,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     frame(pg, M, y, CW, boxH, "Plan");
     drawPlan(pg, R, M + 10, y + 26, CW - 20, boxH - 36);
   }
-  footer(pg, o.nom, 1, PAGES);
+  footer(pg, o, 1, PAGES);
 
   /* ---------- Page 2 ---------- */
   const p2 = doc.page();
@@ -472,7 +490,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   } else p2.text(M, y + 16.5, "Cotes en millimètres.", { size: 8, color: C.muted });
 
   wrap(DISCLAIMER, 7.5, CW).forEach((ln, i) => p2.text(M, footY + 14 + i * 10, ln, { size: 7.5, color: C.muted }));
-  footer(p2, o.nom, 2, PAGES);
+  footer(p2, o, 2, PAGES);
 
   /* ---------- Page 3 ---------- */
   const p3 = doc.page();
@@ -524,7 +542,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     lines.forEach((ln, i) => p3.text(M + 12, y + i * 12.5, ln, { size: 9.5, color: C.ink }));
     y += lines.length * 12.5 + 3;
   }
-  footer(p3, o.nom, 3, PAGES);
+  footer(p3, o, 3, PAGES);
 
   limons.pages.forEach((ids, i) => limonPage(doc, R, limons, ids, o.nom, 4 + i, PAGES));
 

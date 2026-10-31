@@ -18,13 +18,15 @@ interface SyncState {
    * L'e-mail plutôt que l'identifiant : un compte supprimé puis recréé avec la même adresse garde ses projets.
    */
   dernier: string | null;
+  /** Un compte a déjà servi sur cet appareil, même déconnecté : on propose de s'y connecter plutôt que d'en créer un. */
+  connu: boolean;
   /** Version de chaque projet que le serveur avait au dernier échange. */
   serveur: Record<string, number>;
   /** Suppressions pas encore envoyées, avec leur date. */
   supprimes: Record<string, number>;
 }
 
-const EMPTY: SyncState = { compte: null, dernier: null, serveur: {}, supprimes: {} };
+const EMPTY: SyncState = { compte: null, dernier: null, connu: false, serveur: {}, supprimes: {} };
 
 export interface SyncStatus {
   compte: Compte | null;
@@ -62,6 +64,8 @@ export class SyncStore implements ProjectStore {
       raw = null;
     }
     this.state = { ...EMPTY, ...raw };
+    // État enregistré avant `connu`.
+    this.state.connu ||= !!this.state.dernier;
   }
 
   /** Échanges au démarrage, au retour du réseau, au retour sur la page et toutes les 5 minutes. */
@@ -121,6 +125,11 @@ export class SyncStore implements ProjectStore {
     return this.state.compte;
   }
 
+  /** Un compte a déjà servi sur cet appareil, connecté ou non. */
+  known(): boolean {
+    return this.state.connu;
+  }
+
   async status(): Promise<SyncStatus> {
     return {
       compte: this.state.compte,
@@ -141,6 +150,7 @@ export class SyncStore implements ProjectStore {
     }
     this.state.compte = compte;
     this.state.dernier = compte.email;
+    this.state.connu = true;
     this.persist();
     this.emit(changed);
     await this.sync();
@@ -163,7 +173,7 @@ export class SyncStore implements ProjectStore {
     }
     this.emit(await this.removeSynced());
     this.atelier?.clear();
-    this.reset();
+    this.reset(true);
   }
 
   /** Retire de l'appareil les projets dont le serveur a la dernière version. */
@@ -182,7 +192,7 @@ export class SyncStore implements ProjectStore {
   /** Compte supprimé : les projets restent sur cet appareil, comme avant d'avoir un compte. */
   async deleteAccount(): Promise<void> {
     await this.api.deleteAccount();
-    this.reset();
+    this.reset(false);
   }
 
   /** La session a expiré ou le compte n'existe plus. */
@@ -296,9 +306,9 @@ export class SyncStore implements ProjectStore {
     this.emit(changed);
   }
 
-  private reset(): void {
+  private reset(connu: boolean): void {
     clearTimeout(this.timer);
-    this.state = { ...EMPTY, serveur: {}, supprimes: {} };
+    this.state = { ...EMPTY, connu, serveur: {}, supprimes: {} };
     this.offline = false;
     this.persist();
     this.emitStatus();

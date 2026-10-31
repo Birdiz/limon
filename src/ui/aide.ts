@@ -50,7 +50,7 @@ export class Aide {
       else if (t.closest(".aide .aidex")) this.close(true);
       else if (this.open && !this.box.contains(t)) this.close(false);
     });
-    // En capture : Échap ferme la bulle sans fermer le dialogue qui la contient.
+    // En capture : Échap ferme la bulle, et rien d'autre.
     document.addEventListener(
       "keydown",
       (e) => {
