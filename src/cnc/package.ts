@@ -4,6 +4,7 @@ import { PERCAGE, TENON, type Stair } from "../core/stair";
 import { postTenon } from "./railing";
 import { treadsCSV } from "../core/sheet";
 import { buildCNC, type CNC } from "./build";
+import { cutListCSV } from "./cutlist";
 import { toDXF } from "./dxf";
 import { makeZip, type ZipFile } from "./zip";
 
@@ -85,6 +86,7 @@ export function readme(R: Stair): string {
           ]
         : []),
       "fiche-marches.csv : girons et longueurs de nez de chaque marche.",
+      "liste-debit.csv : liste de débit (essence, épaisseur, cotes brutes, quantité, volume) pour le tableur.",
       "",
       R.quart
         ? "À vérifier avant usinage : sens des pièces, fixation des limons au sol et au plancher haut."
@@ -93,7 +95,7 @@ export function readme(R: Stair): string {
   );
 }
 
-/** Contenu de l'archive d'export. Le CSV commence par un BOM pour qu'Excel lise l'UTF-8. */
+/** Contenu de l'archive d'export. Les CSV commencent par un BOM pour qu'Excel lise l'UTF-8. */
 export function exportFiles(R: Stair, cnc: CNC = buildCNC(R)): ZipFile[] {
   return [
     { name: "marches.dxf", data: toDXF(cnc.treadEnts) },
@@ -102,6 +104,7 @@ export function exportFiles(R: Stair, cnc: CNC = buildCNC(R)): ZipFile[] {
     ...(R.newel ? [{ name: "poteau.dxf", data: toDXF(cnc.postEnts) }] : []),
     ...(cnc.rail ? [{ name: "garde-corps.dxf", data: toDXF(cnc.rail.ents) }] : []),
     { name: "fiche-marches.csv", data: "\ufeff" + treadsCSV(R) },
+    { name: "liste-debit.csv", data: "\ufeff" + cutListCSV(cnc, R) },
     { name: "LISEZMOI.txt", data: readme(R) },
   ];
 }

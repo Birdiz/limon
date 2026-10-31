@@ -28,5 +28,6 @@ poteau.dxf : poteau de 100 x 100 mm, du sol à 2 120 mm, affleurant les limons
   TEXTE       numéro et rôle de chaque face
 
 fiche-marches.csv : girons et longueurs de nez de chaque marche.
+liste-debit.csv : liste de débit (essence, épaisseur, cotes brutes, quantité, volume) pour le tableur.
 
 À vérifier avant usinage : sens des pièces, fixation des limons au sol et au plancher haut.
