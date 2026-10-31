@@ -248,6 +248,10 @@
             entreprise si vous les remplissez) et la clé publique de vos passkeys : Face ID et l'empreinte ne quittent
             pas votre appareil. Ces données servent seulement à vous connecter et à retrouver votre travail sur vos
             appareils ; ni publicité, ni mesure d'audience.
+            <span data-devis
+              >Le nom et l'adresse des clients de vos devis sont gardés avec l'escalier, pour être imprimés sur le
+              devis, et partent avec lui.</span
+            >
           </p>
           <p>
             Hébergement chez Railway, dans un centre de données à Amsterdam ; Railway est une société américaine, liée
@@ -831,6 +835,21 @@
       <div class="dvhead">
         <h1 id="dvTitle">Devis</h1>
         <p class="lead" id="dvLead"></p>
+        <p class="dvetat"><span class="chip" id="dvChip"></span> <span id="dvEtatTxt"></span></p>
+      </div>
+      <div class="actions dvactions" id="dvActions">
+        <button class="btn" id="dvPdf" type="button">Télécharger le brouillon</button>
+        <button class="btn go" id="dvRemettre" type="button">Remettre au client</button>
+        <button class="btn" id="dvAccepte" type="button">Accepté par le client</button>
+        <button class="btn" id="dvRefuse" type="button">Refusé</button>
+        <button class="btn" id="dvSansReponse" type="button">Pas encore de réponse</button>
+        <button class="btn" id="dvRouvrir" type="button">Modifier le devis</button>
+        <button class="btn" id="dvAnnuler" type="button">Revenir à la version remise</button>
+      </div>
+      <div class="notes" id="dvBloq"></div>
+      <div class="note bad dvneed" id="dvMsg" hidden>
+        <span id="dvMsgTxt"></span>
+        <button class="btn" id="dvCompte" type="button" hidden>Me connecter</button>
       </div>
       <div class="note warn dvneed" id="dvNeed" hidden>
         <span id="dvNeedTxt"></span>
@@ -880,6 +899,19 @@
               ><label class="check"><input type="checkbox" id="dvDetail" /> détaillée par poste</label>
             </div>
           </div>
+          <div class="group">
+            <h3>Conditions</h3>
+            <div class="row">
+              <label for="dvAcompte">Acompte à la commande<small>vide s'il n'y en a pas</small></label>
+              <div class="num long">
+                <input id="dvAcompte" type="number" inputmode="decimal" step="any" min="0" max="100" /><span>%</span>
+              </div>
+            </div>
+            <div class="row texte">
+              <label for="dvDelai">Début et durée des travaux</label>
+              <input id="dvDelai" type="text" maxlength="200" placeholder="semaine 48, deux jours de pose" />
+            </div>
+          </div>
         </div>
         <div class="dvmain">
           <div class="dvlines" id="dvLines"></div>
@@ -911,6 +943,7 @@
             <summary>Pour vous seul : marge et heures</summary>
             <div id="dvSelfBody"></div>
           </details>
+          <div class="dvversions" id="dvVersions" hidden></div>
         </div>
       </div>
     </section>

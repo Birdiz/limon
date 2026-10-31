@@ -1794,6 +1794,49 @@ body[data-tab="devis"] .work,
   font-size: 13px;
   text-align: left;
 }
+/* État du devis, ses boutons, et les versions déjà remises */
+.dvetat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+#dvBloq:empty {
+  display: none;
+}
+/* Version remise : figée, sans les boutons des lignes */
+.dvgrid.fige .dl-act,
+.dvgrid.fige .dl-head span:last-child {
+  visibility: hidden;
+}
+.dvversions h3 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.dvversions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dvversions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.dvv-tot {
+  margin-left: auto;
+  font-family: var(--f-data);
+  font-variant-numeric: tabular-nums;
+}
 .dvself {
   border: 1px dashed var(--rule);
   border-radius: 10px;

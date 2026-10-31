@@ -84,6 +84,16 @@ const MIGRATIONS = [
   );`,
   // Devis : tarifs et fiche de l'entreprise, à côté des réglages de l'atelier.
   `alter table ateliers add column tarifs jsonb, add column entreprise jsonb;`,
+  // Numéros des devis remis : un par escalier, suite continue par compte et par année.
+  `create table devis_numeros (
+    compte uuid not null references comptes on delete cascade,
+    projet text not null,
+    annee int not null,
+    rang int not null,
+    cree timestamptz not null default now(),
+    primary key (compte, projet),
+    unique (compte, annee, rang)
+  );`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */

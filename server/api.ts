@@ -430,6 +430,34 @@ export function api(cfg: ApiConfig): Hono<Env> {
     return c.json(await atelierOf(compte));
   });
 
+  /* ---------- Devis ---------- */
+
+  /**
+   * Numéro du devis d'un escalier, donné à sa première remise au client : le suivant de l'année pour le compte,
+   * sans trou. Redemandé (nouvelle version, envoi répété après une coupure), c'est le même.
+   */
+  app.post("/devis/numero", auth, async (c) => {
+    const projet = (await body(c)).projet;
+    if (typeof projet !== "string" || !projet || projet.length > 100) return err(c, 400, "Demande mal formée.");
+    const compte = c.get("compte");
+    for (let essai = 0; essai < 5; essai++) {
+      const [n] = await db.query<{ annee: number; rang: number }>(
+        "select annee, rang from devis_numeros where compte = $1 and projet = $2",
+        [compte, projet],
+      );
+      if (n) return c.json({ numero: `${n.annee}-${String(n.rang).padStart(4, "0")}` });
+      // Deux demandes en même temps pour le même rang : l'une n'insère rien et recommence.
+      await db.query(
+        `insert into devis_numeros (compte, projet, annee, rang)
+         select $1, $2, y, coalesce((select max(rang) from devis_numeros where compte = $1 and annee = y), 0) + 1
+         from (select extract(year from now() at time zone 'Europe/Paris')::int as y) a
+         on conflict do nothing`,
+        [compte, projet],
+      );
+    }
+    return err(c, 503, "Le numéro n'a pas pu être donné. Réessayez dans un instant.");
+  });
+
   app.post("/projets/lire", auth, async (c) => {
     const ids = (await body(c)).ids;
     if (!Array.isArray(ids) || ids.length > MAX_BATCH || ids.some((i) => typeof i !== "string"))

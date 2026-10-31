@@ -1,7 +1,15 @@
 import { fmt } from "./format";
-import type { Essence } from "./params";
+import { DEFAULTS, sanitizeParams, type Essence, type Params } from "./params";
 import { ESSENCE_LABEL } from "./summary";
-import { POSTE_LABEL, POSTES, type Poste, type Tarifs } from "./tarifs";
+import {
+  POSTE_LABEL,
+  POSTES,
+  sanitizeEntreprise,
+  sanitizeTarifs,
+  type Entreprise,
+  type Poste,
+  type Tarifs,
+} from "./tarifs";
 
 /*
  * Calcul du devis : des quantités de l'escalier et des tarifs de l'atelier, les lignes, la remise, la TVA et les
@@ -68,6 +76,10 @@ export interface Saisie {
   corrections: Record<string, Correction>;
   libres: LigneLibre[];
   remise: { pct: number } | { eur: number } | null;
+  /** Acompte à la commande, en % du TTC ; aucun par défaut. */
+  acompte: number | null;
+  /** Date de début et durée des travaux, en clair (« semaine 48, deux jours de pose »). */
+  delai: string;
 }
 
 /** Client du devis : ce que le document imprimera. */
@@ -79,10 +91,15 @@ export interface Client {
   chantier: string;
 }
 
-/** Devis d'un escalier, enregistré avec lui : le client et les réglages ; les lignes se recalculent. */
+/** Devis d'un escalier, enregistré avec lui : le client et les réglages, dont les lignes se recalculent, et les
+    versions déjà remises au client. */
 export interface DevisProjet {
   client: Client;
   saisie: Saisie;
+  /** Versions remises au client, la plus récente en dernier. */
+  remis: DevisRemis[];
+  /** Devis repris par l'artisan après la dernière remise : la version en cours est un brouillon. */
+  rouvert: boolean;
 }
 
 export const SAISIE_DEFAUT: Saisie = {
@@ -94,16 +111,20 @@ export const SAISIE_DEFAUT: Saisie = {
   corrections: {},
   libres: [],
   remise: null,
+  acompte: null,
+  delai: "",
 };
 
 export const CLIENT_VIDE: Client = { nom: "", adresse: "", chantier: "" };
 
 export function newDevis(tva: TauxTVA = 20): DevisProjet {
-  return { client: { ...CLIENT_VIDE }, saisie: { ...SAISIE_DEFAUT, tva } };
+  return { client: { ...CLIENT_VIDE }, saisie: { ...SAISIE_DEFAUT, tva }, remis: [], rouvert: false };
 }
 
 const MAX_TEXTE = 2000;
 const MAX_LIGNES = 100;
+/** Versions remises gardées pour un escalier. */
+const MAX_VERSIONS = 50;
 const MAX_MONTANT = 1e7;
 const texte = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const nombre = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= MAX_MONTANT ? v : null);
@@ -113,12 +134,13 @@ const positif = (v: unknown) => {
 };
 const obj = (v: unknown) => (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
 
-/** Devis relu (stockage, fichier ou serveur, non fiable) ; null s'il n'y en a pas. */
-export function sanitizeDevis(raw: unknown): DevisProjet | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  const c = obj(r.client),
-    s = obj(r.saisie);
+function sanitizeClient(raw: unknown): Client {
+  const c = obj(raw);
+  return { nom: texte(c.nom), adresse: texte(c.adresse, MAX_TEXTE), chantier: texte(c.chantier, MAX_TEXTE) };
+}
+
+function sanitizeSaisie(raw: unknown): Saisie {
+  const s = obj(raw);
   const corrections: Record<string, Correction> = {};
   for (const [id, v] of Object.entries(obj(s.corrections)).slice(0, MAX_LIGNES)) {
     if (!/^[a-z][a-zA-Z-]{0,40}$/.test(id)) continue;
@@ -144,19 +166,35 @@ export function sanitizeDevis(raw: unknown): DevisProjet | null {
   });
   const rm = obj(s.remise);
   const pct = positif(rm.pct),
-    eur = positif(rm.eur);
+    eur = positif(rm.eur),
+    acompte = positif(s.acompte);
   return {
-    client: { nom: texte(c.nom), adresse: texte(c.adresse, MAX_TEXTE), chantier: texte(c.chantier, MAX_TEXTE) },
-    saisie: {
-      tva: s.tva === 10 ? 10 : 20,
-      pose: s.pose !== false,
-      km: positif(s.km) ?? 0,
-      livraison: s.livraison === true,
-      faconDetail: s.faconDetail === true,
-      corrections,
-      libres,
-      remise: pct !== null ? { pct: Math.min(pct, 100) } : eur !== null ? { eur } : null,
-    },
+    tva: s.tva === 10 ? 10 : 20,
+    pose: s.pose !== false,
+    km: positif(s.km) ?? 0,
+    livraison: s.livraison === true,
+    faconDetail: s.faconDetail === true,
+    corrections,
+    libres,
+    remise: pct !== null ? { pct: Math.min(pct, 100) } : eur !== null ? { eur } : null,
+    acompte: acompte !== null && acompte > 0 ? Math.min(acompte, 100) : null,
+    delai: texte(s.delai),
+  };
+}
+
+/** Devis relu (stockage, fichier ou serveur, non fiable) ; null s'il n'y en a pas. */
+export function sanitizeDevis(raw: unknown): DevisProjet | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const remis = (Array.isArray(r.remis) ? r.remis : [])
+    .slice(-MAX_VERSIONS)
+    .map(sanitizeRemis)
+    .filter((v): v is DevisRemis => v !== null);
+  return {
+    client: sanitizeClient(r.client),
+    saisie: sanitizeSaisie(r.saisie),
+    remis,
+    rouvert: remis.length > 0 && r.rouvert === true,
   };
 }
 
@@ -189,6 +227,8 @@ export interface Devis {
   /** TVA par taux : base HT après remise, montant. */
   tva: { taux: number; base: number; montant: number }[];
   totalTTC: number;
+  /** Acompte à la commande, TTC, arrondi au centime ; null sans acompte. */
+  acompte: number | null;
   /** Ce qui manque pour que le devis soit complet (tarifs vides). Les totaux ne comptent que les lignes chiffrées. */
   aCompleter: string[];
   alertes: string[];
@@ -399,6 +439,7 @@ export function devis(Q: Quantites, T: Tarifs, S: Saisie): Devis {
   });
   const ht = tot - remise;
   const montantTVA = tvas.reduce((s, v) => s + cents(v.montant), 0);
+  const ttc = ht + montantTVA;
 
   // Déboursé : fournitures au prix d'achat, heures d'atelier et de pose.
   const achat = (prix === null ? 0 : vol * prix) + (quinc ?? 0);
@@ -408,10 +449,203 @@ export function devis(Q: Quantites, T: Tarifs, S: Saisie): Devis {
     remise: euros(remise),
     totalHT: euros(ht),
     tva: tvas,
-    totalTTC: euros(ht + montantTVA),
+    totalTTC: euros(ttc),
+    acompte: S.acompte ? euros(Math.round((ttc * S.acompte) / 100)) : null,
     aCompleter: aCompleter.filter((m, i) => aCompleter.indexOf(m) === i),
     alertes,
     facon: fab.map(([k, q]) => ({ poste: k, q, h: T.heures[k] })),
     debourse: { fournitures: euros(cents(achat)), heures: round((hFab.h ?? 0) + (hPose?.h ?? 0), 2) },
   };
+}
+
+/* ---------- Remise au client et suite ---------- */
+
+/** État d'une version remise ; « expiré » se lit à la date, il n'est pas enregistré. */
+export type EtatRemis = "remis" | "accepte" | "refuse";
+export type EtatDevis = "brouillon" | EtatRemis | "expire";
+
+export const ETAT_DEVIS_LABEL: Record<EtatDevis, string> = {
+  brouillon: "Brouillon",
+  remis: "Remis au client",
+  accepte: "Accepté",
+  refuse: "Refusé",
+  expire: "Expiré",
+};
+
+/**
+ * Version remise au client, figée : les réglages de l'escalier, les tarifs, l'entreprise, le client, la saisie et
+ * les lignes chiffrées, pour refaire le même document au caractère près, même après un changement de tarifs ou
+ * de calcul.
+ */
+export interface DevisRemis {
+  /** Numéro donné par le serveur, le même pour toutes les versions d'un escalier : « 2026-0012 ». */
+  numero: string;
+  /** 1, 2… */
+  version: number;
+  remisLe: number;
+  /** Durée de validité, en jours. */
+  validite: number;
+  etat: EtatRemis;
+  /** Date de l'acceptation ou du refus, 0 sinon. */
+  etatLe: number;
+  /** Nom de l'escalier. */
+  nom: string;
+  params: Params;
+  tarifs: Tarifs;
+  entreprise: Entreprise;
+  client: Client;
+  saisie: Saisie;
+  chiffrage: Devis;
+}
+
+const date = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+const texts = (v: unknown, n: number) =>
+  (Array.isArray(v) ? v : [])
+    .slice(0, n)
+    .map((x) => texte(x, MAX_TEXTE))
+    .filter(Boolean);
+
+function sanitizeChiffrage(raw: unknown): Devis {
+  const r = obj(raw);
+  const lignes: Ligne[] = (Array.isArray(r.lignes) ? r.lignes : []).slice(0, 2 * MAX_LIGNES).map((v, i) => {
+    const l = obj(v);
+    return {
+      id: texte(l.id, 60) || `ligne-${i + 1}`,
+      designation: texte(l.designation),
+      q: nombre(l.q),
+      unite: texte(l.unite, 20),
+      pu: nombre(l.pu),
+      tva: positif(l.tva) ?? 20,
+      total: nombre(l.total),
+      auto: l.auto === true,
+      corrigee: l.corrigee === true,
+    };
+  });
+  const tva = (Array.isArray(r.tva) ? r.tva : []).slice(0, 10).map((v) => {
+    const t = obj(v);
+    return { taux: positif(t.taux) ?? 0, base: nombre(t.base) ?? 0, montant: nombre(t.montant) ?? 0 };
+  });
+  const facon = (Array.isArray(r.facon) ? r.facon : [])
+    .map(obj)
+    .filter((f) => POSTES.includes(f.poste as Poste))
+    .map((f) => ({ poste: f.poste as Poste, q: positif(f.q) ?? 0, h: positif(f.h) }));
+  const d = obj(r.debourse);
+  return {
+    lignes,
+    totalLignes: nombre(r.totalLignes) ?? 0,
+    remise: nombre(r.remise) ?? 0,
+    totalHT: nombre(r.totalHT) ?? 0,
+    tva,
+    totalTTC: nombre(r.totalTTC) ?? 0,
+    acompte: nombre(r.acompte),
+    aCompleter: texts(r.aCompleter, MAX_LIGNES),
+    alertes: texts(r.alertes, MAX_LIGNES),
+    facon,
+    debourse: { fournitures: nombre(d.fournitures) ?? 0, heures: positif(d.heures) ?? 0 },
+  };
+}
+
+/** Version remise relue ; null sans numéro. */
+function sanitizeRemis(raw: unknown): DevisRemis | null {
+  const r = obj(raw);
+  if (typeof r.numero !== "string" || !/^\d{4}-\d{4,6}$/.test(r.numero)) return null;
+  const version = typeof r.version === "number" && Number.isInteger(r.version) && r.version >= 1 ? r.version : 1;
+  const etat: EtatRemis = r.etat === "accepte" || r.etat === "refuse" ? r.etat : "remis";
+  return {
+    numero: r.numero,
+    version,
+    remisLe: date(r.remisLe),
+    validite: Math.round(Math.min(positif(r.validite) ?? 30, 3650)),
+    etat,
+    etatLe: etat === "remis" ? 0 : date(r.etatLe),
+    nom: texte(r.nom, 80),
+    params: sanitizeParams(r.params),
+    tarifs: sanitizeTarifs(r.tarifs),
+    entreprise: sanitizeEntreprise(r.entreprise),
+    client: sanitizeClient(r.client),
+    saisie: sanitizeSaisie(r.saisie),
+    chiffrage: sanitizeChiffrage(r.chiffrage),
+  };
+}
+
+/** Dernier jour de validité, à minuit passé, à l'heure de l'appareil. */
+export function finValidite(r: Pick<DevisRemis, "remisLe" | "validite">): number {
+  const d = new Date(r.remisLe);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + r.validite + 1);
+  return d.getTime() - 1;
+}
+
+/** État d'une version remise à la date donnée : une version sans réponse passe « expiré » après sa validité. */
+export function etatRemis(r: DevisRemis, now: number): EtatRemis | "expire" {
+  return r.etat === "remis" && now > finValidite(r) ? "expire" : r.etat;
+}
+
+/** Mêmes réglages d'escalier, réglage par réglage. */
+export function memesParams(a: Params, b: Params): boolean {
+  return (Object.keys(DEFAULTS) as (keyof Params)[]).every((k) => a[k] === b[k]);
+}
+
+/**
+ * Version remise qui tient lieu de devis en cours, ou null quand le devis en cours est un brouillon : jamais remis,
+ * repris par l'artisan, ou escalier modifié depuis la dernière remise (une nouvelle version repart en brouillon).
+ */
+export function versionRemise(d: DevisProjet | null, params: Params): DevisRemis | null {
+  const last = d?.remis.at(-1);
+  return last && !d!.rouvert && memesParams(last.params, params) ? last : null;
+}
+
+/** Numéro de la version qu'aurait le brouillon en cours. */
+export const versionSuivante = (d: DevisProjet | null) => (d?.remis.at(-1)?.version ?? 0) + 1;
+
+/** Devis avec une version de plus, remise au client à `now`. */
+export function remettre(
+  d: DevisProjet,
+  v: Pick<DevisRemis, "numero" | "nom" | "params" | "tarifs" | "entreprise" | "chiffrage">,
+  now: number,
+): DevisProjet {
+  const r: DevisRemis = structuredClone({
+    ...v,
+    version: versionSuivante(d),
+    remisLe: now,
+    validite: v.tarifs.validite ?? 30,
+    etat: "remis",
+    etatLe: 0,
+    client: d.client,
+    saisie: d.saisie,
+  });
+  return { ...d, remis: [...d.remis, r].slice(-MAX_VERSIONS), rouvert: false };
+}
+
+/** Réponse du client notée sur une version ; « remis » efface une réponse notée par erreur. */
+export function noterReponse(d: DevisProjet, version: number, etat: EtatRemis, now: number): DevisProjet {
+  return {
+    ...d,
+    remis: d.remis.map((r) => (r.version === version ? { ...r, etat, etatLe: etat === "remis" ? 0 : now } : r)),
+  };
+}
+
+/** Ce qui empêche de remettre le devis au client ; vide quand il peut partir. */
+export function bloquants(D: Devis, d: DevisProjet, T: Tarifs, E: Entreprise): string[] {
+  const out: string[] = [];
+  if (D.aCompleter.length) out.push("les lignes à compléter");
+  if (!D.lignes.length) out.push("au moins une ligne");
+  if (!d.client.nom) out.push("le nom du client");
+  if (!d.client.adresse) out.push("l'adresse du client");
+  if (!E.nom || !E.adresse) out.push("le nom et l'adresse de votre entreprise (Mon atelier)");
+  if (T.validite === null) out.push("la durée de validité des devis (Mon atelier)");
+  return out;
+}
+
+/** Mentions de l'entreprise que le document devrait porter et qui manquent : un avertissement, pas un refus. */
+export function mentionsManquantes(E: Entreprise): string[] {
+  const out: string[] = [];
+  if (!E.forme) out.push("forme juridique");
+  if (!E.siren) out.push("SIREN");
+  if (!E.immat) out.push("immatriculation (RCS ou répertoire des métiers)");
+  if (!E.assureur || !E.contrat || !E.couverture) out.push("assurance décennale");
+  if (!E.mediateur) out.push("médiateur de la consommation");
+  if (!E.paiement) out.push("conditions de paiement");
+  if (!E.dechets) out.push("gestion des déchets");
+  return out;
 }
