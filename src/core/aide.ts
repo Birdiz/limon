@@ -38,6 +38,12 @@ const hlj: AideTexte = {
   conseil: logements,
 };
 
+const mp: AideTexte = {
+  texte:
+    "Planche posée au bord du plancher du haut, au niveau du sol fini, logée dans les limons prolongés. Sa profondeur se mesure depuis son nez ; le bord de la trémie recule d'autant.",
+  conseil: courant("mpP"),
+};
+
 export const AIDE: Partial<Record<AideKey, AideTexte>> = {
   forme: {
     texte:
@@ -82,6 +88,19 @@ export const AIDE: Partial<Record<AideKey, AideTexte>> = {
   tY: {
     texte: "Longueur de l'ouverture le long du côté départ, mesurée depuis le mur face à la montée.",
     conseil: echappee,
+  },
+  tForme: {
+    texte:
+      "Rectangle : toute l'ouverture d'un bloc. En L : le coin au-dessus du jour reste plancher, la trémie n'ouvre que deux bandes le long des murs, au-dessus des volées.",
+    conseil: echappee,
+  },
+  tbD: {
+    texte: "Largeur de la branche du L le long du côté départ, mesurée depuis le mur du départ.",
+    conseil: "Au moins la largeur de l'escalier, limon de jour et garde-corps compris.",
+  },
+  tbA: {
+    texte: "Largeur de la branche du L le long du côté arrivée, mesurée depuis le mur face à la montée.",
+    conseil: "Au moins la largeur de l'escalier, limon de jour et garde-corps compris.",
   },
   ep: {
     texte:
@@ -131,6 +150,12 @@ export const AIDE: Partial<Record<AideKey, AideTexte>> = {
     texte:
       "Planches debout qui ferment l'escalier entre deux marches, et leur épaisseur. Sans contremarches, l'escalier est ajouré.",
     conseil: courant("ecm"),
+  },
+  mp,
+  mpP: mp,
+  mpE: {
+    texte: "Épaisseur de la marche palière, qui peut différer de celle des marches pour affleurer le parquet du haut.",
+    conseil: courant("mpE"),
   },
   el: { texte: "Épaisseur des limons, les planches qui portent les marches de chaque côté.", conseil: courant("el") },
   ps: {

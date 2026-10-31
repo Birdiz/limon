@@ -153,7 +153,9 @@ const undo = new Undo(
 
 /** Croquis des cotes : celle du champ en cours de saisie, sinon la première de la section. */
 function sketches(focused = document.activeElement?.id): void {
-  document.querySelectorAll<HTMLElement>("[data-sketch]").forEach((fig) => showSketch(fig, params.forme, focused));
+  document
+    .querySelectorAll<HTMLElement>("[data-sketch]")
+    .forEach((fig) => showSketch(fig, params.forme, focused, params.tForme));
 }
 
 /** Ouvre un escalier ; null quand il n'en reste aucun : l'accueil prend alors la page. */
@@ -225,7 +227,10 @@ const atelierPanel = new AtelierPanel(atelier, {
   saved: () => store.atelierChanged(),
 });
 // Après Mon atelier, dont les lignes sont créées par le panneau.
-new Aide(() => params.forme).attach();
+new Aide(
+  () => params.forme,
+  () => params.tForme,
+).attach();
 byId("atKeep").addEventListener("click", () => atelierPanel.keep(byId("sharemsg")));
 byId("homeBtn").addEventListener("click", () => void home.show());
 byId("pjNew").addEventListener("click", () => void startNew());

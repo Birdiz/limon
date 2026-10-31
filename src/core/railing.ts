@@ -26,11 +26,16 @@ export const GC = {
   tete: 60,
 } as const;
 
-/** Tronçon de main courante au-dessus du tronçon de limon de jour idx, entre ses bouts d'aplomb u0 et u1. */
+/** Tronçon de main courante au-dessus du tronçon de limon de jour idx, du bout u0 au bout u1 (pris au dessus). */
 export interface Handrail {
   idx: number;
   u0: number;
   u1: number;
+  /** Coupe d'onglet en bout : décalage en u du dessous par rapport au dessus ; absent si le bout est d'aplomb. */
+  cut0?: number;
+  cut1?: number;
+  /** Retour horizontal au-dessus de la marche palière. */
+  retour?: boolean;
   /** Dessus : z = z0 + b·u. */
   z0: number;
   b: number;
@@ -91,6 +96,8 @@ export interface RailingInput {
   /** Nez sur la ligne de jour : abscisses curvilignes et hauteurs, du premier nez à l'arrivée. */
   noseS: readonly number[];
   noseZ: readonly number[];
+  /** Profondeur de la marche palière, 0 sans elle : la main courante y fait un retour horizontal. */
+  mpD?: number;
 }
 
 const slopeOf = (f: (u: number) => number, u: number) => f(u + 0.5) - f(u - 0.5);
@@ -136,7 +143,7 @@ function holesAt(sp: StringerPiece, u: number, z0: number, z1: number): Pt[] {
     : [[u, lo]];
 }
 
-export function railing({ p, quart, jour, cum, noseS, noseZ }: RailingInput): Railing | null {
+export function railing({ p, quart, jour, cum, noseS, noseZ, mpD = 0 }: RailingInput): Railing | null {
   if (p.gc === "aucun") return null;
   const chant = p.gcPose === "chant";
   const off = chant ? p.el / 2 : p.el + p.bs / 2;
@@ -204,8 +211,35 @@ export function railing({ p, quart, jour, cum, noseS, noseZ }: RailingInput): Ra
         t1,
       };
     }
-    handrails.push({ idx: sp.idx, u0, u1, z0, b, hv, tenon });
-
+    // Marche palière : retour horizontal à la hauteur où arrive la main courante, coupé d'onglet avec elle.
+    const zr = z0 + b * u1,
+      uE = u1 + mpD,
+      retour = last && mpD > 0 && b > 1e-6;
+    const cut = retour ? (hv - p.mcH) / b : 0;
+    handrails.push({ idx: sp.idx, u0, u1, z0, b, hv, tenon, ...(retour ? { cut1: cut } : {}) });
+    fill(sp, top, u0, u1, z0, b, hv, postA, postB, us);
+    if (retour) {
+      handrails.push({ idx: sp.idx, u0: u1, u1: uE, z0: zr, b: 0, hv: p.mcH, tenon: null, cut0: cut, retour: true });
+      const d = zr - nose(s0 + u1);
+      hMin = Math.min(hMin, d);
+      hMax = Math.max(hMax, d);
+      fill(sp, top, u1, uE, zr, 0, p.mcH, true, false, [u1, uE]);
+    }
+  });
+  /** Balustres ou montants et lisses sous la main courante de dessus z0 + b·u, de u0 à u1. */
+  function fill(
+    sp: StringerPiece,
+    top: (u: number) => number,
+    u0: number,
+    u1: number,
+    z0: number,
+    b: number,
+    hv: number,
+    postA: boolean,
+    postB: boolean,
+    us: readonly number[],
+  ): void {
+    const sec = Math.hypot(1, b);
     const under = (u: number) => z0 + b * u - hv;
     const G = p.gc === "balustres" ? GC.ecart : GC.pas - p.bs;
     const axes = spread(u0, u1, p.bs, G, postA, postB);
@@ -252,7 +286,7 @@ export function railing({ p, quart, jour, cum, noseS, noseZ }: RailingInput): Ra
             hv: hvL,
           });
     }
-  });
+  }
   return {
     type: p.gc,
     pose: p.gcPose,

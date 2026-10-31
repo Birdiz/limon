@@ -28,6 +28,8 @@ export interface StairGeom {
   treads: Tread[];
   risers: Riser[];
   stringers: StringerGeom[];
+  /** Marche palière : ligne de son nez, dessus, épaisseur et profondeur. */
+  mp?: { line: NoseLine; top: number; e: number; depth: number } | null;
 }
 
 export function cncFrame(R: Pick<StairGeom, "inner" | "outer">, p: Params): Frame {
@@ -121,6 +123,9 @@ export function stringerPockets(R: StairGeom, p: Params, F: Frame): StringerPock
       if (z0 > 0.5) need = Math.max(need, topAt(u0) - lo + BOIS_SOUS_LOGEMENT, topAt(u1) - lo + BOIS_SOUS_LOGEMENT);
     };
     R.treads.forEach((t) => pocket(F.at(R.lines[t.j - 1]!, 0), F.at(R.lines[t.j]!, bo), t.top - p.et, t.top, true));
+    // La marche palière va jusqu'au bout des limons, prolongés pour elle.
+    const mp = R.mp;
+    if (mp) pocket(F.at(mp.line, 0), F.at(mp.line, mp.depth), mp.top - mp.e, mp.top, true);
     if (p.cm)
       R.risers.forEach((r, i) => {
         const band = F.riserBand(R.lines[i]!);

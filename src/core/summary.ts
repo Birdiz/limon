@@ -47,17 +47,18 @@ export function turnSpan(R: Stair): { from: number; to: number; z0: number; z1: 
 export function sectionSummaries(p: Params, R: Stair | null): Record<Section, string> {
   const quart = p.forme !== "droit";
   const tre = R ? R.treDims : { tL: p.tL, tX: p.tX, tY: p.tY };
-  const treTxt = quart ? `${fmt(tre.tY)} × ${fmt(tre.tX)}` : fmt(tre.tL);
+  const treTxt = quart ? `${p.tForme === "L" ? "en L, " : ""}${fmt(tre.tY)} × ${fmt(tre.tX)}` : fmt(tre.tL);
   const tour = R && turnSpan(R);
   return {
     forme: FORME_LABEL[p.forme],
     dimensions: `${fmt(p.H)} de haut · ${quart ? `${fmt(p.A)} × ${fmt(p.B)}` : `${fmt(p.L)} de long`} · ${fmt(p.W)} de large`,
     tremie: p.tAuto ? (R ? `à calculer : ${treTxt}` : "à calculer") : treTxt,
-    marches: R
-      ? `${R.n} hauteurs de ${fmt(R.h, 1)}${p.nAuto ? ", automatique" : ""}${tour ? ` · tour de ${fmt(tour.z0)} à ${fmt(tour.z1)}` : ""}`
-      : p.nAuto
-        ? "automatique"
-        : `${p.n} hauteurs`,
+    marches:
+      (R
+        ? `${R.n} hauteurs de ${fmt(R.h, 1)}${p.nAuto ? ", automatique" : ""}${tour ? ` · tour de ${fmt(tour.z0)} à ${fmt(tour.z1)}` : ""}`
+        : p.nAuto
+          ? "automatique"
+          : `${p.n} hauteurs`) + (p.mp ? ` · marche palière de ${fmt(p.mpP)}` : ""),
     bois: `${ESSENCE_LABEL[p.ess]} · marches ${fmt(p.et)}${p.cm ? ` · contremarches ${fmt(p.ecm)}` : ", sans contremarches"}`,
     gardecorps: p.gc === "aucun" ? "aucun" : `${GC_LABEL[p.gc]} ${POSE_LABEL[p.gcPose]}`,
   };

@@ -4,6 +4,8 @@ export type Essence = "chene" | "hetre" | "frene" | "sapin" | "noyer";
 export type GardeCorps = "aucun" | "balustres" | "lisses";
 /** Pose des balustres ou montants : dans le chant haut du limon, ou sur son flanc côté vide. */
 export type Pose = "chant" | "anglaise";
+/** Contour de la trémie : rectangle, ou en L qui suit le quart tournant. */
+export type FormeTremie = "rect" | "L";
 
 /** Réglages saisis par l'utilisateur. Longueurs en millimètres. */
 export interface Params {
@@ -63,6 +65,18 @@ export interface Params {
   tX: number;
   /** Trémie côté départ (quart). */
   tY: number;
+  /** Contour de la trémie (le L ne sert qu'en quart tournant). */
+  tForme: FormeTremie;
+  /** Trémie en L : largeur de la branche côté départ, depuis le mur du départ. */
+  tbD: number;
+  /** Trémie en L : largeur de la branche côté arrivée, depuis le mur face à la montée. */
+  tbA: number;
+  /** Marche palière : dans le prolongement du plancher d'arrivée, logée dans les limons. */
+  mp: boolean;
+  /** Profondeur de la marche palière, depuis le nez. */
+  mpP: number;
+  /** Épaisseur de la marche palière. */
+  mpE: number;
   /** Épaisseur du plancher. */
   ep: number;
   /** Encastrement des marches et contremarches dans les limons. */
@@ -108,6 +122,12 @@ export const DEFAULTS: Readonly<Params> = {
   tL: 3200,
   tX: 1850,
   tY: 2550,
+  tForme: "rect",
+  tbD: 950,
+  tbA: 950,
+  mp: false,
+  mpP: 300,
+  mpE: 40,
   ep: 200,
   enc: 15,
   jeu: 0.5,
@@ -119,6 +139,7 @@ export const FORMES: readonly Forme[] = ["droit", "quart-g", "quart-d"];
 export const ESSENCES: readonly Essence[] = ["chene", "hetre", "frene", "sapin", "noyer"];
 export const GARDE_CORPS: readonly GardeCorps[] = ["aucun", "balustres", "lisses"];
 export const POSES: readonly Pose[] = ["chant", "anglaise"];
+export const FORMES_TREMIE: readonly FormeTremie[] = ["rect", "L"];
 
 /** Masse volumique moyenne à 12 % d'humidité, en kg/m³ (ordre de grandeur pour le poids). */
 export const DENSITE: Record<Essence, number> = { chene: 710, hetre: 720, frene: 700, sapin: 450, noyer: 650 };
@@ -147,6 +168,10 @@ export const NUMERIC_KEYS = [
   "tL",
   "tX",
   "tY",
+  "tbD",
+  "tbA",
+  "mpP",
+  "mpE",
   "ep",
   "enc",
   "jeu",
@@ -155,7 +180,14 @@ export const NUMERIC_KEYS = [
 ] as const satisfies readonly (keyof Params)[];
 export type NumericKey = (typeof NUMERIC_KEYS)[number];
 
-export const BOOLEAN_KEYS = ["fAuto", "nAuto", "hljAuto", "cm", "tAuto"] as const satisfies readonly (keyof Params)[];
+export const BOOLEAN_KEYS = [
+  "fAuto",
+  "nAuto",
+  "hljAuto",
+  "cm",
+  "tAuto",
+  "mp",
+] as const satisfies readonly (keyof Params)[];
 
 /** Fusionne des réglages enregistrés (non fiables) avec les valeurs par défaut, champ par champ. */
 export function sanitizeParams(raw: unknown): Params {
@@ -166,6 +198,7 @@ export function sanitizeParams(raw: unknown): Params {
   if (ESSENCES.includes(r.ess as Essence)) p.ess = r.ess as Essence;
   if (GARDE_CORPS.includes(r.gc as GardeCorps)) p.gc = r.gc as GardeCorps;
   if (POSES.includes(r.gcPose as Pose)) p.gcPose = r.gcPose as Pose;
+  if (FORMES_TREMIE.includes(r.tForme as FormeTremie)) p.tForme = r.tForme as FormeTremie;
   for (const k of NUMERIC_KEYS) if (typeof r[k] === "number" && Number.isFinite(r[k])) p[k] = r[k];
   for (const k of BOOLEAN_KEYS) if (typeof r[k] === "boolean") p[k] = r[k];
   return p;

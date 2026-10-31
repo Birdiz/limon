@@ -1,5 +1,5 @@
 import { aideOf } from "../core/aide";
-import type { Forme } from "../core/params";
+import type { Forme, FormeTremie } from "../core/params";
 import { sketchSVG } from "./sketch";
 
 /*
@@ -36,7 +36,10 @@ export class Aide {
   private open: HTMLButtonElement | null = null;
   private done = new WeakSet<Element>();
 
-  constructor(private forme: () => Forme) {
+  constructor(
+    private forme: () => Forme,
+    private tForme: () => FormeTremie = () => "rect",
+  ) {
     this.box.className = "aide";
     this.box.id = "aide";
     this.box.hidden = true;
@@ -102,7 +105,7 @@ export class Aide {
   private show(btn: HTMLButtonElement): void {
     const a = aideOf(btn.dataset.key!);
     if (!a) return;
-    const svg = sketchSVG(btn.dataset.key!.replace(/^at-/, ""), this.forme());
+    const svg = sketchSVG(btn.dataset.key!.replace(/^at-/, ""), this.forme(), this.tForme());
     this.box.innerHTML =
       `<button class="aidex" type="button" aria-label="Fermer l'aide">×</button>` +
       (svg ?? "") +

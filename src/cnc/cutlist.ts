@@ -30,6 +30,9 @@ function group(list: readonly TreadPart[], one: string, many: string, e: number)
   }));
 }
 
+/** Arrondi au millimètre supérieur, sans compter les erreurs d'arrondi du calcul. */
+const up = (v: number) => Math.ceil(v - 1e-6);
+
 /** Liste de débit : limons, marches, contremarches, garde-corps, poteau. */
 export function cutRows(cnc: CNC, R: Stair): CutRow[] {
   const p = R.params;
@@ -42,6 +45,7 @@ export function cutRows(cnc: CNC, R: Stair): CutRow[] {
       q: 1,
     })),
     ...group(cnc.treadParts, "Marche", "Marches", p.et),
+    ...(cnc.mpPart ? [{ name: "Marche palière", q: 1, L: up(cnc.mpPart.L), l: up(cnc.mpPart.l), e: p.mpE }] : []),
     ...group(cnc.riserParts, "Contremarche", "Contremarches", p.ecm),
     ...(cnc.rail
       ? [
@@ -129,6 +133,11 @@ export function stockNotes(cnc: CNC, R: Stair): [Status, string][] {
   };
   glued(big.treads, "Marche", "Marches");
   glued(big.risers, "Contremarche", "Contremarches");
+  const mp = cnc.mpPart;
+  if (mp && (mp.L > pL + 0.5 || mp.l > pW + 0.5))
+    notes.push(
+      `Marche palière (${fmt(Math.ceil(mp.L))} × ${fmt(Math.ceil(mp.l))} mm) plus grande que le ${plateau} : à reconstituer en lames collées, fil le long du nez.`,
+    );
   big.boards.forEach((b) =>
     notes.push(
       `${b.name.charAt(0)}${b.name.slice(1).toLowerCase()} (${fmt(Math.ceil(b.L))} × ${fmt(Math.ceil(b.l))} mm) plus grand que le ${plateau} : à abouter ou à débiter dans un plateau plus grand.`,

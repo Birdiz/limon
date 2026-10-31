@@ -4,10 +4,10 @@
    Limons : développé vu depuis la face côté marches, avec les logements à défoncer.
    Poteau : ses quatre faces vues de l'extérieur, couchées pied à gauche, avec logements et mortaises. */
 import { fmt } from "../core/format";
-import { cncFrame } from "../core/pockets";
+import { cncFrame, type Section } from "../core/pockets";
 import { polyPath } from "../core/poly";
 import { GC } from "../core/railing";
-import { PERCAGE, type Stair } from "../core/stair";
+import { PERCAGE, type NoseLine, type Stair } from "../core/stair";
 import { stringerOutline } from "../core/stringer";
 import { V, bbox, closeRing, interp, type Box, type Pt, type Vertex } from "../core/vec";
 import type { Entity, Layer } from "./entities";
@@ -58,11 +58,12 @@ export function oversize(cnc: CNC, pL: number, pW: number) {
 export function stockVolume(cnc: CNC, R: Stair): number {
   const p = R.params;
   const sum = (list: readonly Piece[], e: number) => list.reduce((v, q) => v + q.L * q.l * e, 0);
+  const mp = cnc.mpPart ? cnc.mpPart.L * cnc.mpPart.l * p.mpE : 0;
   const post = cnc.postPart ? cnc.postPart.L * cnc.postPart.l * cnc.postPart.e : 0;
   const rail = cnc.rail
     ? sum(cnc.rail.handrailParts, p.mcL) + sum(cnc.rail.postParts, p.bs) + sum(cnc.rail.railParts, p.bs)
     : 0;
-  return (sum(cnc.boardParts, p.el) + sum(cnc.treadParts, p.et) + sum(cnc.riserParts, p.ecm) + post + rail) / 1e9;
+  return (sum(cnc.boardParts, p.el) + sum(cnc.treadParts, p.et) + mp + sum(cnc.riserParts, p.ecm) + post + rail) / 1e9;
 }
 
 export interface CNC {
@@ -72,6 +73,8 @@ export interface CNC {
   treadParts: TreadPart[];
   riserParts: TreadPart[];
   boardParts: BoardPart[];
+  /** Marche palière, dans marches.dxf ; null sans elle. */
+  mpPart: TreadPart | null;
   postEnts: Entity[];
   postPart: PostPart | null;
   /** Garde-corps côté jour, s'il y en a un. */
@@ -95,18 +98,10 @@ export function buildCNC(R: Stair): CNC {
     rowH = 0;
   const gap = 40,
     rowMax = 2600;
-  R.treads.forEach((t) => {
-    const lnF = R.lines[t.j - 1]!,
-      lnB = R.lines[t.j]!;
-    const fr = at(lnF, 0),
-      bk = at(lnB, bo);
+  // Une marche, du nez lnF jusqu'à la coupe arrière bk, placée à la suite des précédentes.
+  const tread = (lnF: NoseLine, bk: Section, marks: [Layer, Pt[]][], label: string, nose: string): Piece => {
+    const fr = at(lnF, 0);
     const outline = closeRing([...polyPath(inOff, fr.inD.s, bk.inD.s), ...polyPath(outOff, bk.outD.s, fr.outD.s)]);
-    const marks: [Layer, Pt[]][] = p.cm
-      ? [
-          ["CM_DESSOUS", riserBand(lnF).quad],
-          ["CM_DESSUS", riserBand(lnB).quad],
-        ]
-      : [];
     // Repère local : nez sur l'axe x, montée vers +y, vu de dessus.
     const ref = M(fr.inF.p),
       nr = M(lnF.nr),
@@ -129,20 +124,39 @@ export function buildCNC(R: Stair): CNC {
     );
     const w = b.x1 - b.x0,
       d = b.y1 - b.y0;
-    treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + d / 2, h: 50, s: `M${t.j}`, center: true });
-    treadEnts.push({
-      kind: "text",
-      layer: "TEXTE",
-      x: cx + w / 2,
-      y: cy + 18,
-      h: 22,
-      s: R.rn > 0 ? `nez R${fmt(R.rn, 1)}` : "nez",
-      center: true,
-    });
+    treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + d / 2, h: 50, s: label, center: true });
+    treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + 18, h: 22, s: nose, center: true });
     cx += w + gap;
     rowH = Math.max(rowH, d);
-    treadParts.push({ j: t.j, L: w, l: d });
+    return { L: w, l: d };
+  };
+  R.treads.forEach((t) => {
+    const lnF = R.lines[t.j - 1]!,
+      lnB = R.lines[t.j]!;
+    const marks: [Layer, Pt[]][] = p.cm
+      ? [
+          ["CM_DESSOUS", riserBand(lnF).quad],
+          ["CM_DESSUS", riserBand(lnB).quad],
+        ]
+      : [];
+    const part = tread(lnF, at(lnB, bo), marks, `M${t.j}`, R.rn > 0 ? `nez R${fmt(R.rn, 1)}` : "nez");
+    treadParts.push({ j: t.j, ...part });
   });
+  // Marche palière : du dernier nez jusqu'au bout des limons, encastrée comme les marches.
+  const mp = R.mp,
+    lnA = R.lines[R.n - 1]!;
+  const mpPart = mp
+    ? {
+        j: R.n,
+        ...tread(
+          lnA,
+          at(lnA, mp.depth),
+          p.cm ? [["CM_DESSOUS", riserBand(lnA).quad]] : [],
+          "MP",
+          `marche paliere ep. ${fmt(mp.e)} - ${mp.rn > 0 ? `nez R${fmt(mp.rn, 1)}` : "nez"}`,
+        ),
+      }
+    : null;
 
   // Contremarches : vues de face depuis l'escalier, bas en bas, encastrement compris, longueur hors tout.
   // Dans le tournant, la contremarche arrive en biais sur le limon : chaque bout biais est coté.
@@ -425,5 +439,5 @@ export function buildCNC(R: Stair): CNC {
   }
   const postPart = N ? { L: N.h, l: N.size, e: N.size } : null;
   const rail = G ? buildRailing(G, p) : null;
-  return { treadEnts, riserEnts, boardEnts, treadParts, riserParts, boardParts, postEnts, postPart, rail };
+  return { treadEnts, riserEnts, boardEnts, treadParts, riserParts, boardParts, mpPart, postEnts, postPart, rail };
 }

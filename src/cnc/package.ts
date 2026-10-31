@@ -24,6 +24,12 @@ export function readme(R: Stair): string {
       "  CM_DESSUS   contremarche posée sur la marche (face supérieure)",
       "  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)",
       `  TEXTE       numéro de marche${R.rn > 0 ? `, nez arrondi R${fmt(R.rn, 1)} dessus et dessous (à profiler, hors contour)` : ""}`,
+      ...(R.mp
+        ? [
+            `  La pièce MP est la marche palière : ${fmt(R.mp.e)} mm d'épaisseur, ${fmt(R.mp.depth)} mm de profondeur depuis le nez,`,
+            "  au niveau du sol fini du haut, logée dans les limons jusqu'à leur bout ; le plancher reprend derrière.",
+          ]
+        : []),
       "",
       ...(p.cm
         ? [
@@ -56,6 +62,11 @@ export function readme(R: Stair): string {
         : R.rail
           ? [`  PERCAGE     perçages D${GC.vis} traversants pour visser les balustres posés à l'anglaise`]
           : []),
+      ...(R.mp
+        ? [
+            `  les limons se prolongent à l'horizontale sur ${fmt(R.mp.depth)} mm au-delà du dernier nez pour loger la marche palière`,
+          ]
+        : []),
       "  TEXTE       nom de la pièce et cotes brutes",
       "",
       ...(R.newel
@@ -76,7 +87,9 @@ export function readme(R: Stair): string {
         ? [
             `garde-corps.dxf : garde-corps ${R.quart ? "côté jour" : "côté limon droit"}, main courante à au moins ${GC.h} mm au-dessus des nez,`,
             `  écart libre de ${GC.ecart} mm au plus.`,
-            "  Mains courantes vues de côté (bouts d'aplomb), puis leur dessous déroulé avec les mortaises",
+            R.rail.handrails.some((hr) => hr.retour)
+              ? "  Mains courantes vues de côté, puis leur dessous déroulé avec les mortaises ; retour horizontal au-dessus de la marche palière, coupé d'onglet avec la main courante rampante,"
+              : "  Mains courantes vues de côté (bouts d'aplomb), puis leur dessous déroulé avec les mortaises",
             `  des ${R.rail.type === "balustres" ? "balustres" : "montants"} ; ${R.rail.type === "balustres" ? "balustres" : "montants et lisses"} vus de côté, couchés, numérotés dans l'ordre de la montée.`,
             "  DECOUPE     contours",
             ...(R.quart ? ["  TENON       tenon de chaque main courante dans le poteau"] : []),

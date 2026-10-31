@@ -40,7 +40,7 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
 
   it("découpe une marche par giron et un limon par tronçon", () => {
     const cut = (ents: typeof cnc.treadEnts) => ents.filter((e) => e.kind === "poly" && e.layer === "DECOUPE");
-    expect(cut(cnc.treadEnts)).toHaveLength(R.treads.length);
+    expect(cut(cnc.treadEnts)).toHaveLength(R.treads.length + (R.mp ? 1 : 0));
     // Avec des balustres posés dans le chant, le chant haut de chaque limon de jour est déroulé en plus.
     const chants = R.rail?.pose === "chant" ? R.stringers.filter((sp) => sp.side === "in").length : 0;
     expect(cut(cnc.boardEnts)).toHaveLength(R.stringers.length + chants);

@@ -99,6 +99,9 @@ const GROUPES: readonly { t: string; champs: readonly Champ[] }[] = [
       { k: "rn", l: "Rayon du nez", s: "arrondi dessus et dessous, 0 = vif", min: 0, adv: true },
       { k: "cm", l: "Contremarches", coche: "avec" },
       { k: "ecm", l: "Épaisseur de contremarche", min: 10 },
+      { k: "mp", l: "Marche palière", s: "logée dans les limons, à l'arrivée", coche: "avec" },
+      { k: "mpP", l: "Profondeur de marche palière", s: "depuis le nez", pas: 10, min: 150 },
+      { k: "mpE", l: "Épaisseur de marche palière", min: 18 },
     ],
   },
   {

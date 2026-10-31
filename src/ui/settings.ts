@@ -4,6 +4,7 @@ import {
   NUMERIC_KEYS,
   type Essence,
   type Forme,
+  type FormeTremie,
   type GardeCorps,
   type NumericKey,
   type Pose,
@@ -15,6 +16,9 @@ import { byId } from "./dom";
 
 const input = (id: string) => byId<HTMLInputElement>(id);
 
+/** Cotes de la trémie, calculées quand elle est « à calculer ». */
+const TRE_KEYS = ["tL", "tX", "tY", "tbD", "tbA"] as const;
+
 export function writeInputs(p: Params): void {
   document.querySelectorAll<HTMLInputElement>('input[name="forme"]').forEach((r) => (r.checked = r.value === p.forme));
   NUMERIC_KEYS.forEach((k) => (input(k).value = String(p[k])));
@@ -24,6 +28,7 @@ export function writeInputs(p: Params): void {
   byId<HTMLSelectElement>("ess").value = p.ess;
   byId<HTMLSelectElement>("gc").value = p.gc;
   byId<HTMLSelectElement>("gcPose").value = p.gcPose;
+  byId<HTMLSelectElement>("tForme").value = p.tForme;
 }
 
 /** Réglages lus dans le formulaire ; un champ vide ou invalide garde sa valeur précédente et figure dans missing. */
@@ -41,6 +46,7 @@ export function readInputs(prev: Params): { params: Params; missing: NumericKey[
   p.ess = byId<HTMLSelectElement>("ess").value as Essence;
   p.gc = byId<HTMLSelectElement>("gc").value as GardeCorps;
   p.gcPose = byId<HTMLSelectElement>("gcPose").value as Pose;
+  p.tForme = byId<HTMLSelectElement>("tForme").value as FormeTremie;
   return { params: p, missing };
 }
 
@@ -81,16 +87,19 @@ export function syncInputs(p: Params, stair: Stair | null): void {
     .querySelectorAll<HTMLElement>("[data-show]")
     .forEach((el) => (el.hidden = (el.dataset.show === "quart") !== quart));
   document.querySelectorAll<HTMLElement>("[data-gc]").forEach((el) => (el.hidden = p.gc === "aucun"));
+  document.querySelectorAll<HTMLElement>("[data-tre]").forEach((el) => (el.hidden = !quart || p.tForme !== "L"));
+  document.querySelectorAll<HTMLElement>("[data-mp]").forEach((el) => (el.hidden = !p.mp));
   input("n").disabled = p.nAuto;
   input("f").disabled = p.fAuto;
   input("hlj").disabled = p.hljAuto;
   input("ecm").disabled = !p.cm;
-  for (const k of ["tL", "tX", "tY"] as const) input(k).disabled = p.tAuto;
+  for (const k of TRE_KEYS) input(k).disabled = p.tAuto;
+  input("mpP").disabled = !p.mp;
   if (stair) {
     if (p.nAuto) input("n").value = String(stair.n);
     if (p.fAuto) input("f").value = String(Math.round(stair.f));
     if (p.hljAuto && stair.quart) input("hlj").value = String(stair.hljAuto);
-    if (p.tAuto) for (const k of ["tL", "tX", "tY"] as const) input(k).value = String(Math.round(stair.treDims[k]));
+    if (p.tAuto) for (const k of TRE_KEYS) input(k).value = String(Math.round(stair.treDims[k]));
   }
   const bal = stair?.bal;
   const span = stair && turnSpan(stair);

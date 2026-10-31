@@ -29,14 +29,16 @@ const rect = (x0: number, y0: number, x1: number, y1: number): Pt[] => [
   [x0, y1],
 ];
 
-/** Contour d'une main courante dans son plan (u, z) : dessus, bouts d'aplomb, tenon dans le poteau. */
+/** Contour d'une main courante dans son plan (u, z) : dessus, bouts d'aplomb ou d'onglet, tenon dans le poteau. */
 export function handrailOutline(hr: Handrail): Pt[] {
   const top = (u: number) => hr.z0 + hr.b * u,
-    t = hr.tenon;
+    t = hr.tenon,
+    c0 = hr.cut0 ?? 0,
+    c1 = hr.cut1 ?? 0;
   const tl: Pt = [hr.u0, top(hr.u0)],
     tr: Pt = [hr.u1, top(hr.u1)],
-    br: Pt = [hr.u1, top(hr.u1) - hr.hv],
-    bl: Pt = [hr.u0, top(hr.u0) - hr.hv];
+    br: Pt = [hr.u1 + c1, top(hr.u1 + c1) - hr.hv],
+    bl: Pt = [hr.u0 + c0, top(hr.u0 + c0) - hr.hv];
   if (t && t.u0 >= hr.u1 - 1e-6) return [tl, tr, [t.u0, t.z1], [t.u1, t.z1], [t.u1, t.z0], [t.u0, t.z0], br, bl];
   if (t) return [tl, tr, br, bl, [t.u1, t.z0], [t.u0, t.z0], [t.u0, t.z1], [t.u1, t.z1]];
   return [tl, tr, br, bl];
@@ -103,7 +105,10 @@ export function buildRailing(G: Railing, p: Params): RailingCNC {
 
   // Mains courantes : vue de côté, puis le dessous déroulé avec les mortaises des balustres.
   const handrailParts: RailingCNC["handrailParts"] = [];
-  G.handrails.forEach((hr, k) => {
+  // Le retour horizontal au-dessus de la marche palière porte son propre nom.
+  const ramp = G.handrails.filter((hr) => !hr.retour).length;
+  let k = 0;
+  G.handrails.forEach((hr) => {
     const out = handrailOutline(hr),
       th = Math.atan(hr.b),
       sec = Math.hypot(1, hr.b);
@@ -111,12 +116,19 @@ export function buildRailing(G: Railing, p: Params): RailingCNC {
     ents.push({ kind: "poly", layer: "DECOUPE", pts: out.map(side.tr), closed: true });
     const t = hr.tenon;
     if (t) ents.push({ kind: "poly", layer: "TENON", pts: rect(t.u0, t.z0, t.u1, t.z1).map(side.tr), closed: true });
-    const name = `MAIN COURANTE${G.handrails.length > 1 ? ` ${k + 1}/${G.handrails.length}` : ""}`;
+    const name = hr.retour ? "RETOUR DE MAIN COURANTE" : `MAIN COURANTE${ramp > 1 ? ` ${++k}/${ramp}` : ""}`;
+    const miter = (c: number | undefined) => (c ? "d'onglet" : "d'aplomb");
+    const ends =
+      miter(hr.cut0) === miter(hr.cut1)
+        ? `bouts ${miter(hr.cut0)}`
+        : `bout bas ${miter(hr.cut0)}, bout haut ${miter(hr.cut1)}`;
     text(
       0,
       y + side.H + 30,
       40,
-      `${name} - vue de cote - ${Math.ceil(side.L)} x ${p.mcH} x ${p.mcL} - pente ${fmt((th * 180) / Math.PI, 1)} deg, bouts d'aplomb`,
+      hr.retour
+        ? `${name} - vue de cote - ${Math.ceil(side.L)} x ${p.mcH} x ${p.mcL} - horizontal au-dessus de la marche paliere, ${ends}`
+        : `${name} - vue de cote - ${Math.ceil(side.L)} x ${p.mcH} x ${p.mcL} - pente ${fmt((th * 180) / Math.PI, 1)} deg, ${ends}`,
     );
     if (t)
       text(
@@ -125,16 +137,23 @@ export function buildRailing(G: Railing, p: Params): RailingCNC {
         30,
         `tenon ${fmt(t.u1 - t.u0, 1)} x ${fmt(t.z1 - t.z0, 1)} ep. ${fmt(t.t1 - t.t0, 1)}, centre sur la largeur`,
       );
-    handrailParts.push({ name: name.charAt(0) + name.slice(1).toLowerCase(), j: k + 1, L: side.L, l: p.mcH });
+    handrailParts.push({
+      name: name.charAt(0) + name.slice(1).toLowerCase(),
+      j: handrailParts.length + 1,
+      L: side.L,
+      l: p.mcH,
+    });
     y += side.H + 180;
     // Dessous déroulé : longueur prise sur la pente, depuis le bout bas ; face côté marches en bas.
-    const len = (hr.u1 - hr.u0) * sec;
+    const b0 = hr.u0 + (hr.cut0 ?? 0),
+      b1 = hr.u1 + (hr.cut1 ?? 0);
+    const len = (b1 - b0) * sec;
     ents.push({ kind: "poly", layer: "DECOUPE", pts: rect(0, y, len, y + p.mcL), closed: true });
     const mid = y + p.mcL / 2;
     G.posts
-      .filter((q) => q.idx === hr.idx)
+      .filter((q) => q.idx === hr.idx && q.u > b0 && q.u < b1)
       .forEach((q) => {
-        const x = (q.u - hr.u0) * sec,
+        const x = (q.u - b0) * sec,
           a = (tb * sec) / 2 + jeu,
           b = tb / 2 + jeu;
         ents.push({ kind: "poly", layer: "MORTAISE", pts: rect(x - a, mid - b, x + a, mid + b), closed: true });
