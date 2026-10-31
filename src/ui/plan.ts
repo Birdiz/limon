@@ -1,4 +1,5 @@
 import { planShapes, type PlanShape } from "../core/plan-shapes";
+import { sideShapes, type SideShape } from "../core/side-shapes";
 import type { Stair } from "../core/stair";
 import type { Pt } from "../core/vec";
 
@@ -6,7 +7,7 @@ const xy = (q: Pt) => q[0].toFixed(1) + "," + q[1].toFixed(1);
 const raw = (q: Pt) => `${q[0]},${q[1]}`;
 const NS = ' vector-effect="non-scaling-stroke"';
 
-function shapeSVG(s: PlanShape): string {
+function shapeSVG(s: PlanShape | SideShape): string {
   const cls = ("s" in s && s.s ? `${s.role} ${s.s}` : s.role) + (s.detail ? " pl-detail" : "");
   switch (s.k) {
     case "poly":
@@ -30,4 +31,10 @@ function shapeSVG(s: PlanShape): string {
 export function planSVG(R: Stair): string {
   const { shapes, box } = planShapes(R);
   return `<svg viewBox="${box.join(" ")}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Plan de l'escalier, vue de dessus">${shapes.map(shapeSVG).join("")}</svg>`;
+}
+
+/** Vue de côté cotée en SVG, développée sur la ligne de foulée (montée vers la droite) ; big : texte agrandi. */
+export function sideSVG(R: Stair, big = false): string {
+  const { shapes, box } = sideShapes(R, big);
+  return `<svg viewBox="${box.join(" ")}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Vue de côté de l'escalier, développée sur la ligne de foulée">${shapes.map(shapeSVG).join("")}</svg>`;
 }
