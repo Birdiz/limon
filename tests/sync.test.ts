@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { atelierDefauts } from "../src/core/atelier";
+import { atelierDefauts, newAtelier } from "../src/core/atelier";
+import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
 import { newProject, type Project } from "../src/core/project";
 import { AtelierStore } from "../src/ui/atelier";
@@ -243,11 +244,21 @@ describe("synchronisation du profil de l'atelier", () => {
 
   it("monte dans le compte à la connexion et descend sur l'autre appareil", async () => {
     const a = device();
-    a.atelier.set(defauts("noyer"), 1000);
+    a.atelier.set({ defauts: defauts("noyer") }, 1000);
     await a.signIn("jean@exemple.fr");
     const b = device();
     await b.signIn("jean@exemple.fr");
-    expect(b.atelier.get()).toEqual({ defauts: defauts("noyer"), modifie: 1000 });
+    expect(b.atelier.get()).toEqual(newAtelier(defauts("noyer"), 1000));
+  });
+
+  it("emporte les tarifs et la fiche de l'entreprise", async () => {
+    const a = device();
+    await a.signIn("jean@exemple.fr");
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 45 }, entreprise: { ...ENTREPRISE_VIDE, nom: "Exemple" } }, 1000);
+    await a.store.sync();
+    const b = device();
+    await b.signIn("jean@exemple.fr");
+    expect(b.atelier.get()).toMatchObject({ tarifs: { taux: 45 }, entreprise: { nom: "Exemple" } });
   });
 
   it("garde la version modifiée en dernier", async () => {
@@ -255,24 +266,24 @@ describe("synchronisation du profil de l'atelier", () => {
     const b = device();
     await a.signIn("jean@exemple.fr");
     await b.signIn("jean@exemple.fr");
-    b.atelier.set(defauts("frene"), 2000);
+    b.atelier.set({ defauts: defauts("frene") }, 2000);
     await b.store.sync();
     await a.store.sync();
     expect(a.atelier.get()!.defauts.ess).toBe("frene");
     // Une version plus ancienne ne reprend pas la main, même envoyée après.
-    a.atelier.set(defauts("sapin"), 500);
+    a.atelier.set({ defauts: defauts("sapin") }, 500);
     await a.store.sync();
     expect(a.atelier.get()!.defauts.ess).toBe("frene");
   });
 
   it("quitte l'appareil à la déconnexion, et ne suit pas sur un autre compte", async () => {
     const a = device();
-    a.atelier.set(defauts("noyer"), 1000);
+    a.atelier.set({ defauts: defauts("noyer") }, 1000);
     await a.signIn("jean@exemple.fr");
     await a.store.signOut();
     expect(a.atelier.get()).toBeNull();
 
-    a.atelier.set(defauts("sapin"), 3000);
+    a.atelier.set({ defauts: defauts("sapin") }, 3000);
     await a.signIn("jean@exemple.fr");
     await a.signIn("marie@exemple.fr");
     expect(a.atelier.get()).toBeNull();

@@ -610,6 +610,43 @@ body.home-on #pjNew {
 .num.nounit input {
   padding-right: 9px;
 }
+.num.long input {
+  padding-right: 52px;
+}
+/* Champ de texte de la fiche de l'entreprise : l'intitulé au-dessus, le champ sur toute la largeur */
+.row.texte {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.row.texte input,
+.row.texte textarea {
+  width: 100%;
+  min-height: var(--field);
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--raised);
+  font: inherit;
+  font-size: 15.5px;
+}
+.row.texte textarea {
+  resize: vertical;
+}
+.row.texte input:focus,
+.row.texte textarea:focus {
+  border-color: var(--chalk);
+  box-shadow: 0 0 0 1px var(--chalk);
+  outline: none;
+}
+.row.texte input[aria-invalid="true"] {
+  border-color: var(--bad);
+}
+.group h3 small {
+  margin-left: 4px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
 .check {
   display: flex;
   align-items: center;
@@ -1571,6 +1608,10 @@ input[role="switch"]:checked::after {
 body:not(.avance) [data-adv] {
   display: none !important;
 }
+/* Devis : en préparation, visible seulement sur un appareil ouvert une fois avec ?devis */
+body:not(.devis) [data-devis] {
+  display: none !important;
+}
 a.btn {
   color: inherit;
   line-height: normal;
@@ -2173,6 +2214,8 @@ body.avance .auto {
     padding-inline: 14px;
   }
   .num input,
+  .row.texte input,
+  .row.texte textarea,
   select {
     font-size: 17px;
   }

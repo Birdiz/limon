@@ -26,6 +26,7 @@ import type { Scene3D } from "./ui/scene3d";
 import { AccountPanel } from "./ui/account";
 import { Aide } from "./ui/aide";
 import { AtelierPanel, AtelierStore } from "./ui/atelier";
+import { TarifsPanel } from "./ui/tarifs";
 import { fmt } from "./core/format";
 import { Home } from "./ui/home";
 import { showSketch } from "./ui/sketch";
@@ -268,11 +269,24 @@ new Aide(
   () => params.forme,
   () => params.tForme,
 ).attach();
+new TarifsPanel(atelier, {
+  params: () => (project ? params : null),
+  saved: () => store.atelierChanged(),
+});
 byId("atKeep").addEventListener("click", () => atelierPanel.keep(byId("sharemsg")));
 byId("homeBtn").addEventListener("click", () => void home.show());
 byId("pjOpen").addEventListener("click", () => void home.show());
 byId("acOpen").addEventListener("click", () => void home.show("compte"));
 byId("pjNew").addEventListener("click", () => void startNew());
+
+/** Devis, en préparation : visible sur l'appareil ouvert une fois avec ?devis, masqué de nouveau avec ?devis=0. */
+const DEVIS_KEY = "limon-devis";
+try {
+  if (asked.has("devis")) localStorage.setItem(DEVIS_KEY, asked.get("devis") === "0" ? "0" : "1");
+  document.body.classList.toggle("devis", localStorage.getItem(DEVIS_KEY) === "1");
+} catch {
+  document.body.classList.toggle("devis", asked.has("devis") && asked.get("devis") !== "0");
+}
 
 /** Réglages avancés : une préférence de l'appareil, réglée dans l'onglet Mon compte. */
 const ADV_KEY = "limon-avance";

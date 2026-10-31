@@ -82,6 +82,8 @@ const MIGRATIONS = [
     modifie bigint not null,
     donnees jsonb not null
   );`,
+  // Devis : tarifs et fiche de l'entreprise, à côté des réglages de l'atelier.
+  `alter table ateliers add column tarifs jsonb, add column entreprise jsonb;`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */

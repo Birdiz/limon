@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { atelierDefauts } from "../src/core/atelier";
+import { atelierDefauts, newAtelier } from "../src/core/atelier";
+import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
 import { newProject } from "../src/core/project";
 import { browser, login, ORIGIN, testServer, type TestServer } from "./server";
@@ -227,10 +228,8 @@ describe("projets", () => {
 });
 
 describe("atelier", () => {
-  const a = (modifie: number, ess: "chene" | "noyer" = "chene") => ({
-    defauts: { ...atelierDefauts(DEFAULTS), ess },
-    modifie,
-  });
+  const a = (modifie: number, ess: "chene" | "noyer" = "chene") =>
+    newAtelier({ ...atelierDefauts(DEFAULTS), ess }, modifie);
 
   it("garde le profil modifié en dernier", async () => {
     const f = browser(s);
@@ -252,6 +251,54 @@ describe("atelier", () => {
     );
     expect(await (await f("/api/atelier")).json()).toEqual(a(3, "noyer"));
     expect((await post(f, "/api/atelier", { atelier: { defauts: {} } }, "PUT")).status).toBe(400);
+  });
+
+  it("garde les tarifs et la fiche de l'entreprise", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const avec = {
+      ...a(10),
+      tarifs: { ...TARIFS_VIDES, taux: 45 },
+      entreprise: { ...ENTREPRISE_VIDE, nom: "Menuiserie Exemple" },
+    };
+    await post(f, "/api/atelier", { atelier: avec }, "PUT");
+    expect(await (await f("/api/atelier")).json()).toEqual(avec);
+    const d = (await (await f("/api/compte/donnees")).json()) as { atelier: typeof avec };
+    expect(d.atelier.tarifs.taux).toBe(45);
+  });
+
+  it("ne perd pas les tarifs quand une version d'avant les devis envoie son profil", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const tarifs = { ...TARIFS_VIDES, taux: 45 };
+    await post(f, "/api/atelier", { atelier: { ...a(10), tarifs } }, "PUT");
+    const ancien = { defauts: { ...atelierDefauts(DEFAULTS), ess: "noyer" }, modifie: 20 };
+    await post(f, "/api/atelier", { atelier: ancien }, "PUT");
+    expect(await (await f("/api/atelier")).json()).toEqual({ ...a(20, "noyer"), tarifs });
+  });
+
+  it("garde les tarifs et la fiche de l'entreprise", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const avec = {
+      ...a(10),
+      tarifs: { ...TARIFS_VIDES, taux: 45 },
+      entreprise: { ...ENTREPRISE_VIDE, nom: "Menuiserie Exemple" },
+    };
+    await post(f, "/api/atelier", { atelier: avec }, "PUT");
+    expect(await (await f("/api/atelier")).json()).toEqual(avec);
+    const d = (await (await f("/api/compte/donnees")).json()) as { atelier: typeof avec };
+    expect(d.atelier.tarifs.taux).toBe(45);
+  });
+
+  it("ne perd pas les tarifs quand une version d'avant les devis envoie son profil", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const tarifs = { ...TARIFS_VIDES, taux: 45 };
+    await post(f, "/api/atelier", { atelier: { ...a(10), tarifs } }, "PUT");
+    const ancien = { defauts: { ...atelierDefauts(DEFAULTS), ess: "noyer" }, modifie: 20 };
+    await post(f, "/api/atelier", { atelier: ancien }, "PUT");
+    expect(await (await f("/api/atelier")).json()).toEqual({ ...a(20, "noyer"), tarifs });
   });
 
   it("sépare les comptes", async () => {
