@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import fs from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newDevis, sanitizeDevis, type DevisProjet } from "../src/core/devis";
 import { DEFAULTS } from "../src/core/params";
 import {
@@ -13,7 +13,8 @@ import {
   type Project,
 } from "../src/core/project";
 import { compute, type Stair } from "../src/core/stair";
-import { TARIFS_VIDES, type Tarifs } from "../src/core/tarifs";
+import { ENTREPRISE_VIDE, TARIFS_VIDES, type Entreprise, type Tarifs } from "../src/core/tarifs";
+import { NotSignedIn } from "../src/ui/api";
 import { DevisView } from "../src/ui/devis";
 
 const html = fs.readFileSync(path.resolve("app/index.html"), "utf8");
@@ -48,6 +49,22 @@ const T: Tarifs = {
     poseMarche: 0.25,
   },
   deplForfait: 50,
+  validite: 30,
+};
+
+const E: Entreprise = {
+  ...ENTREPRISE_VIDE,
+  nom: "Menuiserie Bouzy",
+  forme: "EI",
+  adresse: "12 rue des Ateliers\n44000 Nantes",
+  siren: "732 829 320",
+  immat: "RM 44",
+  assureur: "MAAF",
+  contrat: "123",
+  couverture: "France",
+  mediateur: "CNPM",
+  paiement: "Solde à la fin de la pose.",
+  dechets: "Repris par l'entreprise.",
 };
 
 describe("devis enregistré avec l'escalier", () => {
@@ -90,6 +107,10 @@ describe("onglet Devis", () => {
   let tarifs: Tarifs;
   let view: DevisView;
   let opened = 0;
+  let entreprise: Entreprise;
+  let numero: (id: string) => Promise<string>;
+  let files: { name: string; data: Uint8Array }[];
+  let compte = 0;
 
   beforeEach(() => {
     document.body.innerHTML = body;
@@ -99,15 +120,24 @@ describe("onglet Devis", () => {
     tarifs = T;
     project = newProject("a", "Exemple", "complet", 1);
     opened = 0;
+    compte = 0;
+    entreprise = E;
+    numero = async () => "2026-0012";
+    files = [];
     view = new DevisView({
       project: () => project,
       stair: () => R,
       tarifs: () => tarifs,
+      entreprise: () => entreprise,
       saved: (d) => {
         project = withDevis(project, d, project.modifie + 1);
         view.refresh();
       },
       openTarifs: () => opened++,
+      openCompte: () => compte++,
+      numero: (id) => numero(id),
+      vue3d: () => null,
+      download: (data, name) => files.push({ name, data }),
     });
     view.refresh();
   });
@@ -202,5 +232,194 @@ describe("onglet Devis", () => {
     $("#dvLines").innerHTML = "";
     view.refresh();
     expect($("#dvLines").innerHTML).toBe("");
+  });
+});
+
+describe("remise au client", () => {
+  let project: Project;
+  let R: Stair | null;
+  let view: DevisView;
+  let entreprise: Entreprise;
+  let numero: (id: string) => Promise<string>;
+  let files: { name: string; data: Uint8Array }[];
+  let compte: number;
+  const latin1 = (b: Uint8Array) => new TextDecoder("latin1").decode(b);
+  const shown = (id: string) => !$(`#${id}`).hidden;
+  const remettre = async () => {
+    $<HTMLButtonElement>("#dvRemettre").click();
+    await vi.waitFor(() => expect($<HTMLButtonElement>("#dvRemettre").textContent).toBe("Remettre au client"));
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 31, 10));
+    document.body.innerHTML = body;
+    document.body.dataset.tab = "devis";
+    const r = compute(DEFAULTS, false);
+    R = r.ok ? r.stair : null;
+    project = withDevis(
+      newProject("a", "Exemple", "complet", 1),
+      { ...newDevis(), client: { nom: "Dupont", adresse: "8 allée des Tilleuls", chantier: "" } },
+      2,
+    );
+    entreprise = E;
+    numero = async () => "2026-0012";
+    files = [];
+    compte = 0;
+    view = new DevisView({
+      project: () => project,
+      stair: () => R,
+      tarifs: () => T,
+      entreprise: () => entreprise,
+      saved: (d) => {
+        project = withDevis(project, d, project.modifie + 1);
+        view.refresh();
+      },
+      openTarifs: () => {},
+      openCompte: () => compte++,
+      numero: (id) => numero(id),
+      vue3d: () => null,
+      download: (data, name) => files.push({ name, data }),
+    });
+    view.refresh();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("montre un brouillon, et son document filigrané", () => {
+    expect($("#dvChip").textContent).toBe("Brouillon");
+    expect($("#dvEtatTxt").textContent).toBe("Pas encore remis au client : le numéro est donné à la remise.");
+    expect(["dvPdf", "dvRemettre", "dvAccepte", "dvRouvrir"].map(shown)).toEqual([true, true, false, false]);
+    expect($<HTMLButtonElement>("#dvRemettre").disabled).toBe(false);
+    $<HTMLButtonElement>("#dvPdf").click();
+    expect(files.map((f) => f.name)).toEqual(["Exemple - devis (brouillon).pdf"]);
+    const pdf = latin1(files[0]!.data);
+    expect(pdf).toContain("(Brouillon : num\\351ro donn\\351 \\340 la remise) Tj");
+    expect(pdf).toContain("1 Tr (BROUILLON) Tj");
+  });
+
+  it("dit ce qui manque avant de remettre", () => {
+    entreprise = { ...ENTREPRISE_VIDE, nom: "Menuiserie Bouzy" };
+    change($("#dvNom"), "");
+    expect($<HTMLButtonElement>("#dvRemettre").disabled).toBe(true);
+    expect($("#dvBloq").textContent).toContain(
+      "Pour remettre le devis, il manque le nom du client et le nom et l'adresse de votre entreprise (Mon atelier).",
+    );
+    expect($("#dvBloq").textContent).toContain("Le devis ne porte pas encore forme juridique, SIREN");
+  });
+
+  it("fige le devis remis, avec son numéro, et le télécharge", async () => {
+    await remettre();
+    const d = project.devis!;
+    expect(d.remis).toHaveLength(1);
+    expect(d.remis[0]).toMatchObject({ numero: "2026-0012", version: 1, etat: "remis", validite: 30, nom: "Exemple" });
+    expect(d.remis[0]!.tarifs).toEqual(T);
+    expect(d.remis[0]!.chiffrage.totalTTC).toBeGreaterThan(0);
+    expect($("#dvChip").textContent).toBe("Remis au client");
+    expect($("#dvEtatTxt").textContent).toBe("N° 2026-0012, remis le 31/10/2026, valable jusqu'au 30/11/2026.");
+    expect(files.map((f) => f.name)).toEqual(["Devis 2026-0012 - Dupont.pdf"]);
+    expect(latin1(files[0]!.data)).not.toContain("BROUILLON");
+    // Figé : rien ne se modifie, les boutons des lignes sont coupés.
+    expect($("#dvNom").disabled).toBe(true);
+    expect(row("bois")!.querySelector<HTMLInputElement>(".dl-pu input")!.disabled).toBe(true);
+    expect(["dvRemettre", "dvAccepte", "dvRefuse", "dvRouvrir"].map(shown)).toEqual([false, true, true, true]);
+    expect($("#dvVersions").textContent).toContain("N° 2026-0012, remis le 31/10/2026");
+  });
+
+  it("refait le même document après un changement de tarifs", async () => {
+    await remettre();
+    const avant = files[0]!.data;
+    T.taux = 60;
+    try {
+      view.refresh();
+      $<HTMLButtonElement>("#dvPdf").click();
+      expect(Buffer.from(files[1]!.data).equals(Buffer.from(avant))).toBe(true);
+    } finally {
+      T.taux = 45;
+    }
+  });
+
+  it("note la réponse du client, et l'efface", async () => {
+    await remettre();
+    vi.setSystemTime(new Date(2026, 10, 3, 9));
+    $<HTMLButtonElement>("#dvAccepte").click();
+    expect(project.devis!.remis[0]).toMatchObject({ etat: "accepte", etatLe: new Date(2026, 10, 3, 9).getTime() });
+    expect($("#dvChip").textContent).toBe("Accepté");
+    expect($("#dvEtatTxt").textContent).toBe("N° 2026-0012, remis le 31/10/2026, accepté le 03/11/2026.");
+    $<HTMLButtonElement>("#dvSansReponse").click();
+    expect(project.devis!.remis[0]).toMatchObject({ etat: "remis", etatLe: 0 });
+    $<HTMLButtonElement>("#dvRefuse").click();
+    expect($("#dvChip").textContent).toBe("Refusé");
+  });
+
+  it("passe expiré une fois la validité passée, sans réponse", async () => {
+    await remettre();
+    vi.setSystemTime(new Date(2026, 10, 30, 23, 59));
+    view.refresh();
+    expect($("#dvChip").textContent).toBe("Remis au client");
+    vi.setSystemTime(new Date(2026, 11, 1, 0, 1));
+    view.refresh();
+    expect($("#dvChip").textContent).toBe("Expiré");
+    expect($("#dvEtatTxt").textContent).toBe("N° 2026-0012, remis le 31/10/2026, validité passée le 30/11/2026.");
+  });
+
+  it("repart en brouillon, version 2, quand l'escalier change", async () => {
+    await remettre();
+    const r = compute({ ...DEFAULTS, W: DEFAULTS.W + 50 }, false);
+    R = r.ok ? r.stair : null;
+    project = { ...project, params: R!.params };
+    view.refresh();
+    expect($("#dvChip").textContent).toBe("Brouillon");
+    expect($("#dvEtatTxt").textContent).toBe("Version 2 : l'escalier a changé depuis la remise du 31/10/2026.");
+    expect($("#dvNom").disabled).toBe(false);
+    expect(shown("dvAnnuler")).toBe(false);
+    await remettre();
+    expect(project.devis!.remis.map((v) => [v.numero, v.version])).toEqual([
+      ["2026-0012", 1],
+      ["2026-0012", 2],
+    ]);
+    expect(files.at(-1)!.name).toBe("Devis 2026-0012 v2 - Dupont.pdf");
+    // L'ancienne version garde son document.
+    document.querySelector<HTMLButtonElement>('#dvVersions [data-v="1"]')!.click();
+    expect(files.at(-1)!.name).toBe("Devis 2026-0012 - Dupont.pdf");
+  });
+
+  it("se reprend à la main, puis revient à la version remise", async () => {
+    await remettre();
+    $<HTMLButtonElement>("#dvRouvrir").click();
+    expect($("#dvEtatTxt").textContent).toBe("Version 2, reprise après la remise du 31/10/2026.");
+    change($("#dvNom"), "Durand");
+    expect(project.devis!.client.nom).toBe("Durand");
+    $<HTMLButtonElement>("#dvAnnuler").click();
+    expect(project.devis!.client.nom).toBe("Dupont");
+    expect($("#dvChip").textContent).toBe("Remis au client");
+  });
+
+  it("demande un compte, ou le réseau, et garde le brouillon", async () => {
+    numero = () => Promise.reject(new NotSignedIn());
+    await remettre();
+    expect(project.devis!.remis).toEqual([]);
+    expect($("#dvMsgTxt").textContent).toContain("connectez-vous à votre compte");
+    $<HTMLButtonElement>("#dvCompte").click();
+    expect(compte).toBe(1);
+    numero = () => Promise.reject(new TypeError("Failed to fetch"));
+    await remettre();
+    expect($("#dvMsgTxt").textContent).toBe(
+      "Pas de réseau : la remise demande une connexion. Le brouillon reste enregistré.",
+    );
+    expect($("#dvCompte").hidden).toBe(true);
+    expect(files).toEqual([]);
+  });
+
+  it("garde l'acompte et le délai des travaux", () => {
+    change($("#dvAcompte"), "30");
+    change($("#dvDelai"), " semaine 48 ");
+    expect(project.devis!.saisie).toMatchObject({ acompte: 30, delai: "semaine 48" });
+    expect($("#dvTot").textContent).toContain("Acompte à la commande");
+    change($("#dvAcompte"), "");
+    expect(project.devis!.saisie.acompte).toBeNull();
   });
 });

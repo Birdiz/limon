@@ -46,4 +46,7 @@ export class Api {
   push = (changements: Changement[], keepalive = false) =>
     this.call<Entree[]>("PUT", "projets", { changements }, keepalive);
   fetchProjects = (ids: string[]) => this.call<Project[]>("POST", "projets/lire", { ids });
+  /** Numéro du devis de l'escalier, donné par le serveur à sa première remise, le même ensuite. */
+  devisNumero = async (projet: string) =>
+    (await this.call<{ numero: string }>("POST", "devis/numero", { projet })).numero;
 }

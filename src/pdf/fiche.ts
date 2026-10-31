@@ -12,7 +12,7 @@ import { boardHeight, boardScale, drawBoard, layBoards, type Board } from "./lim
 import { qrMatrix } from "./qr";
 
 /** Couleurs du thème clair de la page, la fiche étant faite pour l'impression. */
-const C = {
+export const C = {
   ink: hex("#161b22"),
   muted: hex("#56606c"),
   rule: hex("#cbd2d9"),
@@ -27,8 +27,8 @@ const C = {
 } satisfies Record<string, RGB>;
 const ST: Record<Status | "info", RGB> = { ok: C.ok, warn: C.warn, bad: C.bad, info: C.muted };
 
-const M = 42;
-const CW = A4.w - 2 * M;
+export const M = 42;
+export const CW = A4.w - 2 * M;
 
 const DISCLAIMER =
   "Girons mesurés de nez à nez. Repères de confort usuels (Blondel 600 à 640 mm, hauteur 160 à 185 mm, giron d'au moins 240 mm, échappée d'au moins 2 000 mm et jamais sous 1 900 mm) : à confronter au NF DTU 36.3 et aux exigences du chantier avant fabrication.";
@@ -45,7 +45,7 @@ export interface FicheOptions {
 
 const mm = (v: number, d = 0) => `${fmt(v, d)} mm`;
 
-function heading(pg: Page, x: number, y: number, s: string): void {
+export function heading(pg: Page, x: number, y: number, s: string): void {
   pg.text(x, y, s.toUpperCase(), { size: 8.5, bold: true, color: C.muted });
 }
 
@@ -105,20 +105,23 @@ function logo(pg: Page, x: number, y: number, s: number): void {
 function footer(pg: Page, o: FicheOptions, i: number, count: number): void {
   pg.text(M, A4.h - 24, `Quart de tour · ${o.nom}`, { size: 7.5, color: C.muted });
   pg.text(A4.w - M, A4.h - 24, `page ${i}/${count}`, { size: 7.5, color: C.muted, anchor: "end" });
-  // Filigrane en lettres creuses, posé en dernier : il ne cache rien de la page. Le long de la diagonale ;
-  // la ligne de base descend d'une demi-hauteur de capitale pour centrer les lettres sur la page.
-  if (o.brouillon)
-    pg.text(A4.w / 2 + 29, A4.h / 2 + 20, "BROUILLON", {
-      size: 96,
-      bold: true,
-      color: C.draft,
-      rot: -55,
-      anchor: "middle",
-      contour: 1.4,
-    });
+  if (o.brouillon) filigrane(pg);
 }
 
-const PLAN_STYLE: Record<PlanRole, Stroke> = {
+/** Filigrane en lettres creuses, posé en dernier : il ne cache rien de la page. Le long de la diagonale ;
+    la ligne de base descend d'une demi-hauteur de capitale pour centrer les lettres sur la page. */
+export function filigrane(pg: Page): void {
+  pg.text(A4.w / 2 + 29, A4.h / 2 + 20, "BROUILLON", {
+    size: 96,
+    bold: true,
+    color: C.draft,
+    rot: -55,
+    anchor: "middle",
+    contour: 1.4,
+  });
+}
+
+export const PLAN_STYLE: Record<PlanRole, Stroke> = {
   "pl-str": { fill: C.rule, stroke: C.muted, width: 0.5 },
   "pl-tread": { fill: C.white, stroke: C.ink, width: 0.5 },
   "pl-bal": { fill: C.chalkSoft, stroke: C.ink, width: 0.5 },
@@ -135,7 +138,7 @@ const PLAN_STYLE: Record<PlanRole, Stroke> = {
   "pl-dimtxt": {},
 };
 
-const SIDE_STYLE: Record<SideRole, Stroke> = {
+export const SIDE_STYLE: Record<SideRole, Stroke> = {
   ...PLAN_STYLE,
   "sd-dalle": { fill: C.rule },
   "sd-sol": { stroke: C.ink, width: 0.7 },
@@ -143,7 +146,7 @@ const SIDE_STYLE: Record<SideRole, Stroke> = {
 };
 
 /** Dessin vectoriel (plan ou vue de côté), ajusté dans le cadre (x, y, w, h). */
-function drawShapes(
+export function drawShapes(
   pg: Page,
   { shapes, box }: { shapes: (PlanShape | SideShape)[]; box: [number, number, number, number] },
   style: Record<string, Stroke>,
@@ -272,7 +275,7 @@ function limonPage(doc: PdfDoc, R: Stair, L: LimonSheets, ids: number[], nom: st
   pg.text(LAND.w - M, LAND.h - 24, `page ${i}/${count}`, { size: 7.5, color: C.muted, anchor: "end" });
 }
 
-function frame(pg: Page, x: number, y: number, w: number, h: number, title: string): void {
+export function frame(pg: Page, x: number, y: number, w: number, h: number, title: string): void {
   pg.rect(x, y, w, h, { stroke: C.rule, width: 0.6 });
   heading(pg, x + 10, y + 16, title);
 }

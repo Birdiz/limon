@@ -11,7 +11,7 @@ import { buildCNC, tightBoards, type CNC } from "./cnc/build";
 import { cutListCSV } from "./cnc/cutlist";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
-import { TARIFS_VIDES } from "./core/tarifs";
+import { ENTREPRISE_VIDE, TARIFS_VIDES } from "./core/tarifs";
 import { DEFAULTS, changeForme, type Params } from "./core/params";
 import { NOM_PAR_DEFAUT, fileBase, newProject, withDevis, withEtat, type Project } from "./core/project";
 import { paramsFromHash, paramsToHash } from "./core/share";
@@ -64,6 +64,7 @@ const devisView = new DevisView({
   project: () => project,
   stair: () => (current?.ok ? current.stair : null),
   tarifs: () => atelier.get()?.tarifs ?? TARIFS_VIDES,
+  entreprise: () => atelier.get()?.entreprise ?? ENTREPRISE_VIDE,
   saved: (d) => {
     if (!project) return;
     project = withDevis(project, d, Date.now());
@@ -71,6 +72,18 @@ const devisView = new DevisView({
     devisView.refresh();
   },
   openTarifs: () => void home.show("atelier"),
+  openCompte: () => void home.show("compte"),
+  numero: (id) => api.devisNumero(id),
+  // Une version remise peut avoir un autre escalier que celui à l'écran : on le dessine le temps de la capture.
+  vue3d: (R) => {
+    if (!scene) return null;
+    const other = !current?.ok || current.stair !== R;
+    if (other) scene.draw(R);
+    const v = scene.snapshot();
+    if (other && current?.ok) scene.draw(current.stair);
+    return v;
+  },
+  download: (data, filename) => downloadBytes(data, filename, "application/pdf"),
 });
 
 function render(result: ComputeResult): void {

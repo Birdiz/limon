@@ -34,6 +34,7 @@ const EXTRA: Record<string, [code: number, reg: number, bold: number]> = {
   "²": [0xb2, 333, 333],
   "³": [0xb3, 333, 333],
   Ø: [0xd8, 778, 778],
+  "€": [0x80, 556, 556],
 };
 
 /** Code WinAnsi et chasse d'un caractère ; les espaces insécables deviennent des espaces. */

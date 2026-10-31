@@ -3,6 +3,7 @@ import { atelierDefauts, newAtelier } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
 import { newProject } from "../src/core/project";
+import { migrate, pgliteDb } from "../server/db";
 import { browser, login, ORIGIN, testServer, type TestServer } from "./server";
 
 const json = { "content-type": "application/json" };
@@ -312,6 +313,77 @@ describe("atelier", () => {
 
   it("demande une session", async () => {
     expect((await browser(s)("/api/atelier")).status).toBe(401);
+  });
+});
+
+describe("numéros de devis", () => {
+  const numero = async (f: typeof fetch, projet: unknown) => {
+    const r = await post(f, "/api/devis/numero", { projet });
+    return r.ok ? ((await r.json()) as { numero: string }).numero : r.status;
+  };
+  const annee = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", year: "numeric" }).format(new Date());
+
+  it("suivent l'année, sans trou, et redonnent le même numéro au même escalier", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect(await numero(f, "a")).toBe(`${annee}-0001`);
+    expect(await numero(f, "b")).toBe(`${annee}-0002`);
+    expect(await numero(f, "a")).toBe(`${annee}-0001`);
+    expect(await numero(f, "c")).toBe(`${annee}-0003`);
+  });
+
+  it("ont une suite par compte et par année", async () => {
+    const f = browser(s),
+      g = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await login(s, g, "b@exemple.fr");
+    await s.db.query("insert into devis_numeros (compte, projet, annee, rang) values ($1, 'vieux', 2001, 57)", [a.id]);
+    expect(await numero(f, "a")).toBe(`${annee}-0001`);
+    expect(await numero(g, "a")).toBe(`${annee}-0001`);
+    expect(await numero(g, "b")).toBe(`${annee}-0002`);
+    expect(await numero(f, "vieux")).toBe("2001-0057");
+  });
+
+  it("tiennent quand deux demandes arrivent ensemble", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const got = await Promise.all(["a", "b", "c", "d", "a"].map((p) => numero(f, p)));
+    expect(new Set(got.slice(0, 4)).size).toBe(4);
+    expect(got[4]).toBe(got[0]);
+    expect([...got].sort()).toEqual([1, 1, 2, 3, 4].map((n) => `${annee}-${String(n).padStart(4, "0")}`));
+  });
+
+  it("demandent une session et un escalier", async () => {
+    expect(await numero(browser(s), "a")).toBe(401);
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect(await numero(f, "")).toBe(400);
+    expect(await numero(f, 12)).toBe(400);
+  });
+
+  it("partent avec le compte", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await numero(f, "a");
+    await f("/api/compte", { method: "DELETE" });
+    expect(await s.db.query("select * from devis_numeros")).toEqual([]);
+  });
+
+  it("arrivent par migration dans une base d'avant les devis, sans rien perdre", async () => {
+    const db = await pgliteDb();
+    await migrate(db);
+    // La base telle qu'elle était avant cette migration.
+    await db.exec("drop table devis_numeros; delete from schema_version where v = 4;");
+    await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000001', 'a@exemple.fr')");
+    await migrate(db);
+    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 4 }]);
+    expect(await db.query("select email from comptes")).toEqual([{ email: "a@exemple.fr" }]);
+    await db.query(
+      "insert into devis_numeros (compte, projet, annee, rang) values ('00000000-0000-0000-0000-000000000001', 'a', 2026, 1)",
+    );
+    await migrate(db);
+    expect(await db.query("select count(*)::int as n from devis_numeros")).toEqual([{ n: 1 }]);
+    await db.close();
   });
 });
 
