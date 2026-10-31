@@ -1,5 +1,5 @@
 import { fmt } from "./format";
-import { TOURS, type Essence, type Forme, type GardeCorps, type Params, type Pose } from "./params";
+import { TOURS, isDemi, type Essence, type Forme, type GardeCorps, type Params, type Pose } from "./params";
 import { CONFORT, echSidesShown, echStatus, type EchCote, type Headroom, type Stair, type Status } from "./stair";
 
 export const FORME_LABEL: Record<Forme, string> = {
@@ -8,6 +8,8 @@ export const FORME_LABEL: Record<Forme, string> = {
   "quart-d": "Quart tournant droit",
   "dq-g": "Double quart tournant gauche",
   "dq-d": "Double quart tournant droit",
+  "demi-g": "Demi-tournant gauche",
+  "demi-d": "Demi-tournant droit",
 };
 
 export const ESSENCE_LABEL: Record<Essence, string> = {
@@ -58,7 +60,7 @@ export function sectionSummaries(p: Params, R: Stair | null): Record<Section, st
     quart = tours > 0;
   const tre = R ? R.treDims : { tL: p.tL, tX: p.tX, tY: p.tY };
   const treTxt = quart
-    ? `${p.tForme === "L" ? (tours === 2 ? "en U, " : "en L, ") : ""}${fmt(tre.tY)} × ${fmt(tre.tX)}`
+    ? `${(R ? R.treL : p.tForme === "L") ? (tours === 2 ? "en U, " : "en L, ") : ""}${fmt(tre.tY)} × ${fmt(tre.tX)}`
     : fmt(tre.tL);
   const spans = R ? turnSpans(R) : [];
   const tourTxt = spans.length
@@ -66,7 +68,7 @@ export function sectionSummaries(p: Params, R: Stair | null): Record<Section, st
     : "";
   return {
     forme: FORME_LABEL[p.forme],
-    dimensions: `${fmt(p.H)} de haut · ${tours === 2 ? `${fmt(p.A)} × ${fmt(p.C)} × ${fmt(p.B)}` : quart ? `${fmt(p.A)} × ${fmt(p.B)}` : `${fmt(p.L)} de long`} · ${fmt(p.W)} de large`,
+    dimensions: `${fmt(p.H)} de haut · ${isDemi(p.forme) ? `${fmt(p.A)} × ${fmt(p.B)}, jour ${fmt(p.J)}` : tours === 2 ? `${fmt(p.A)} × ${fmt(p.C)} × ${fmt(p.B)}` : quart ? `${fmt(p.A)} × ${fmt(p.B)}` : `${fmt(p.L)} de long`} · ${fmt(p.W)} de large`,
     tremie: p.tAuto ? (R ? `à calculer : ${treTxt}` : "à calculer") : treTxt,
     marches:
       (R

@@ -1,6 +1,7 @@
 import { buildCNC } from "../cnc/build";
 import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist";
 import { fmt } from "../core/format";
+import { isDemi } from "../core/params";
 import { planShapes, type PlanRole } from "../core/plan-shapes";
 import type { Stair, Status } from "../core/stair";
 import { ESSENCE_LABEL, FORME_LABEL, GC_LABEL, POSE_LABEL, STATUS_LABEL, checks, turnSpans } from "../core/summary";
@@ -193,7 +194,12 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     ...(R.quart
       ? ([
           ["Longueur côté départ", mm(R.A)],
-          ...(R.tours > 1 ? ([["Longueur côté fond", mm(R.C)]] as [string, string][]) : []),
+          ...(R.tours > 1
+            ? ([isDemi(p.forme) ? ["Jour, limons compris", mm(p.J)] : ["Longueur côté fond", mm(R.C)]] as [
+                string,
+                string,
+              ][])
+            : []),
           ["Longueur côté arrivée", mm(R.B)],
         ] as [string, string][])
       : ([["Reculement", mm(R.L)]] as [string, string][])),

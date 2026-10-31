@@ -10,6 +10,7 @@ import {
   type Pose,
   type Params,
   TOURS,
+  isDemi,
 } from "../core/params";
 import { turnRange, type InputError, type Stair } from "../core/stair";
 import { turnSpans } from "../core/summary";
@@ -81,25 +82,29 @@ export function showFieldErrors(errors: readonly InputError[]): void {
   });
 }
 
-/** Formes où se montre un élément [data-show] : droit, quart (qui tourne), quart1 (un tournant), u (deux tournants). */
-const SHOW: Record<string, (tours: number) => boolean> = {
-  droit: (t) => t === 0,
-  quart: (t) => t > 0,
-  quart1: (t) => t === 1,
-  u: (t) => t === 2,
+/** Formes où se montre un élément [data-show] : droit, quart (qui tourne), quart1 (un tournant), u (deux tournants),
+    dq (double quart, saisi par le côté fond), demi (demi-tournant, saisi par le jour). */
+const SHOW: Record<string, (f: Forme) => boolean> = {
+  droit: (f) => TOURS[f] === 0,
+  quart: (f) => TOURS[f] > 0,
+  quart1: (f) => TOURS[f] === 1,
+  u: (f) => TOURS[f] === 2,
+  dq: (f) => TOURS[f] === 2 && !isDemi(f),
+  demi: isDemi,
 };
 
 /** Champs propres à la forme, champs automatiques grisés et valeurs calculées affichées. */
 export function syncInputs(p: Params, stair: Stair | null): void {
-  const tours = TOURS[p.forme];
   document
     .querySelectorAll<HTMLElement>("[data-show]")
-    .forEach((el) => (el.hidden = !SHOW[el.dataset.show ?? ""]?.(tours)));
+    .forEach((el) => (el.hidden = !SHOW[el.dataset.show ?? ""]?.(p.forme)));
   document.querySelectorAll<HTMLElement>("[data-gc]").forEach((el) => (el.hidden = p.gc === "aucun"));
-  document.querySelectorAll<HTMLElement>("[data-tre]").forEach((el) => (el.hidden = !tours || p.tForme !== "L"));
+  document
+    .querySelectorAll<HTMLElement>("[data-tre]")
+    .forEach((el) => (el.hidden = !TOURS[p.forme] || p.tForme !== "L"));
   // La trémie qui suit l'escalier : en L pour un quart tournant, en U pour deux tournants.
   byId<HTMLSelectElement>("tForme").querySelector<HTMLOptionElement>('option[value="L"]')!.textContent =
-    tours === 2 ? "En U" : "En L";
+    TOURS[p.forme] === 2 ? "En U" : "En L";
   document.querySelectorAll<HTMLElement>("[data-mp]").forEach((el) => (el.hidden = !p.mp));
   input("n").disabled = p.nAuto;
   input("f").disabled = p.fAuto;

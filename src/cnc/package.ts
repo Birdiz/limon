@@ -1,6 +1,6 @@
 import { fmt } from "../core/format";
 import { GC } from "../core/railing";
-import { PERCAGE, TENON, type Stair } from "../core/stair";
+import { PERCAGE, TENON, type Newel, type Stair } from "../core/stair";
 import { postTenon } from "./railing";
 import { treadsCSV } from "../core/sheet";
 import { buildCNC, type CNC } from "./build";
@@ -14,6 +14,8 @@ const FORME_LABEL = {
   "quart-d": "quart tournant droit",
   "dq-g": "double quart tournant gauche",
   "dq-d": "double quart tournant droit",
+  "demi-g": "demi-tournant gauche",
+  "demi-d": "demi-tournant droit",
 } as const;
 const FORME_SLUG = {
   droit: "droit",
@@ -21,7 +23,12 @@ const FORME_SLUG = {
   "quart-d": "quart-droit",
   "dq-g": "double-quart-gauche",
   "dq-d": "double-quart-droit",
+  "demi-g": "demi-tournant-gauche",
+  "demi-d": "demi-tournant-droit",
 } as const;
+
+/** Section du poteau : carrée, ou largeur du jour × section pour le poteau unique du demi-tournant. */
+const section = (N: Newel) => `${Math.max(N.sx, N.sy)} x ${Math.min(N.sx, N.sy)}`;
 
 export function readme(R: Stair): string {
   const p = R.params;
@@ -60,7 +67,7 @@ export function readme(R: Stair): string {
       `              jeu de ${fmt(p.jeu, 1)} mm par côté compris${R.rn > 0 ? ", bout avant arrondi comme le nez (arcs)" : ""}`,
       ...(R.quart
         ? [
-            `  TENON       tenon des limons de jour dans ${R.tours > 1 ? "les poteaux" : "le poteau"} : enlever les joues de part et d'autre`,
+            `  TENON       tenon des limons de jour dans ${R.newels.length > 1 ? "les poteaux" : "le poteau"} : enlever les joues de part et d'autre`,
             `              (épaisseurs sous le nom de la pièce), épaulements de ${TENON.epaul} mm en haut et en bas`,
             ...(R.tours > 1
               ? [
@@ -90,13 +97,13 @@ export function readme(R: Stair): string {
       "",
       ...(R.newels.length > 1
         ? [
-            `poteau.dxf : ${R.newels.length} poteaux de ${R.newels[0]!.size} x ${R.newels[0]!.size} mm, du sol à ${R.newels.map((N) => fmt(N.h)).join(" et ")} mm,`,
+            `poteau.dxf : ${R.newels.length} poteaux de ${section(R.newels[0]!)} mm, du sol à ${R.newels.map((N) => fmt(N.h)).join(" et ")} mm,`,
             "  affleurant les limons de jour côté marches, dans l'ordre de la montée. Les quatre faces de chacun",
             "  vues de l'extérieur, couchées pied à gauche, dans l'ordre du tour :",
           ]
         : R.newels.length
           ? [
-              `poteau.dxf : poteau de ${R.newels[0]!.size} x ${R.newels[0]!.size} mm, du sol à ${fmt(R.newels[0]!.h)} mm, affleurant les limons de jour`,
+              `poteau.dxf : poteau de ${section(R.newels[0]!)} mm, du sol à ${fmt(R.newels[0]!.h)} mm, affleurant les limons de jour`,
               "  côté marches. Ses quatre faces vues de l'extérieur, couchées pied à gauche, dans l'ordre du tour :",
             ]
           : []),
@@ -122,7 +129,9 @@ export function readme(R: Stair): string {
             `  des ${R.rail.type === "balustres" ? "balustres" : "montants"} ; ${R.rail.type === "balustres" ? "balustres" : "montants et lisses"} vus de côté, couchés, numérotés dans l'ordre de la montée.`,
             "  DECOUPE     contours",
             ...(R.quart
-              ? [`  TENON       tenon de chaque main courante dans ${R.tours > 1 ? "les poteaux" : "le poteau"}`]
+              ? [
+                  `  TENON       tenon de chaque main courante dans ${R.newels.length > 1 ? "les poteaux" : "le poteau"}`,
+                ]
               : []),
             "  MORTAISE    mortaises d'aplomb sous la main courante, jeu compris",
             "  TEXTE       noms, sections, pentes",
