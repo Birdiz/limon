@@ -1,4 +1,12 @@
 import { DEFAULTS, sanitizeParams, type Params } from "./params";
+import {
+  ENTREPRISE_VIDE,
+  TARIFS_VIDES,
+  sanitizeEntreprise,
+  sanitizeTarifs,
+  type Entreprise,
+  type Tarifs,
+} from "./tarifs";
 
 /**
  * Profil de l'atelier : les réglages qui tiennent à l'habitude de l'artisan, repris par chaque nouvel
@@ -36,6 +44,9 @@ export type AtelierDefauts = Pick<Params, AtelierKey>;
 /** Réglages de l'atelier, avec la date qui départage deux appareils. */
 export interface Atelier {
   defauts: AtelierDefauts;
+  /** Pour les devis : tarifs et fiche de l'entreprise. */
+  tarifs: Tarifs;
+  entreprise: Entreprise;
   /** Dernière modification, en millisecondes depuis 1970. */
   modifie: number;
 }
@@ -57,10 +68,21 @@ export function isDefaultAtelier(d: AtelierDefauts): boolean {
   return ATELIER_KEYS.every((k) => d[k] === DEFAULTS[k]);
 }
 
-/** Profil relu (stockage ou serveur, non fiable) ; null s'il n'a pas de date. */
+/** Profil sans tarifs ni fiche de l'entreprise, comme avant les devis. */
+export function newAtelier(defauts: AtelierDefauts, modifie: number): Atelier {
+  return { defauts, tarifs: TARIFS_VIDES, entreprise: ENTREPRISE_VIDE, modifie };
+}
+
+/** Profil relu (stockage ou serveur, non fiable) ; null s'il n'a pas de date. Un profil d'avant les devis
+    revient sans tarifs ni fiche de l'entreprise. */
 export function sanitizeAtelier(raw: unknown): Atelier | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   if (typeof r.modifie !== "number" || !Number.isFinite(r.modifie)) return null;
-  return { defauts: atelierDefauts(sanitizeParams(r.defauts)), modifie: Math.round(r.modifie) };
+  return {
+    defauts: atelierDefauts(sanitizeParams(r.defauts)),
+    tarifs: sanitizeTarifs(r.tarifs),
+    entreprise: sanitizeEntreprise(r.entreprise),
+    modifie: Math.round(r.modifie),
+  };
 }

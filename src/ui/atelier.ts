@@ -2,6 +2,7 @@ import {
   atelierDefauts,
   atelierParams,
   isDefaultAtelier,
+  newAtelier,
   sanitizeAtelier,
   type Atelier,
   type AtelierDefauts,
@@ -43,8 +44,10 @@ export class AtelierStore {
     return atelierParams(this.a);
   }
 
-  set(defauts: AtelierDefauts, now = Date.now()): void {
-    this.put({ defauts, modifie: now });
+  /** Change une partie du profil (réglages, tarifs ou fiche de l'entreprise) en gardant le reste. */
+  set(part: Partial<Omit<Atelier, "modifie">>, now = Date.now()): void {
+    const base = this.a ?? newAtelier(atelierDefauts(DEFAULTS), now);
+    this.put({ ...base, ...part, modifie: now });
   }
 
   /** Version reçue du compte, plus récente que celle d'ici. */
@@ -237,8 +240,8 @@ export class AtelierPanel {
     return atelierDefauts(sanitizeParams({ ...DEFAULTS, ...this.defauts(), ...raw }));
   }
 
-  private save(d: AtelierDefauts): void {
-    this.store.set(d);
+  private save(defauts: AtelierDefauts): void {
+    this.store.set({ defauts });
     this.host.saved();
   }
 

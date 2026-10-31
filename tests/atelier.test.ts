@@ -2,7 +2,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ATELIER_KEYS, atelierDefauts, atelierParams, isDefaultAtelier, sanitizeAtelier } from "../src/core/atelier";
+import {
+  ATELIER_KEYS,
+  atelierDefauts,
+  atelierParams,
+  isDefaultAtelier,
+  newAtelier,
+  sanitizeAtelier,
+} from "../src/core/atelier";
 import { DEFAULTS } from "../src/core/params";
 import { AtelierPanel, AtelierStore } from "../src/ui/atelier";
 import type { KeyValue } from "../src/ui/store";
@@ -24,7 +31,7 @@ describe("réglages de l'atelier", () => {
   });
 
   it("donne les réglages d'un nouvel escalier : l'atelier d'abord, l'exemple pour le reste", () => {
-    const p = atelierParams({ defauts: { ...atelierDefauts(DEFAULTS), ess: "sapin", el: 60 }, modifie: 1 });
+    const p = atelierParams(newAtelier({ ...atelierDefauts(DEFAULTS), ess: "sapin", el: 60 }, 1));
     expect([p.ess, p.el]).toEqual(["sapin", 60]);
     expect([p.H, p.A, p.B, p.W]).toEqual([DEFAULTS.H, DEFAULTS.A, DEFAULTS.B, DEFAULTS.W]);
     expect(atelierParams(null)).toEqual(DEFAULTS);
@@ -36,10 +43,9 @@ describe("réglages de l'atelier", () => {
   });
 
   it("nettoie un profil relu, et refuse celui qui n'a pas de date", () => {
-    expect(sanitizeAtelier({ defauts: { ess: "hetre", et: "épais" }, modifie: 7.4 })).toEqual({
-      defauts: { ...atelierDefauts(DEFAULTS), ess: "hetre" },
-      modifie: 7,
-    });
+    expect(sanitizeAtelier({ defauts: { ess: "hetre", et: "épais" }, modifie: 7.4 })).toEqual(
+      newAtelier({ ...atelierDefauts(DEFAULTS), ess: "hetre" }, 7),
+    );
     expect(sanitizeAtelier({ defauts: { ess: "hetre" } })).toBeNull();
     expect(sanitizeAtelier(null)).toBeNull();
   });
@@ -50,11 +56,8 @@ describe("profil gardé sur l'appareil", () => {
     const storage = memory();
     const a = new AtelierStore(storage);
     expect(a.get()).toBeNull();
-    a.set({ ...atelierDefauts(DEFAULTS), ess: "frene" }, 1000);
-    expect(new AtelierStore(storage).get()).toEqual({
-      defauts: { ...atelierDefauts(DEFAULTS), ess: "frene" },
-      modifie: 1000,
-    });
+    a.set({ defauts: { ...atelierDefauts(DEFAULTS), ess: "frene" } }, 1000);
+    expect(new AtelierStore(storage).get()).toEqual(newAtelier({ ...atelierDefauts(DEFAULTS), ess: "frene" }, 1000));
     a.clear();
     expect(new AtelierStore(storage).get()).toBeNull();
   });

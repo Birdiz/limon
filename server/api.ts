@@ -14,6 +14,7 @@ import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { cleanEmail, type Compte, type CompteDetail, type Entree, type Passkey } from "../src/core/account";
 import { sanitizeAtelier, type Atelier, type AtelierDefauts } from "../src/core/atelier";
+import type { Entreprise, Tarifs } from "../src/core/tarifs";
 import { sanitizeProject, type Project } from "../src/core/project";
 import type { Db } from "./db";
 import type { SendCode } from "./mail";
@@ -389,26 +390,42 @@ export function api(cfg: ApiConfig): Hono<Env> {
 
   /* ---------- Atelier ---------- */
 
+  /** Profil du compte ; les lignes d'avant les devis reviennent sans tarifs ni fiche de l'entreprise. */
   async function atelierOf(compte: string): Promise<Atelier | null> {
-    const [row] = await db.query<{ modifie: number; donnees: AtelierDefauts }>(
-      "select modifie, donnees from ateliers where compte = $1",
-      [compte],
-    );
-    return row ? { defauts: row.donnees, modifie: row.modifie } : null;
+    const [row] = await db.query<{
+      modifie: number;
+      donnees: AtelierDefauts;
+      tarifs: Tarifs | null;
+      entreprise: Entreprise | null;
+    }>("select modifie, donnees, tarifs, entreprise from ateliers where compte = $1", [compte]);
+    return row
+      ? sanitizeAtelier({ defauts: row.donnees, tarifs: row.tarifs, entreprise: row.entreprise, modifie: row.modifie })
+      : null;
   }
 
   app.get("/atelier", auth, async (c) => c.json(await atelierOf(c.get("compte"))));
 
   /** Le profil reçu ne remplace que plus ancien que lui ; renvoie celui qui l'emporte. */
   app.put("/atelier", auth, async (c) => {
-    const a = sanitizeAtelier((await body(c)).atelier);
+    const raw = (await body(c)).atelier;
+    const a = sanitizeAtelier(raw);
     if (!a) return err(c, 400, "Envoi mal formé.");
+    // Une version de l'outil d'avant les devis envoie son profil sans tarifs ni fiche : on garde ceux du compte.
+    const has = (k: string) => typeof raw === "object" && raw !== null && k in raw;
     const compte = c.get("compte");
     await db.query(
-      `insert into ateliers (compte, modifie, donnees) values ($1, $2, $3::jsonb)
-       on conflict (compte) do update set modifie = excluded.modifie, donnees = excluded.donnees
+      `insert into ateliers (compte, modifie, donnees, tarifs, entreprise) values ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb)
+       on conflict (compte) do update set modifie = excluded.modifie, donnees = excluded.donnees,
+         tarifs = coalesce(excluded.tarifs, ateliers.tarifs),
+         entreprise = coalesce(excluded.entreprise, ateliers.entreprise)
          where ateliers.modifie < excluded.modifie`,
-      [compte, a.modifie, JSON.stringify(a.defauts)],
+      [
+        compte,
+        a.modifie,
+        JSON.stringify(a.defauts),
+        has("tarifs") ? JSON.stringify(a.tarifs) : null,
+        has("entreprise") ? JSON.stringify(a.entreprise) : null,
+      ],
     );
     return c.json(await atelierOf(compte));
   });
