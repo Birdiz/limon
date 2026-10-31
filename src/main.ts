@@ -8,6 +8,7 @@ import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./styles/main.css";
 
 import { buildCNC, tightBoards, type CNC } from "./cnc/build";
+import { cutListCSV } from "./cnc/cutlist";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { DEFAULTS, type Params } from "./core/params";
@@ -309,8 +310,11 @@ byId("vtop").addEventListener("click", () => view3d(true));
 byId("ficheDl").addEventListener("click", () => {
   if (!current?.ok) return;
   const base = fileBase(project?.nom ?? NOM_PAR_DEFAUT);
-  if (byId<HTMLSelectElement>("ficheFmt").value === "csv")
-    downloadBytes(new TextEncoder().encode("\ufeff" + treadsCSV(current.stair)), `${base} - marches.csv`, "text/csv");
+  const kind = byId<HTMLSelectElement>("ficheFmt").value;
+  const csv = (text: string, nom: string) =>
+    downloadBytes(new TextEncoder().encode("\ufeff" + text), `${base} - ${nom}.csv`, "text/csv");
+  if (kind === "csv") csv(treadsCSV(current.stair), "marches");
+  else if (kind === "debit") csv(cutListCSV(cnc ?? buildCNC(current.stair), current.stair), "liste de débit");
   else {
     const vue3d = scene?.snapshot() ?? undefined;
     const date = new Date().toLocaleDateString("fr-FR");
@@ -321,7 +325,7 @@ byId("ficheDl").addEventListener("click", () => {
       "application/pdf",
     );
   }
-  flash(byId("ficheMsg"), "Fiche enregistrée");
+  flash(byId("ficheMsg"), kind === "debit" ? "Liste de débit enregistrée" : "Fiche enregistrée");
 });
 /** Confirmation avant d'exporter des limons dont les logements débordent sous le bord. */
 const confirmTight = (c: CNC): boolean =>

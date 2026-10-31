@@ -60,6 +60,29 @@ export function cutRows(cnc: CNC, R: Stair): CutRow[] {
 
 const ESSENCE_LABEL = { chene: "chêne", hetre: "hêtre", frene: "frêne", sapin: "sapin", noyer: "noyer" } as const;
 
+/** Nombre pour un tableur français : virgule décimale, sans séparateur de milliers. */
+const num = (v: number, d: number) =>
+  v.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: d, useGrouping: false });
+
+/** Cellule entre guillemets si elle contient le séparateur, un guillemet ou un retour à la ligne. */
+const cell = (v: string) => (/[;"\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
+/** Liste de débit au format CSV (séparateur point-virgule, décimales à la française), avec une ligne de total.
+    Le volume de chaque ligne est pris sur les cotes brutes affichées, quantité comprise. */
+export function cutListCSV(cnc: CNC, R: Stair): string {
+  const ess = ESSENCE_LABEL[R.params.ess];
+  const essence = ess.charAt(0).toUpperCase() + ess.slice(1);
+  const rows = cutRows(cnc, R).map((r) => ({ ...r, v: (r.q * r.L * r.l * r.e) / 1e9 }));
+  const q = rows.reduce((t, r) => t + r.q, 0),
+    v = rows.reduce((t, r) => t + r.v, 0);
+  const lines: string[][] = [
+    ["Pièce", "Essence", "Épaisseur (mm)", "Longueur (mm)", "Largeur (mm)", "Quantité", "Volume (m³)"],
+    ...rows.map((r) => [r.name, essence, num(r.e, 1), num(r.L, 1), num(r.l, 1), String(r.q), num(r.v, 4)]),
+    ["Total", "", "", "", "", String(q), num(v, 4)],
+  ];
+  return lines.map((l) => l.map(cell).join(";")).join("\n");
+}
+
 /** Volume brut et poids approximatif selon l'essence. */
 export function volumeText(cnc: CNC, R: Stair): string {
   const v = stockVolume(cnc, R),

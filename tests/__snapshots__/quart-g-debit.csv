@@ -1,0 +1,21 @@
+Pièce;Essence;Épaisseur (mm);Longueur (mm);Largeur (mm);Quantité;Volume (m³)
+Limon de jour 1/2;Chêne;45;2558;454;1;0,0523
+Limon de jour 2/2;Chêne;45;1520;418;1;0,0286
+Limon de mur 1/2;Chêne;45;3500;486;1;0,0765
+Limon de mur 2/2;Chêne;45;2130;434;1;0,0416
+Marches 1, 2, 3, 4, 5, 6, 14;Chêne;40;880;314;7;0,0774
+Marche 7;Chêne;40;880;360;1;0,0127
+Marche 8;Chêne;40;927;401;1;0,0149
+Marche 9;Chêne;40;1202;562;1;0,027
+Marche 10;Chêne;40;1405;466;1;0,0262
+Marche 11;Chêne;40;1131;395;1;0,0179
+Marche 12;Chêne;40;984;384;1;0,0151
+Marche 13;Chêne;40;913;358;1;0,0131
+Contremarches 1, 2, 3, 4, 5, 6, 7, 14, 15;Chêne;22;880;140;9;0,0244
+Contremarches 8, 13;Chêne;22;887;140;2;0,0055
+Contremarche 9;Chêne;22;926;140;1;0,0029
+Contremarche 10;Chêne;22;1285;140;1;0,004
+Contremarche 11;Chêne;22;1050;140;1;0,0032
+Contremarche 12;Chêne;22;925;140;1;0,0028
+Poteau;Chêne;100;2040;100;1;0,0204
+Total;;;;;34;0,4663
