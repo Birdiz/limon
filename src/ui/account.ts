@@ -78,7 +78,8 @@ export class AccountDialog {
     if (!st.compte) {
       saved.textContent = "Enregistré sur cet appareil";
       btn.className = "btn hbtn acbtn guest";
-      btn.innerHTML = `${PERSON}<span class="lbl-long">Créer mon compte</span><span class="lbl-short">Compte</span>`;
+      const lbl = this.store.known() ? "Me connecter" : "Créer mon compte";
+      btn.innerHTML = `${PERSON}<span class="lbl-long">${lbl}</span><span class="lbl-short">Compte</span>`;
       btn.removeAttribute("aria-label");
       return;
     }
@@ -125,6 +126,14 @@ export class AccountDialog {
 
   private showLogin(): void {
     this.view("login");
+    // Déjà venu avec un compte : se connecter passe avant créer.
+    const known = this.store.known();
+    byId("acIntro").textContent = known
+      ? "Connectez-vous pour retrouver vos escaliers sur cet appareil."
+      : "Avec un compte, vos escaliers vous suivent sur votre téléphone et votre ordinateur, et restent utilisables sans réseau.";
+    byId("acEmailLbl").textContent = known
+      ? "Se connecter avec un code, ou créer un autre compte"
+      : "Créer un compte, ou se connecter avec un code";
     this.codeStep(false);
     byId("acPkBox").hidden = !hasWebAuthn();
     // La passkey proposée dans le remplissage automatique du champ e-mail.
