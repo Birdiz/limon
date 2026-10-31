@@ -638,10 +638,11 @@ input[type="range"] {
 
 .shapes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 6px;
 }
-.shapes input {
+.shapes input,
+.sens input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
@@ -675,6 +676,58 @@ input[type="range"] {
 }
 .shapes input:checked + label svg {
   stroke: var(--chalk);
+}
+/* Les pictogrammes sont dessinés à droite ; à gauche, leur miroir. */
+.sbody:has(#s-g:checked) .shapes svg.tourne {
+  transform: scaleX(-1);
+}
+/* Sens du tournant : deux boutons côte à côte, sous les formes qui tournent. */
+.sensrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15.5px;
+  font-weight: 500;
+}
+.sens {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--paper);
+}
+.sens label {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.sens input:checked + label {
+  background: var(--chalk-soft);
+  color: var(--chalk);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--chalk);
+}
+.sens input:focus-visible + label {
+  outline: 2px solid var(--chalk);
+  outline-offset: 2px;
+}
+/* Différence entre les deux formes en U, sous les cases, dans les deux modes. */
+.formenote {
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+.formenote b {
+  color: var(--ink);
+  font-weight: 600;
 }
 .shapes input:focus-visible + label,
 .choice:has(input:focus-visible) {
