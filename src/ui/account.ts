@@ -75,7 +75,7 @@ export class AccountPanel {
     if (!st.compte) {
       saved.textContent = "Enregistré sur cet appareil";
       btn.className = "btn hbtn acbtn guest";
-      const lbl = this.store.known() ? "Me connecter" : "Créer mon compte";
+      const lbl = this.store.known() ? "Me connecter" : "Ouvrir l'outil";
       btn.innerHTML = `${PERSON}<span class="lbl-long">${lbl}</span><span class="lbl-short">Compte</span>`;
       btn.removeAttribute("aria-label");
       return;
