@@ -1,11 +1,14 @@
-import { buildCNC } from "../cnc/build";
+import { buildCNC, type CNC } from "../cnc/build";
 import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist";
 import { fmt } from "../core/format";
 import { isDemi } from "../core/params";
+import { projectUrl } from "../core/share";
 import { planShapes, type PlanRole } from "../core/plan-shapes";
 import type { Stair, Status } from "../core/stair";
 import { ESSENCE_LABEL, FORME_LABEL, GC_LABEL, POSE_LABEL, STATUS_LABEL, checks, turnSpans } from "../core/summary";
 import { A4, PdfDoc, hex, wrap, type Page, type RGB, type Stroke } from "./pdf";
+import { boardHeight, boardScale, drawBoard, layBoards, type Board } from "./limons";
+import { qrMatrix } from "./qr";
 
 /** Couleurs du thème clair de la page, la fiche étant faite pour l'impression. */
 const C = {
@@ -19,11 +22,11 @@ const C = {
   ok: hex("#2e7d4f"),
   warn: hex("#856a00"),
   bad: hex("#b42318"),
+  draft: hex("#e6a8a1"),
 } satisfies Record<string, RGB>;
 const ST: Record<Status | "info", RGB> = { ok: C.ok, warn: C.warn, bad: C.bad, info: C.muted };
 
 const M = 42;
-const PAGES = 3;
 const CW = A4.w - 2 * M;
 
 const DISCLAIMER =
@@ -35,6 +38,8 @@ export interface FicheOptions {
   date: string;
   /** Capture de la vue 3D en JPEG, si elle est disponible. */
   vue3d?: { data: Uint8Array; w: number; h: number };
+  /** Escalier pas encore dit fini : mention en tête et filigrane sur chaque page. */
+  brouillon?: boolean;
 }
 
 const mm = (v: number, d = 0) => `${fmt(v, d)} mm`;
@@ -96,9 +101,20 @@ function logo(pg: Page, x: number, y: number, s: number): void {
   pg.path([P(88.5, 78.8), P(92.6, 66.4), P(79, 69.8)], { fill: C.chalk }, true);
 }
 
-function footer(pg: Page, nom: string, i: number, count: number): void {
-  pg.text(M, A4.h - 24, `Quart de tour · ${nom}`, { size: 7.5, color: C.muted });
+function footer(pg: Page, o: FicheOptions, i: number, count: number): void {
+  pg.text(M, A4.h - 24, `Quart de tour · ${o.nom}`, { size: 7.5, color: C.muted });
   pg.text(A4.w - M, A4.h - 24, `page ${i}/${count}`, { size: 7.5, color: C.muted, anchor: "end" });
+  // Filigrane en lettres creuses, posé en dernier : il ne cache rien de la page. Le long de la diagonale ;
+  // la ligne de base descend d'une demi-hauteur de capitale pour centrer les lettres sur la page.
+  if (o.brouillon)
+    pg.text(A4.w / 2 + 29, A4.h / 2 + 20, "BROUILLON", {
+      size: 96,
+      bold: true,
+      color: C.draft,
+      rot: -55,
+      anchor: "middle",
+      contour: 1.4,
+    });
 }
 
 const PLAN_STYLE: Record<PlanRole, Stroke> = {
@@ -151,6 +167,95 @@ function drawPlan(pg: Page, R: Stair, x: number, y: number, w: number, h: number
   }
 }
 
+/** Largeur du code QR de la page 1, en points (28 mm : un module d'au moins 0,35 mm pour un lien de 300 signes). */
+const QR_W = 80;
+
+/** Code QR du lien de l'escalier, coin haut droit en (x, y), et sa légende ; renvoie l'ordonnée sous la légende. */
+function qrBlock(pg: Page, x: number, y: number, url: string): number {
+  const m = qrMatrix(url),
+    k = QR_W / m.length,
+    x0 = x - QR_W;
+  // Modules foncés par suites horizontales ; la marge claire de 4 modules est le blanc de la page autour.
+  const runs: [number, number, number, number][] = [];
+  m.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      if (!row[i]) continue;
+      const i0 = i;
+      while (row[i + 1]) i++;
+      runs.push([x0 + i0 * k, y + j * k, (i - i0 + 1) * k, k]);
+    }
+  });
+  pg.rects(runs, { fill: C.ink });
+  pg.text(x - QR_W / 2, y + QR_W + 13, "Rouvrir cet escalier", {
+    size: 8.5,
+    bold: true,
+    color: C.ink,
+    anchor: "middle",
+  });
+  pg.text(x - QR_W / 2, y + QR_W + 23, "sur quart-de-tour.fr", { size: 7.5, color: C.muted, anchor: "middle" });
+  return y + QR_W + 27;
+}
+
+/* ---------- Limons ---------- */
+
+const LAND = { w: A4.h, h: A4.w };
+/** Place laissée de chaque côté du limon pour les coupes d'about et la hauteur. */
+const SIDE = 70;
+
+interface LimonSheets {
+  boards: Board[];
+  /** Échelle commune, 1:n. */
+  n: number;
+  /** Limons de chaque page. */
+  pages: number[][];
+}
+
+/** Limons à une même échelle, répartis sur des pages à l'italienne. */
+function limonSheets(R: Stair, cnc: CNC): LimonSheets {
+  const boards = layBoards(
+    R,
+    cnc.boardParts.map((b) => b.name.toLowerCase().replace(/^limon/, "Limon")),
+  );
+  const n = boardScale(boards, LAND.w - 2 * M - 2 * SIDE);
+  const pages: number[][] = [];
+  let y = Infinity;
+  boards.forEach((b, i) => {
+    const h = boardHeight(b, n);
+    if (y + h > LAND.h - 44) {
+      pages.push([]);
+      y = 90;
+    }
+    pages[pages.length - 1]!.push(i);
+    y += h + 12;
+  });
+  return { boards, n, pages };
+}
+
+function limonPage(doc: PdfDoc, R: Stair, L: LimonSheets, ids: number[], nom: string, i: number, count: number): void {
+  const pg = doc.page(true);
+  pg.text(M, 58, "Limons", { size: 18, bold: true, color: C.ink });
+  pg.text(LAND.w - M, 46, nom, { size: 8.5, color: C.muted, anchor: "end" });
+  pg.text(LAND.w - M, 58, `Vus côté marches, couchés dans le sens du plateau · échelle 1:${L.n}`, {
+    size: 8.5,
+    color: C.muted,
+    anchor: "end",
+  });
+  pg.text(
+    M,
+    74,
+    `Cotes en millimètres : nez depuis le bout gauche du plateau, hauteurs depuis sa rive basse, angles depuis sa rive. Logements défoncés de ${fmt(R.params.enc)} mm, jeu de ${fmt(R.params.jeu, 1)} mm par côté.`,
+    { size: 8, color: C.muted },
+  );
+  let y = 90;
+  for (const id of ids) {
+    const b = L.boards[id]!;
+    drawBoard(pg, b, L.n, M + SIDE, y, R.params.el, C);
+    y += boardHeight(b, L.n) + 12;
+  }
+  pg.text(M, LAND.h - 24, `Quart de tour · ${nom}`, { size: 7.5, color: C.muted });
+  pg.text(LAND.w - M, LAND.h - 24, `page ${i}/${count}`, { size: 7.5, color: C.muted, anchor: "end" });
+}
+
 function frame(pg: Page, x: number, y: number, w: number, h: number, title: string): void {
   pg.rect(x, y, w, h, { stroke: C.rule, width: 0.6 });
   heading(pg, x + 10, y + 16, title);
@@ -160,13 +265,20 @@ function frame(pg: Page, x: number, y: number, w: number, h: number, title: stri
 export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   const p = R.params;
   const doc = new PdfDoc(o.nom);
+  const cnc = buildCNC(R);
+  const limons = limonSheets(R, cnc);
+  const PAGES = 3 + limons.pages.length;
 
   /* ---------- Page 1 ---------- */
   const pg = doc.page();
   // Bandeau de la marque, comme l'en-tête de la page : logo et nom à gauche, date à droite.
   logo(pg, M, 22, 22);
   pg.text(M + 28, 39, "QUART DE TOUR", { size: 11, bold: true, color: C.ink });
-  pg.text(A4.w - M, 33, `Fiche escalier · ${o.date}`, { size: 8.5, color: C.muted, anchor: "end" });
+  pg.text(A4.w - M, 33, `Fiche escalier${o.brouillon ? " · brouillon" : ""} · ${o.date}`, {
+    size: 8.5,
+    color: C.muted,
+    anchor: "end",
+  });
   pg.text(A4.w - M, 44, "quart-de-tour.fr", { size: 8.5, color: C.muted, anchor: "end" });
   pg.path(
     [
@@ -260,14 +372,15 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
 
   let y = Math.max(yL, yR) + 12;
   heading(pg, M, y, "Remarques");
+  const yQr = qrBlock(pg, A4.w - M, y - 7, projectUrl(p));
   y += 16;
   for (const [s, t] of R.notes) {
-    const lines = wrap(t, 9.5, CW - 14);
+    const lines = wrap(t, 9.5, CW - QR_W - 32);
     pg.rect(M, y - 6.5, 5, 5, { fill: ST[s] });
     lines.forEach((ln, i) => pg.text(M + 12, y + i * 12.5, ln, { size: 9.5, color: C.ink }));
     y += lines.length * 12.5 + 3;
   }
-  y += 10;
+  y = Math.max(y, yQr) + 10;
 
   const boxH = Math.min(A4.h - 48 - y, 380);
   if (o.vue3d) {
@@ -286,7 +399,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     frame(pg, M, y, CW, boxH, "Plan");
     drawPlan(pg, R, M + 10, y + 26, CW - 20, boxH - 36);
   }
-  footer(pg, o.nom, 1, PAGES);
+  footer(pg, o, 1, PAGES);
 
   /* ---------- Page 2 ---------- */
   const p2 = doc.page();
@@ -377,10 +490,9 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   } else p2.text(M, y + 16.5, "Cotes en millimètres.", { size: 8, color: C.muted });
 
   wrap(DISCLAIMER, 7.5, CW).forEach((ln, i) => p2.text(M, footY + 14 + i * 10, ln, { size: 7.5, color: C.muted }));
-  footer(p2, o.nom, 2, PAGES);
+  footer(p2, o, 2, PAGES);
 
   /* ---------- Page 3 ---------- */
-  const cnc = buildCNC(R);
   const p3 = doc.page();
   p3.text(M, 58, "Liste de débit", { size: 18, bold: true, color: C.ink });
   p3.text(A4.w - M, 46, o.nom, { size: 8.5, color: C.muted, anchor: "end" });
@@ -430,7 +542,9 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     lines.forEach((ln, i) => p3.text(M + 12, y + i * 12.5, ln, { size: 9.5, color: C.ink }));
     y += lines.length * 12.5 + 3;
   }
-  footer(p3, o.nom, 3, PAGES);
+  footer(p3, o, 3, PAGES);
+
+  limons.pages.forEach((ids, i) => limonPage(doc, R, limons, ids, o.nom, 4 + i, PAGES));
 
   return doc.bytes();
 }

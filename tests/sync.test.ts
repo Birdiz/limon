@@ -225,7 +225,16 @@ describe("synchronisation des projets", () => {
     await a.store.deleteAccount();
     expect(await a.names()).toEqual(["Dupont"]);
     expect(a.store.account()).toBeNull();
+    expect(a.store.known()).toBe(false);
     expect(await s.db.query("select * from projets")).toEqual([]);
+  });
+
+  it("après une déconnexion, l'appareil se souvient qu'un compte existe", async () => {
+    const a = device();
+    expect(a.store.known()).toBe(false);
+    await a.signIn("jean@exemple.fr");
+    await a.store.signOut();
+    expect(a.store.known()).toBe(true);
   });
 });
 

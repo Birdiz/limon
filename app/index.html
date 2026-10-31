@@ -36,9 +36,12 @@
         >
       </button>
       <div class="proj" id="proj">
-        <button class="pjswitch" id="pjOpen" type="button">
-          Mes escaliers<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" /></svg>
-        </button>
+        <div class="pjtop">
+          <button class="pjswitch" id="pjOpen" type="button">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" /></svg>Mes escaliers
+          </button>
+          <span class="etat" id="pjEtat"></span>
+        </div>
         <input id="pjName" class="pjname" type="text" maxlength="80" aria-label="Nom de l'escalier" />
       </div>
       <span class="saved" id="saved" role="status"></span>
@@ -57,30 +60,196 @@
       <button class="btn hbtn acbtn" id="acOpen" type="button"></button>
     </header>
 
-    <section class="home" id="home" hidden aria-labelledby="homeTitle">
-      <h1 id="homeTitle">Un escalier à calculer ?</h1>
-      <p class="lead">
-        Six questions, les cotes du chantier sous la main. Le plan, la 3D et la fiche se font tout seuls.
-      </p>
-      <div class="homeacts">
-        <button class="btn go big" id="homeNew" type="button">Nouvel escalier</button>
-        <button class="btn big" id="homeEx" type="button">Voir un exemple déjà calculé</button>
-        <button class="btn big" id="homeBack" type="button" hidden></button>
+    <section class="home" id="home" hidden>
+      <div class="dtabs" role="tablist" aria-label="Mes escaliers, mon atelier, mon compte">
+        <button role="tab" type="button" id="dtEsc" data-panel="escaliers" aria-controls="dpEsc">Escaliers</button
+        ><button role="tab" type="button" id="dtAt" data-panel="atelier" aria-controls="dpAt">Mon atelier</button
+        ><button role="tab" type="button" id="dtAc" data-panel="compte" aria-controls="dpAc">Mon compte</button>
       </div>
-      <div class="homelist" id="homeListBox" hidden>
-        <h2>Mes escaliers</h2>
-        <ul class="plist" id="homeList"></ul>
+
+      <div class="dpanel" id="dpEsc" role="tabpanel" aria-labelledby="dtEsc">
+        <h1 id="homeTitle">Mes escaliers</h1>
+        <p class="lead" id="homeLead">
+          Six questions, les cotes du chantier sous la main. Le plan, la 3D et la fiche se font tout seuls.
+        </p>
+        <button class="btn big back" id="homeBack" type="button" hidden></button>
+        <form class="newp" id="homeNewForm">
+          <label for="homeNom">Nom du nouvel escalier <small>(facultatif)</small></label>
+          <div class="newrow">
+            <input id="homeNom" type="text" maxlength="80" placeholder="Escalier Dupont" /><button
+              class="btn go"
+              id="homeNew"
+              type="submit"
+            >
+              Nouvel escalier
+            </button>
+          </div>
+          <div class="links">
+            <button class="linkbtn" id="homeEx" type="button">Voir un exemple déjà calculé</button
+            ><button class="linkbtn" id="homeFull" type="button" data-adv>Tous les réglages d'un coup</button>
+          </div>
+        </form>
+        <div class="homelist" id="homeDraftBox" hidden>
+          <h2>En cours <span class="count" id="homeDraftN"></span></h2>
+          <ul class="cards" id="homeDraft"></ul>
+        </div>
+        <div class="homelist" id="homeDoneBox" hidden>
+          <h2>Terminés <span class="count" id="homeDoneN"></span></h2>
+          <ul class="cards" id="homeDone"></ul>
+        </div>
+        <div class="links">
+          <button class="linkbtn" id="pjImport" type="button">Ouvrir une copie gardée</button
+          ><button class="linkbtn" id="pjExport" type="button">Garder une copie de l'escalier ouvert</button
+          ><span class="copied" id="pjMsg" role="status" hidden></span>
+        </div>
+        <input type="file" id="pjFile" accept=".escalier,.limon,application/json" hidden />
+        <p class="invite" id="homeInvite">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="2" y="5" width="13" height="10" rx="1.5" />
+            <rect x="16" y="8" width="6" height="11" rx="1.2" />
+            <path d="M5 18h8" /></svg
+          ><span
+            >Vos escaliers sur le téléphone et l'ordinateur :
+            <button class="linkbtn" id="homeAcct" type="button">créer mon compte</button>, sans mot de passe.</span
+          >
+        </p>
+        <div class="install" id="pjInstall" hidden>
+          <div class="actions" id="pjInstallBtns">
+            <button class="btn" id="pjInstallBtn" type="button">Installer Quart de tour sur cet appareil</button>
+          </div>
+          <p class="disclaimer" id="pjInstallNote">
+            Quart de tour s'ouvre alors comme une application, depuis l'écran d'accueil ou le bureau, et fonctionne sans
+            réseau.
+          </p>
+          <p class="disclaimer" id="pjInstallIos" hidden>
+            Pour installer Quart de tour sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil ». Quart de
+            tour s'ouvre alors comme une application et fonctionne sans réseau. Les escaliers faits dans le navigateur
+            n'y apparaissent pas : connectez-vous à votre compte dans l'application, ou gardez-en une copie puis
+            ouvrez-la dans l'application.
+          </p>
+        </div>
       </div>
-      <p class="invite" id="homeInvite">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="2" y="5" width="13" height="10" rx="1.5" />
-          <rect x="16" y="8" width="6" height="11" rx="1.2" />
-          <path d="M5 18h8" /></svg
-        ><span
-          >Vos escaliers sur le téléphone et l'ordinateur :
-          <button class="linkbtn" id="homeAcct" type="button">créer mon compte</button>, sans mot de passe.</span
-        >
-      </p>
+
+      <div class="dpanel" id="dpAt" role="tabpanel" aria-labelledby="dtAt" hidden>
+        <h1>Mon atelier</h1>
+        <p class="lead">
+          Vos habitudes de travail : chaque nouvel escalier part avec ces réglages. Les cotes du chantier, elles,
+          restent propres à chaque escalier.
+        </p>
+        <p class="disclaimer" id="atSum"></p>
+        <div class="actions">
+          <button class="btn" id="atTake" type="button">Reprendre les réglages de l'escalier ouvert</button
+          ><button class="btn" id="atReset" type="button">Revenir à l'exemple</button
+          ><span class="copied" id="atMsg" role="status" hidden></span>
+        </div>
+        <div class="atbody" id="atBody"></div>
+      </div>
+
+      <div class="dpanel" id="dpAc" role="tabpanel" aria-labelledby="dtAc" hidden>
+        <h1>Mon compte</h1>
+        <div class="acview" id="acLogin">
+          <p class="lead" id="acIntro">
+            Avec un compte, vos escaliers vous suivent sur votre téléphone et votre ordinateur, et restent utilisables
+            sans réseau.
+          </p>
+          <div class="actions" id="acPkBox" hidden>
+            <button class="btn" id="acPk" type="button">Se connecter avec Face ID ou l'empreinte</button>
+          </div>
+          <form class="newp" id="acEmailForm">
+            <label for="acEmail" id="acEmailLbl">Créer un compte, ou se connecter avec un code</label>
+            <input
+              id="acEmail"
+              type="email"
+              inputmode="email"
+              autocomplete="username webauthn"
+              required
+              placeholder="vous@exemple.fr"
+            />
+            <div class="actions">
+              <button class="btn go" type="submit">Recevoir un code par e-mail</button>
+            </div>
+          </form>
+          <form class="newp" id="acCodeForm" hidden>
+            <label for="acCode">Code reçu à <span id="acCodeTo"></span></label>
+            <input
+              id="acCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              pattern="[0-9 ]{6,7}"
+              maxlength="7"
+              required
+            />
+            <div class="actions">
+              <button class="btn go" type="submit">Se connecter</button
+              ><button class="btn" id="acBack" type="button">Changer d'adresse ou renvoyer</button>
+            </div>
+          </form>
+        </div>
+        <div class="acview" id="acOffer" hidden>
+          <p>
+            Vous êtes connecté. La prochaine fois, connectez-vous avec Face ID ou l'empreinte, sans attendre d'e-mail.
+          </p>
+          <div class="actions">
+            <button class="btn go" id="acOfferYes" type="button">Activer Face ID ou l'empreinte</button
+            ><button class="btn" id="acOfferNo" type="button">Plus tard</button>
+          </div>
+        </div>
+        <div class="acview" id="acAccount" hidden>
+          <p>Connecté avec <b id="acMe"></b></p>
+          <p class="disclaimer" id="acState"></p>
+          <h3>Face ID et empreinte</h3>
+          <ul class="plist" id="acKeys"></ul>
+          <div class="actions">
+            <button class="btn" id="acAddKey" type="button">Activer Face ID ou l'empreinte sur cet appareil</button>
+          </div>
+          <div class="actions">
+            <a class="btn" id="acData" href="/api/compte/donnees" download>Télécharger mes données</a
+            ><button class="btn" id="acLogout" type="button">Se déconnecter</button
+            ><button class="btn danger" id="acDelete" type="button">Supprimer mon compte</button>
+          </div>
+        </div>
+        <p class="copied" id="acMsg" role="status" hidden></p>
+        <label class="adv"
+          ><span
+            ><b>Réglages avancés</b
+            ><small
+              >Pour régler l'escalier dans le détail : nombre de hauteurs et ligne de foulée à la main, marches
+              balancées, nez, assemblage des fichiers machine, nouvel escalier avec tous les réglages d'un coup.</small
+            ></span
+          ><input type="checkbox" role="switch" id="advToggle"
+        /></label>
+        <div class="soon">
+          <h3>Bientôt</h3>
+          <ul>
+            <li><b>Nom et logo de l'atelier</b> en tête de la fiche remise au client</li>
+            <li><b>Devis</b> : le prix de l'escalier, de la marche au garde-corps</li>
+            <li><b>État du chantier</b> : devis, en fabrication, posé</li>
+            <li><b>Lien de visite</b> pour montrer l'escalier au client, en 3D</li>
+            <li><b>Versions</b> : revoir un escalier tel qu'il était avant</li>
+          </ul>
+          <p class="disclaimer">Ces outils arrivent avec l'abonnement, en préparation.</p>
+        </div>
+        <details class="privacy">
+          <summary>Confidentialité</summary>
+          <p>
+            Responsable : Thomas Bouzy, <a href="mailto:tom.bouzy@gmail.com">tom.bouzy@gmail.com</a>. Le compte garde
+            votre adresse e-mail, vos projets et la clé publique de vos passkeys : Face ID et l'empreinte ne quittent
+            pas votre appareil. Ces données servent seulement à vous connecter et à retrouver vos projets sur vos
+            appareils ; ni publicité, ni mesure d'audience.
+          </p>
+          <p>
+            Hébergement chez Railway, dans un centre de données à Amsterdam ; Railway est une société américaine, liée
+            par un accord de traitement des données. Les codes de connexion partent par Brevo, en France.
+          </p>
+          <p>
+            Les données sont gardées jusqu'à la suppression du compte, qui les efface aussitôt ; les sauvegardes de la
+            base en gardent une copie le temps de leur conservation. Vous pouvez télécharger vos données et supprimer
+            votre compte ici même. Pour toute autre demande, écrivez à l'adresse ci-dessus ; vous pouvez aussi vous
+            adresser à la CNIL.
+          </p>
+        </details>
+      </div>
     </section>
 
     <div class="work">
@@ -487,6 +656,14 @@
         <section class="tiles" id="tiles" aria-live="polite"></section>
         <section class="notes" id="notes"></section>
 
+        <section class="etatbox" id="etatBox">
+          <p id="etatTxt"></p>
+          <div class="actions">
+            <span class="copied" id="etatMsg" role="status" hidden></span
+            ><button class="btn" id="etatBtn" type="button"></button>
+          </div>
+        </section>
+
         <section class="sheet" id="sheetBox">
           <div class="shead">
             <h2>Fiche des marches</h2>
@@ -663,172 +840,5 @@
         >Fiche
       </button>
     </nav>
-
-    <dialog id="projets" class="dlg" aria-labelledby="pjTitle">
-      <div class="shead">
-        <h2 id="pjTitle">Mes escaliers</h2>
-        <button class="btn" id="pjClose" type="button">Fermer</button>
-      </div>
-      <div class="newp">
-        <label for="pjNom">Nom du nouvel escalier</label>
-        <div class="newrow">
-          <input id="pjNom" type="text" maxlength="80" placeholder="Escalier Dupont" /><button
-            class="btn go"
-            id="pjGuide"
-            type="button"
-          >
-            Démarrer
-          </button>
-        </div>
-        <div class="actions" data-adv>
-          <button class="btn" id="pjFull" type="button">Tous les réglages d'un coup</button>
-        </div>
-      </div>
-      <ul class="plist" id="pjList"></ul>
-      <div class="links">
-        <button class="linkbtn" id="pjImport" type="button">Ouvrir une copie gardée</button
-        ><button class="linkbtn" id="pjExport" type="button">Garder une copie de cet escalier</button
-        ><span class="copied" id="pjMsg" hidden></span>
-      </div>
-      <input type="file" id="pjFile" accept=".escalier,.limon,application/json" hidden />
-      <div class="install" id="pjInstall" hidden>
-        <div class="actions" id="pjInstallBtns">
-          <button class="btn" id="pjInstallBtn" type="button">Installer Quart de tour sur cet appareil</button>
-        </div>
-        <p class="disclaimer" id="pjInstallNote">
-          Quart de tour s'ouvre alors comme une application, depuis l'écran d'accueil ou le bureau, et fonctionne sans
-          réseau.
-        </p>
-        <p class="disclaimer" id="pjInstallIos" hidden>
-          Pour installer Quart de tour sur iPhone ou iPad : bouton Partager, puis « Sur l'écran d'accueil ». Quart de
-          tour s'ouvre alors comme une application et fonctionne sans réseau. Les escaliers faits dans le navigateur n'y
-          apparaissent pas : connectez-vous à votre compte dans l'application, ou gardez-en une copie puis ouvrez-la
-          dans l'application.
-        </p>
-      </div>
-    </dialog>
-
-    <dialog id="compte" class="dlg" aria-labelledby="acTitle">
-      <div class="shead">
-        <h2 id="acTitle">Compte</h2>
-        <button class="btn" id="acClose" type="button">Fermer</button>
-      </div>
-      <div class="acview" id="acLogin">
-        <p>
-          Avec un compte, vos escaliers vous suivent sur votre téléphone et votre ordinateur, et restent utilisables
-          sans réseau.
-        </p>
-        <div class="actions" id="acPkBox" hidden>
-          <button class="btn" id="acPk" type="button">Se connecter avec Face ID ou l'empreinte</button>
-        </div>
-        <form class="newp" id="acEmailForm">
-          <label for="acEmail">Créer un compte, ou se connecter avec un code</label>
-          <input
-            id="acEmail"
-            type="email"
-            inputmode="email"
-            autocomplete="username webauthn"
-            required
-            placeholder="vous@exemple.fr"
-          />
-          <div class="actions">
-            <button class="btn go" type="submit">Recevoir un code par e-mail</button>
-          </div>
-        </form>
-        <form class="newp" id="acCodeForm" hidden>
-          <label for="acCode">Code reçu à <span id="acCodeTo"></span></label>
-          <input
-            id="acCode"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            pattern="[0-9 ]{6,7}"
-            maxlength="7"
-            required
-          />
-          <div class="actions">
-            <button class="btn go" type="submit">Se connecter</button
-            ><button class="btn" id="acBack" type="button">Changer d'adresse ou renvoyer</button>
-          </div>
-        </form>
-      </div>
-      <div class="acview" id="acOffer" hidden>
-        <p>
-          Vous êtes connecté. La prochaine fois, connectez-vous avec Face ID ou l'empreinte, sans attendre d'e-mail.
-        </p>
-        <div class="actions">
-          <button class="btn go" id="acOfferYes" type="button">Activer Face ID ou l'empreinte</button
-          ><button class="btn" id="acOfferNo" type="button">Plus tard</button>
-        </div>
-      </div>
-      <div class="acview" id="acAccount" hidden>
-        <p>Connecté avec <b id="acMe"></b></p>
-        <p class="disclaimer" id="acState"></p>
-        <h3>Face ID et empreinte</h3>
-        <ul class="plist" id="acKeys"></ul>
-        <div class="actions">
-          <button class="btn" id="acAddKey" type="button">Activer Face ID ou l'empreinte sur cet appareil</button>
-        </div>
-        <div class="actions">
-          <a class="btn" id="acData" href="/api/compte/donnees" download>Télécharger mes données</a
-          ><button class="btn" id="acLogout" type="button">Se déconnecter</button
-          ><button class="btn danger" id="acDelete" type="button">Supprimer mon compte</button>
-        </div>
-      </div>
-      <p class="copied" id="acMsg" role="status" hidden></p>
-      <details class="atsec" id="atelier">
-        <summary><span class="sh">Mon atelier</span><span class="sum" id="atSum"></span></summary>
-        <div class="sbody" id="atBody">
-          <p class="disclaimer">
-            Vos habitudes de travail : chaque nouvel escalier part avec ces réglages. Les cotes du chantier, elles,
-            restent propres à chaque escalier.
-          </p>
-          <div class="actions">
-            <button class="btn" id="atTake" type="button">Reprendre les réglages de l'escalier ouvert</button
-            ><button class="btn" id="atReset" type="button">Revenir à l'exemple</button
-            ><span class="copied" id="atMsg" hidden></span>
-          </div>
-        </div>
-      </details>
-      <div class="soon">
-        <h3>Bientôt</h3>
-        <ul>
-          <li><b>Nom et logo de l'atelier</b> en tête de la fiche remise au client</li>
-          <li><b>Devis</b> : le prix de l'escalier, de la marche au garde-corps</li>
-          <li><b>État du chantier</b> : devis, en fabrication, posé</li>
-          <li><b>Lien de visite</b> pour montrer l'escalier au client, en 3D</li>
-          <li><b>Versions</b> : revoir un escalier tel qu'il était avant</li>
-        </ul>
-        <p class="disclaimer">Ces outils arrivent avec l'abonnement, en préparation.</p>
-      </div>
-      <label class="adv"
-        ><span
-          ><b>Réglages avancés</b
-          ><small
-            >Pour régler l'escalier dans le détail : nombre de hauteurs et ligne de foulée à la main, marches balancées,
-            nez, assemblage des fichiers machine, nouvel escalier avec tous les réglages d'un coup.</small
-          ></span
-        ><input type="checkbox" role="switch" id="advToggle"
-      /></label>
-      <details class="privacy">
-        <summary>Confidentialité</summary>
-        <p>
-          Responsable : Thomas Bouzy, <a href="mailto:tom.bouzy@gmail.com">tom.bouzy@gmail.com</a>. Le compte garde
-          votre adresse e-mail, vos projets et la clé publique de vos passkeys : Face ID et l'empreinte ne quittent pas
-          votre appareil. Ces données servent seulement à vous connecter et à retrouver vos projets sur vos appareils ;
-          ni publicité, ni mesure d'audience.
-        </p>
-        <p>
-          Hébergement chez Railway, dans un centre de données à Amsterdam ; Railway est une société américaine, liée par
-          un accord de traitement des données. Les codes de connexion partent par Brevo, en France.
-        </p>
-        <p>
-          Les données sont gardées jusqu'à la suppression du compte, qui les efface aussitôt ; les sauvegardes de la
-          base en gardent une copie le temps de leur conservation. Vous pouvez télécharger vos données et supprimer
-          votre compte ici même. Pour toute autre demande, écrivez à l'adresse ci-dessus ; vous pouvez aussi vous
-          adresser à la CNIL.
-        </p>
-      </details>
-    </dialog>
   </body>
 </html>

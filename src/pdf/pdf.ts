@@ -33,6 +33,7 @@ const EXTRA: Record<string, [code: number, reg: number, bold: number]> = {
   Œ: [0x8c, 1000, 1000],
   "²": [0xb2, 333, 333],
   "³": [0xb3, 333, 333],
+  Ø: [0xd8, 778, 778],
 };
 
 /** Code WinAnsi et chasse d'un caractère ; les espaces insécables deviennent des espaces. */
@@ -105,13 +106,21 @@ export interface TextStyle {
   rot?: number;
   /** Détourage sous le texte, pour le détacher d'un trait. */
   halo?: { color: RGB; width: number };
+  /** Lettres seulement tracées, de cette épaisseur, pour laisser voir ce qu'elles couvrent. */
+  contour?: number;
 }
 
 export class Page {
   readonly ops: string[] = [];
   readonly images = new Set<string>();
 
-  private y = (v: number) => A4.h - v;
+  /** Largeur et hauteur en points : A4 en hauteur, ou à l'italienne. */
+  constructor(
+    readonly w = A4.w,
+    readonly h = A4.h,
+  ) {}
+
+  private y = (v: number) => this.h - v;
 
   private paint(st: Stroke, close: boolean): void {
     const o: string[] = [];
@@ -132,6 +141,13 @@ export class Page {
 
   rect(x: number, y: number, w: number, h: number, st: Stroke): void {
     this.ops.push(`${n(x)} ${n(this.y(y + h))} ${n(w)} ${n(h)} re`);
+    this.paint(st, true);
+  }
+
+  /** Plusieurs rectangles (x, y, w, h) peints d'un seul tenant : pas de filet clair entre deux voisins. */
+  rects(rs: readonly (readonly [number, number, number, number])[], st: Stroke): void {
+    if (!rs.length) return;
+    this.ops.push(rs.map(([x, y, w, h]) => `${n(x)} ${n(this.y(y + h))} ${n(w)} ${n(h)} re`).join(" "));
     this.paint(st, true);
   }
 
@@ -159,6 +175,10 @@ export class Page {
       Y = this.y(y) + dx * sin;
     const set = `/${bold ? "F2" : "F1"} ${n(ts.size)} Tf ${n(cos)} ${n(sin)} ${n(-sin)} ${n(cos)} ${n(X)} ${n(Y)} Tm`;
     const str = pdfString(s, bold);
+    if (ts.contour) {
+      this.ops.push(`[] 0 d ${n(ts.contour)} w ${rgb(ts.color ?? [0, 0, 0])} RG BT ${set} 1 Tr ${str} Tj ET`);
+      return;
+    }
     if (ts.halo)
       this.ops.push(`[] 0 d 1 j ${n(ts.halo.width)} w ${rgb(ts.halo.color)} RG BT ${set} 1 Tr ${str} Tj ET 0 j`);
     this.ops.push(`BT ${set} 0 Tr ${rgb(ts.color ?? [0, 0, 0])} rg ${str} Tj ET`);
@@ -182,8 +202,9 @@ export class PdfDoc {
 
   constructor(private title: string) {}
 
-  page(): Page {
-    const p = new Page();
+  /** Nouvelle page A4, en hauteur ou à l'italienne. */
+  page(landscape = false): Page {
+    const p = landscape ? new Page(A4.h, A4.w) : new Page();
     this.pages.push(p);
     return p;
   }
@@ -247,7 +268,7 @@ export class PdfDoc {
       const xo = [...p.images].map((k) => `/${k} ${imgIds.get(k)} 0 R`).join(" ");
       obj(
         id,
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(A4.w)} ${n(A4.h)}] /Contents ${id + 1} 0 R ` +
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(p.w)} ${n(p.h)}] /Contents ${id + 1} 0 R ` +
           `/Resources << /Font << /F1 3 0 R /F2 4 0 R >>${xo ? ` /XObject << ${xo} >>` : ""} >> >>`,
       );
       const content = p.ops.join("\n");
