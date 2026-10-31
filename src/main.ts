@@ -12,7 +12,7 @@ import { cutListCSV } from "./cnc/cutlist";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { DEFAULTS, changeForme, type Params } from "./core/params";
-import { NOM_PAR_DEFAUT, fileBase, newProject, type Project } from "./core/project";
+import { NOM_PAR_DEFAUT, fileBase, newProject, withEtat, type Project } from "./core/project";
 import { paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
 import { fichePDF } from "./pdf/fiche";
@@ -23,14 +23,13 @@ import { byId, copyText, downloadBytes, flash } from "./ui/dom";
 import { planSVG } from "./ui/plan";
 import { notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
-import { AccountDialog } from "./ui/account";
+import { AccountPanel } from "./ui/account";
 import { Aide } from "./ui/aide";
 import { AtelierPanel, AtelierStore } from "./ui/atelier";
 import { fmt } from "./core/format";
 import { Home } from "./ui/home";
 import { showSketch } from "./ui/sketch";
 import { Api } from "./ui/api";
-import { ProjectsDialog } from "./ui/projects";
 import { startPWA } from "./ui/pwa";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
@@ -108,8 +107,14 @@ function update(): void {
   if (next !== read.params) writeInputs(next);
   params = next;
   if (project && JSON.stringify(params) !== JSON.stringify(project.params)) {
+    // Un escalier terminé qu'on modifie redevient un brouillon : sa fiche n'est plus celle qui a été validée.
+    if (project.etat === "fini") {
+      project = withEtat(project, "brouillon", Date.now());
+      flash(byId("etatMsg"), "Modifié : l'escalier repasse en brouillon", false, 6000);
+    }
     project = { ...project, params, modifie: Date.now() };
     void store.save(project);
+    showEtat();
   }
   undo.record(params);
   const hash = paramsToHash(params);
@@ -160,6 +165,41 @@ function sketches(focused = document.activeElement?.id): void {
     .forEach((fig) => showSketch(fig, params.forme, focused, params.tForme));
 }
 
+const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
+
+/** État de l'escalier ouvert : pastille de l'en-tête et bandeau au-dessus de la fiche. */
+function showEtat(): void {
+  const fini = project?.etat === "fini";
+  const badge = byId("pjEtat");
+  badge.textContent = fini ? "Terminé" : "Brouillon";
+  badge.classList.toggle("fini", fini);
+  byId("etatBox").classList.toggle("fini", fini);
+  byId("etatTxt").innerHTML = fini
+    ? `<b>Terminé le ${day(project!.finiLe)}.</b> La fiche est prête à remettre. Une modification le repasse en brouillon.`
+    : "<b>Brouillon.</b> La fiche porte la mention « brouillon » tant que l'escalier n'est pas dit terminé.";
+  byId("etatBtn").textContent = fini ? "Repasser en brouillon" : "Escalier terminé";
+}
+byId("etatBtn").addEventListener("click", () => {
+  if (!project) return;
+  if (queued) update();
+  const fini = project.etat === "fini";
+  if (!fini && !current?.ok) {
+    flash(byId("etatMsg"), "Corrigez d'abord les cotes signalées en rouge", true, 6000);
+    return;
+  }
+  if (
+    !fini &&
+    current?.ok &&
+    current.stair.notes.some(([st]) => st === "bad") &&
+    !confirm("Des contrôles ne sont pas respectés (en rouge). Dire l'escalier terminé quand même ?")
+  )
+    return;
+  project = withEtat(project, fini ? "brouillon" : "fini", Date.now());
+  void store.save(project);
+  showEtat();
+  flash(byId("etatMsg"), fini ? "Repassé en brouillon" : "Terminé : la fiche ne porte plus la mention brouillon");
+});
+
 /** Ouvre un escalier ; null quand il n'en reste aucun : l'accueil prend alors la page. */
 function openProject(p: Project | null): void {
   if (p) home.hide();
@@ -171,6 +211,7 @@ function openProject(p: Project | null): void {
   steps.apply(p?.mode ?? "complet", p?.etape ?? 0);
   setCNC(false);
   atelierPanel.refresh();
+  showEtat();
   update();
   // L'historique appartient à l'escalier ouvert.
   undo.reset(params);
@@ -206,23 +247,15 @@ async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = a
   openProject(q);
 }
 
-const projects = new ProjectsDialog(store, {
+const account = new AccountPanel(store, api);
+const home = new Home(store, {
   current: () => project,
   params: () => atelier.params(),
   open: openProject,
-  signedIn: () => store.account() !== null,
-});
-const account = new AccountDialog(store, api);
-const home = new Home(store, {
-  current: () => project,
-  create: () => void startNew(),
   example: () => void example(),
-  open: (p) => {
-    openProject(p);
-    void store.setCurrent(p.id);
-  },
-  account: () => void account.show(),
   signedIn: () => store.account() !== null,
+  known: () => store.known(),
+  account: () => void account.show(),
 });
 const atelierPanel = new AtelierPanel(atelier, {
   params: () => (project ? params : null),
@@ -235,9 +268,11 @@ new Aide(
 ).attach();
 byId("atKeep").addEventListener("click", () => atelierPanel.keep(byId("sharemsg")));
 byId("homeBtn").addEventListener("click", () => void home.show());
+byId("pjOpen").addEventListener("click", () => void home.show());
+byId("acOpen").addEventListener("click", () => void home.show("compte"));
 byId("pjNew").addEventListener("click", () => void startNew());
 
-/** Réglages avancés : une préférence de l'appareil, réglée dans le dialogue Compte. */
+/** Réglages avancés : une préférence de l'appareil, réglée dans l'onglet Mon compte. */
 const ADV_KEY = "limon-avance";
 function setAdvanced(on: boolean): void {
   document.body.classList.toggle("avance", on);
@@ -270,9 +305,8 @@ store.onChange(async (ids) => {
       if (next) void store.setCurrent(next.id);
     }
   }
-  await projects.refreshIfOpen();
+  await home.refreshIfOpen();
 });
-byId("pjOpen").addEventListener("click", () => void projects.show());
 byId<HTMLInputElement>("pjName").addEventListener("change", (e) => {
   const el = e.target as HTMLInputElement;
   if (!project) return;
@@ -351,9 +385,10 @@ byId("ficheDl").addEventListener("click", () => {
     const vue3d = scene?.snapshot() ?? undefined;
     const date = new Date().toLocaleDateString("fr-FR");
     const nom = project?.nom ?? NOM_PAR_DEFAUT;
+    const brouillon = project?.etat !== "fini";
     downloadBytes(
-      fichePDF(current.stair, { nom, date, ...(vue3d ? { vue3d } : {}) }),
-      `${base}.pdf`,
+      fichePDF(current.stair, { nom, date, brouillon, ...(vue3d ? { vue3d } : {}) }),
+      `${base}${brouillon ? " (brouillon)" : ""}.pdf`,
       "application/pdf",
     );
   }

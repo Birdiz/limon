@@ -42,6 +42,19 @@ describe.each(Object.entries(CASES))("fiche %s", (name, over) => {
   });
 });
 
+describe("fiche d'un brouillon", () => {
+  const R = stairOf(CASES.droit!);
+  const fini = latin1(fichePDF(R, { nom: "Essai", date: "01/01/2026" }));
+  const brouillon = latin1(fichePDF(R, { nom: "Essai", date: "01/01/2026", brouillon: true }));
+
+  it("porte la mention en tête et le filigrane sur chaque page", () => {
+    expect(fini).not.toContain("BROUILLON");
+    expect(brouillon).toContain("(Fiche escalier \\267 brouillon \\267 01/01/2026) Tj");
+    // Lettres creuses (mode de rendu 1), une fois par page.
+    expect(brouillon.match(/1 Tr \(BROUILLON\) Tj/g)).toHaveLength(3);
+  });
+});
+
 describe("écrivain PDF", () => {
   it("incorpore une image JPEG", () => {
     const doc = new PdfDoc("Essai é");

@@ -32,11 +32,10 @@ function problem(e: unknown): string | null {
 type View = "login" | "offer" | "account";
 
 /**
- * Compte : bouton et état de l'enregistrement dans l'en-tête, et dialogue de connexion (passkey, ou code par e-mail
- * pour créer le compte et en secours) puis de gestion du compte.
+ * Compte : bouton et état de l'enregistrement dans l'en-tête, et onglet Mon compte de l'accueil : connexion (passkey,
+ * ou code par e-mail pour créer le compte et en secours) puis gestion du compte.
  */
-export class AccountDialog {
-  private dlg = byId<HTMLDialogElement>("compte");
+export class AccountPanel {
   private msg = byId("acMsg");
   private email = "";
 
@@ -44,8 +43,6 @@ export class AccountDialog {
     private store: SyncStore,
     private api: Api,
   ) {
-    byId("acOpen").addEventListener("click", () => void this.show());
-    byId("acClose").addEventListener("click", () => this.dlg.close());
     byId("acPk").addEventListener("click", () => void this.run(() => this.passkeyLogin(false)));
     byId("acEmailForm").addEventListener("submit", (e) => {
       e.preventDefault();
@@ -57,7 +54,7 @@ export class AccountDialog {
     });
     byId("acBack").addEventListener("click", () => this.codeStep(false));
     byId("acOfferYes").addEventListener("click", () => void this.run(() => this.addPasskey()));
-    byId("acOfferNo").addEventListener("click", () => this.dlg.close());
+    byId("acOfferNo").addEventListener("click", () => void this.run(() => this.showAccount()));
     byId("acAddKey").addEventListener("click", () => void this.run(() => this.addPasskey()));
     byId("acKeys").addEventListener("click", (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-key]");
@@ -95,13 +92,12 @@ export class AccountDialog {
     btn.className = "btn hbtn acbtn member";
     btn.innerHTML = `<span class="lbl">Mon compte</span><span class="avatar" aria-hidden="true">${esc(st.compte.email[0]!.toUpperCase())}</span>`;
     btn.setAttribute("aria-label", "Mon compte");
-    if (this.dlg.open && !byId("acAccount").hidden)
-      byId("acState").textContent = `${state[0]!.toUpperCase()}${state.slice(1)}.`;
+    if (!byId("acAccount").hidden) byId("acState").textContent = `${state[0]!.toUpperCase()}${state.slice(1)}.`;
   }
 
+  /** L'onglet s'affiche : connexion, ou le compte. */
   async show(): Promise<void> {
     this.msg.hidden = true;
-    if (!this.dlg.open) this.dlg.showModal();
     if (this.store.account()) await this.run(() => this.showAccount());
     else this.showLogin();
   }
@@ -110,7 +106,6 @@ export class AccountDialog {
     byId("acLogin").hidden = v !== "login";
     byId("acOffer").hidden = v !== "offer";
     byId("acAccount").hidden = v !== "account";
-    byId("acTitle").textContent = v === "account" ? "Mon compte" : "Compte";
   }
 
   /** Lance une action du dialogue et affiche son erreur éventuelle. */
@@ -134,7 +129,8 @@ export class AccountDialog {
     byId("acEmailLbl").textContent = known
       ? "Se connecter avec un code, ou créer un autre compte"
       : "Créer un compte, ou se connecter avec un code";
-    this.codeStep(false);
+    // Pas de clavier qui surgit à l'ouverture de l'onglet sur le téléphone.
+    this.codeStep(false, false);
     byId("acPkBox").hidden = !hasWebAuthn();
     // La passkey proposée dans le remplissage automatique du champ e-mail.
     void webauthn().then(async (w) => {
@@ -142,12 +138,12 @@ export class AccountDialog {
     });
   }
 
-  private codeStep(on: boolean): void {
+  private codeStep(on: boolean, focus = true): void {
     byId("acEmailForm").hidden = on;
     byId("acCodeForm").hidden = !on;
     byId("acCodeTo").textContent = this.email;
     byId<HTMLInputElement>("acCode").value = "";
-    byId<HTMLInputElement>(on ? "acCode" : "acEmail").focus();
+    if (focus) byId<HTMLInputElement>(on ? "acCode" : "acEmail").focus();
   }
 
   private async sendCode(): Promise<void> {
@@ -171,7 +167,7 @@ export class AccountDialog {
     const optionsJSON = await this.api.passkeyOptions<Parameters<typeof w.startAuthentication>[0]["optionsJSON"]>();
     const reponse = await w.startAuthentication({ optionsJSON, useBrowserAutofill: autofill });
     await this.signedIn(await this.api.passkeyLogin(reponse));
-    this.dlg.close();
+    await this.showAccount();
   }
 
   private async signedIn(compte: Compte): Promise<void> {
@@ -230,7 +226,7 @@ export class AccountDialog {
     )
       return;
     await this.store.signOut();
-    this.dlg.close();
+    this.showLogin();
   }
 
   private async deleteAccount(): Promise<void> {
@@ -241,6 +237,6 @@ export class AccountDialog {
     )
       return;
     await this.store.deleteAccount();
-    this.dlg.close();
+    this.showLogin();
   }
 }

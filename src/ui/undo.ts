@@ -90,8 +90,7 @@ export class Undo {
     // Ctrl+Y rétablit aussi, comme ailleurs sous Windows.
     const redo = (k === "z" && e.shiftKey) || (k === "y" && e.ctrlKey && !e.metaKey && !e.shiftKey);
     if (k !== "z" && !redo) return;
-    if (freeText(e.target) || document.querySelector("dialog[open]") || document.body.classList.contains("home-on"))
-      return;
+    if (freeText(e.target) || document.body.classList.contains("home-on")) return;
     e.preventDefault();
     if (redo) this.redo();
     else this.undo();

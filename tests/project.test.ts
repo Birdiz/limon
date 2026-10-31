@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULTS } from "../src/core/params";
-import { fileBase, newProject, parseProjectFile, projectFile, sanitizeProject } from "../src/core/project";
+import { fileBase, newProject, parseProjectFile, projectFile, sanitizeProject, withEtat } from "../src/core/project";
 
 describe("projets", () => {
   const p = newProject("a1", "  Escalier Dupont ", "guide", 1000, { ...DEFAULTS, forme: "droit", H: 2800 });
@@ -18,6 +18,18 @@ describe("projets", () => {
     expect(q).toMatchObject({ id: "b", nom: "Mon escalier", mode: "complet", etape: 3, cree: 0 });
     expect(q.params.W).toBe(900);
     expect(q.params.forme).toBe(DEFAULTS.forme);
+  });
+
+  it("part en brouillon et passe à fini, date comprise", () => {
+    expect(p).toMatchObject({ etat: "brouillon", finiLe: 0 });
+    const f = withEtat(p, "fini", 5000);
+    expect(f).toMatchObject({ etat: "fini", finiLe: 5000, modifie: 5000 });
+    expect(withEtat(f, "brouillon", 6000)).toMatchObject({ etat: "brouillon", finiLe: 0, modifie: 6000 });
+    // Les escaliers d'avant l'état, ou un état inconnu, sont des brouillons.
+    expect(sanitizeProject({ id: "c" })).toMatchObject({ etat: "brouillon", finiLe: 0 });
+    expect(sanitizeProject({ id: "c", etat: "posé", finiLe: 9 })).toMatchObject({ etat: "brouillon", finiLe: 0 });
+    expect(sanitizeProject({ id: "c", etat: "fini", finiLe: 9 })).toMatchObject({ etat: "fini", finiLe: 9 });
+    expect(parseProjectFile(projectFile(f), "z")).toMatchObject({ etat: "fini", finiLe: 5000 });
   });
 
   it("relit son fichier .escalier sous un nouvel identifiant", () => {
