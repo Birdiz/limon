@@ -24,6 +24,7 @@ import { planSVG } from "./ui/plan";
 import { notesHTML, tilesHTML, treadsTableHTML } from "./ui/results";
 import type { Scene3D } from "./ui/scene3d";
 import { AccountDialog } from "./ui/account";
+import { Aide } from "./ui/aide";
 import { AtelierPanel, AtelierStore } from "./ui/atelier";
 import { fmt } from "./core/format";
 import { Home } from "./ui/home";
@@ -223,6 +224,8 @@ const atelierPanel = new AtelierPanel(atelier, {
   params: () => (project ? params : null),
   saved: () => store.atelierChanged(),
 });
+// Après Mon atelier, dont les lignes sont créées par le panneau.
+new Aide(() => params.forme).attach();
 byId("atKeep").addEventListener("click", () => atelierPanel.keep(byId("sharemsg")));
 byId("homeBtn").addEventListener("click", () => void home.show());
 byId("pjNew").addEventListener("click", () => void startNew());
