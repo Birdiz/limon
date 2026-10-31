@@ -11,8 +11,9 @@ import { buildCNC, tightBoards, type CNC } from "./cnc/build";
 import { cutListCSV } from "./cnc/cutlist";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
+import { TARIFS_VIDES } from "./core/tarifs";
 import { DEFAULTS, changeForme, type Params } from "./core/params";
-import { NOM_PAR_DEFAUT, fileBase, newProject, withEtat, type Project } from "./core/project";
+import { NOM_PAR_DEFAUT, fileBase, newProject, withDevis, withEtat, type Project } from "./core/project";
 import { paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
 import { fichePDF } from "./pdf/fiche";
@@ -27,6 +28,7 @@ import { AccountPanel } from "./ui/account";
 import { Aide } from "./ui/aide";
 import { AtelierPanel, AtelierStore } from "./ui/atelier";
 import { TarifsPanel } from "./ui/tarifs";
+import { DevisView } from "./ui/devis";
 import { fmt } from "./core/format";
 import { Home } from "./ui/home";
 import { showSketch } from "./ui/sketch";
@@ -57,6 +59,19 @@ let cnc: CNC | null = null;
 let scene: Scene3D | null = null;
 /** Vue du panneau Plan : de dessus, ou de côté (développé sur la ligne de foulée). */
 let planCote = false;
+/** Onglet Devis de l'escalier ouvert ; recalculé seulement quand il est à l'écran. */
+const devisView = new DevisView({
+  project: () => project,
+  stair: () => (current?.ok ? current.stair : null),
+  tarifs: () => atelier.get()?.tarifs ?? TARIFS_VIDES,
+  saved: (d) => {
+    if (!project) return;
+    project = withDevis(project, d, Date.now());
+    void store.save(project);
+    devisView.refresh();
+  },
+  openTarifs: () => void home.show("atelier"),
+});
 
 function render(result: ComputeResult): void {
   const errHTML = (e: string) => `<div class="errbox">${e}</div>`;
@@ -134,6 +149,7 @@ function update(): void {
     : "Le nombre de marches sera choisi une fois les cotes justes.";
   sketches();
   render(current);
+  devisView.refresh();
 }
 
 let queued = false;
@@ -212,6 +228,8 @@ function openProject(p: Project | null): void {
   byId<HTMLInputElement>("pjName").value = p?.nom ?? "";
   writeInputs(params);
   steps.apply(p?.mode ?? "complet", p?.etape ?? 0);
+  // Le devis n'existe pas en pas à pas : l'escalier n'est pas encore dessiné.
+  if (tabs.current === "devis" && p?.mode !== "complet") tabs.show("reglages");
   setCNC(false);
   atelierPanel.refresh();
   showEtat();
@@ -240,7 +258,19 @@ byId("cncClose").addEventListener("click", () => {
   update();
 });
 
-new Tabs(byId("tabbar"), document.querySelector<HTMLElement>(".work")!);
+/** Bouton Devis de l'en-tête : passe de l'escalier à son devis et retour. */
+function showDevisBtn(tab: string): void {
+  const on = tab === "devis";
+  byId("devisBtn").setAttribute("aria-pressed", String(on));
+  byId("devisBtnTxt").textContent = on ? "Escalier" : "Devis";
+}
+const tabs = new Tabs(byId("tabbar"), document.querySelector<HTMLElement>(".work")!, (tab) => {
+  showDevisBtn(tab);
+  if (tab === "devis") devisView.refresh();
+});
+byId("devisBtn").addEventListener("click", () => tabs.show(tabs.current === "devis" ? "reglages" : "devis"));
+// Tarifs changés dans Mon atelier ou reçus du compte : le devis à l'écran suit.
+atelier.onChange(() => devisView.refresh());
 
 /** Nouvel escalier : réglages de l'atelier, et toujours en pas à pas sauf choix contraire. */
 async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = atelier.params()): Promise<void> {
