@@ -1,9 +1,9 @@
 import type { StringerPiece } from "./stair";
 import { dedupe, type Pt } from "./vec";
 
-/** Contour du limon dans son plan (u le long du limon, z en hauteur), coupé au sol, tenon compris. */
+/** Contour du limon dans son plan (u le long du limon, z en hauteur), coupé au sol, tenons compris. */
 export function stringerOutline(
-  sp: Pick<StringerPiece, "prof"> & Partial<Pick<StringerPiece, "tenon">>,
+  sp: Pick<StringerPiece, "prof"> & Partial<Pick<StringerPiece, "tenons">>,
   hl: number,
 ): Pt[] {
   const top = sp.prof,
@@ -21,11 +21,29 @@ export function stringerOutline(
     }
     bot.push([u, Math.max(0, r)]);
   }
-  const t = sp.tenon;
-  if (!t) return dedupe([...top, ...bot.reverse()]);
-  // Le tenon sort du bout haut (u croissant) ou du bout bas du limon.
-  const uEnd = top[top.length - 1]![0];
-  if (t.u0 >= uEnd - 1e-6)
-    return dedupe([...top, [t.u0, t.z1], [t.u1, t.z1], [t.u1, t.z0], [t.u0, t.z0], ...bot.reverse()]);
-  return dedupe([...top, ...bot.reverse(), [t.u1, t.z0], [t.u0, t.z0], [t.u0, t.z1], [t.u1, t.z1]]);
+  // Un tenon sort du bout haut (u croissant), l'autre du bout bas du limon.
+  const uEnd = top[top.length - 1]![0],
+    ts = sp.tenons ?? [];
+  const hi = ts.find((t) => t.u0 >= uEnd - 1e-6),
+    lo = ts.find((t) => t !== hi);
+  return dedupe([
+    ...top,
+    ...(hi
+      ? ([
+          [hi.u0, hi.z1],
+          [hi.u1, hi.z1],
+          [hi.u1, hi.z0],
+          [hi.u0, hi.z0],
+        ] as Pt[])
+      : []),
+    ...bot.reverse(),
+    ...(lo
+      ? ([
+          [lo.u1, lo.z0],
+          [lo.u0, lo.z0],
+          [lo.u0, lo.z1],
+          [lo.u1, lo.z1],
+        ] as Pt[])
+      : []),
+  ]);
 }

@@ -8,8 +8,20 @@ import { cutListCSV } from "./cutlist";
 import { toDXF } from "./dxf";
 import { makeZip, type ZipFile } from "./zip";
 
-const FORME_LABEL = { droit: "droit", "quart-g": "quart tournant gauche", "quart-d": "quart tournant droit" } as const;
-const FORME_SLUG = { droit: "droit", "quart-g": "quart-gauche", "quart-d": "quart-droit" } as const;
+const FORME_LABEL = {
+  droit: "droit",
+  "quart-g": "quart tournant gauche",
+  "quart-d": "quart tournant droit",
+  "dq-g": "double quart tournant gauche",
+  "dq-d": "double quart tournant droit",
+} as const;
+const FORME_SLUG = {
+  droit: "droit",
+  "quart-g": "quart-gauche",
+  "quart-d": "quart-droit",
+  "dq-g": "double-quart-gauche",
+  "dq-d": "double-quart-droit",
+} as const;
 
 export function readme(R: Stair): string {
   const p = R.params;
@@ -48,10 +60,17 @@ export function readme(R: Stair): string {
       `              jeu de ${fmt(p.jeu, 1)} mm par côté compris${R.rn > 0 ? ", bout avant arrondi comme le nez (arcs)" : ""}`,
       ...(R.quart
         ? [
-            "  TENON       tenon des limons de jour dans le poteau : enlever les joues de part et d'autre",
+            `  TENON       tenon des limons de jour dans ${R.tours > 1 ? "les poteaux" : "le poteau"} : enlever les joues de part et d'autre`,
             `              (épaisseurs sous le nom de la pièce), épaulements de ${TENON.epaul} mm en haut et en bas`,
-            `  PERCAGE     limon de mur 1/2 : perçages D${PERCAGE} traversants dans la partie qui reçoit`,
-            "              le bout du limon de mur 2/2 (about vissé ou boulonné)",
+            ...(R.tours > 1
+              ? [
+                  `  PERCAGE     limons de mur 1/3 et 2/3 : perçages D${PERCAGE} traversants dans la partie qui reçoit`,
+                  "              le bout du limon de mur suivant (about vissé ou boulonné)",
+                ]
+              : [
+                  `  PERCAGE     limon de mur 1/2 : perçages D${PERCAGE} traversants dans la partie qui reçoit`,
+                  "              le bout du limon de mur 2/2 (about vissé ou boulonné)",
+                ]),
           ]
         : []),
       ...(R.rail?.pose === "chant"
@@ -69,10 +88,20 @@ export function readme(R: Stair): string {
         : []),
       "  TEXTE       nom de la pièce et cotes brutes",
       "",
-      ...(R.newel
+      ...(R.newels.length > 1
         ? [
-            `poteau.dxf : poteau de ${R.newel.size} x ${R.newel.size} mm, du sol à ${fmt(R.newel.h)} mm, affleurant les limons de jour`,
-            "  côté marches. Ses quatre faces vues de l'extérieur, couchées pied à gauche, dans l'ordre du tour :",
+            `poteau.dxf : ${R.newels.length} poteaux de ${R.newels[0]!.size} x ${R.newels[0]!.size} mm, du sol à ${R.newels.map((N) => fmt(N.h)).join(" et ")} mm,`,
+            "  affleurant les limons de jour côté marches, dans l'ordre de la montée. Les quatre faces de chacun",
+            "  vues de l'extérieur, couchées pied à gauche, dans l'ordre du tour :",
+          ]
+        : R.newels.length
+          ? [
+              `poteau.dxf : poteau de ${R.newels[0]!.size} x ${R.newels[0]!.size} mm, du sol à ${fmt(R.newels[0]!.h)} mm, affleurant les limons de jour`,
+              "  côté marches. Ses quatre faces vues de l'extérieur, couchées pied à gauche, dans l'ordre du tour :",
+            ]
+          : []),
+      ...(R.newels.length
+        ? [
             "  l'arête basse d'une face est l'arête haute de la suivante.",
             "  DECOUPE     contour de la face (débit à la longueur)",
             `  DEFONCE     logements des marches et contremarches, profondeur ${p.enc} mm, jeu compris`,
@@ -92,7 +121,9 @@ export function readme(R: Stair): string {
               : "  Mains courantes vues de côté (bouts d'aplomb), puis leur dessous déroulé avec les mortaises",
             `  des ${R.rail.type === "balustres" ? "balustres" : "montants"} ; ${R.rail.type === "balustres" ? "balustres" : "montants et lisses"} vus de côté, couchés, numérotés dans l'ordre de la montée.`,
             "  DECOUPE     contours",
-            ...(R.quart ? ["  TENON       tenon de chaque main courante dans le poteau"] : []),
+            ...(R.quart
+              ? [`  TENON       tenon de chaque main courante dans ${R.tours > 1 ? "les poteaux" : "le poteau"}`]
+              : []),
             "  MORTAISE    mortaises d'aplomb sous la main courante, jeu compris",
             "  TEXTE       noms, sections, pentes",
             "",
@@ -114,7 +145,7 @@ export function exportFiles(R: Stair, cnc: CNC = buildCNC(R)): ZipFile[] {
     { name: "marches.dxf", data: toDXF(cnc.treadEnts) },
     { name: "limons.dxf", data: toDXF(cnc.boardEnts) },
     ...(R.params.cm ? [{ name: "contremarches.dxf", data: toDXF(cnc.riserEnts) }] : []),
-    ...(R.newel ? [{ name: "poteau.dxf", data: toDXF(cnc.postEnts) }] : []),
+    ...(R.newels.length ? [{ name: "poteau.dxf", data: toDXF(cnc.postEnts) }] : []),
     ...(cnc.rail ? [{ name: "garde-corps.dxf", data: toDXF(cnc.rail.ents) }] : []),
     { name: "fiche-marches.csv", data: "\ufeff" + treadsCSV(R) },
     { name: "liste-debit.csv", data: "\ufeff" + cutListCSV(cnc, R) },

@@ -56,9 +56,13 @@ export function cutRows(cnc: CNC, R: Stair): CutRow[] {
           ...group(cnc.rail.railParts, "Lisse", "Lisses", p.bs),
         ]
       : []),
-    ...(cnc.postPart
-      ? [{ name: "Poteau", q: 1, L: Math.ceil(cnc.postPart.L), l: cnc.postPart.l, e: cnc.postPart.e }]
-      : []),
+    ...cnc.postParts.map((q) => ({
+      name: cnc.postParts.length > 1 ? `Poteau ${q.j}` : "Poteau",
+      q: 1,
+      L: Math.ceil(q.L),
+      l: q.l,
+      e: q.e,
+    })),
   ];
 }
 

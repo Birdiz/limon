@@ -9,9 +9,10 @@ import {
   type NumericKey,
   type Pose,
   type Params,
+  TOURS,
 } from "../core/params";
 import { turnRange, type InputError, type Stair } from "../core/stair";
-import { turnSpan } from "../core/summary";
+import { turnSpans } from "../core/summary";
 import { byId } from "./dom";
 
 const input = (id: string) => byId<HTMLInputElement>(id);
@@ -80,14 +81,25 @@ export function showFieldErrors(errors: readonly InputError[]): void {
   });
 }
 
+/** Formes où se montre un élément [data-show] : droit, quart (qui tourne), quart1 (un tournant), u (deux tournants). */
+const SHOW: Record<string, (tours: number) => boolean> = {
+  droit: (t) => t === 0,
+  quart: (t) => t > 0,
+  quart1: (t) => t === 1,
+  u: (t) => t === 2,
+};
+
 /** Champs propres à la forme, champs automatiques grisés et valeurs calculées affichées. */
 export function syncInputs(p: Params, stair: Stair | null): void {
-  const quart = p.forme !== "droit";
+  const tours = TOURS[p.forme];
   document
     .querySelectorAll<HTMLElement>("[data-show]")
-    .forEach((el) => (el.hidden = (el.dataset.show === "quart") !== quart));
+    .forEach((el) => (el.hidden = !SHOW[el.dataset.show ?? ""]?.(tours)));
   document.querySelectorAll<HTMLElement>("[data-gc]").forEach((el) => (el.hidden = p.gc === "aucun"));
-  document.querySelectorAll<HTMLElement>("[data-tre]").forEach((el) => (el.hidden = !quart || p.tForme !== "L"));
+  document.querySelectorAll<HTMLElement>("[data-tre]").forEach((el) => (el.hidden = !tours || p.tForme !== "L"));
+  // La trémie qui suit l'escalier : en L pour un quart tournant, en U pour deux tournants.
+  byId<HTMLSelectElement>("tForme").querySelector<HTMLOptionElement>('option[value="L"]')!.textContent =
+    tours === 2 ? "En U" : "En L";
   document.querySelectorAll<HTMLElement>("[data-mp]").forEach((el) => (el.hidden = !p.mp));
   input("n").disabled = p.nAuto;
   input("f").disabled = p.fAuto;
@@ -102,7 +114,8 @@ export function syncInputs(p: Params, stair: Stair | null): void {
     if (p.tAuto) for (const k of TRE_KEYS) input(k).value = String(Math.round(stair.treDims[k]));
   }
   const bal = stair?.bal;
-  const span = stair && turnSpan(stair);
+  const spans = stair ? turnSpans(stair) : [];
+  const span = spans[0];
   if (bal && span) {
     // Pendant la saisie, un nombre impossible reste affiché avec les bornes ; sinon le champ suit le calcul.
     const el = input("tour"),
@@ -112,12 +125,15 @@ export function syncInputs(p: Params, stair: Stair | null): void {
     if (!typing) el.value = String(bal.a);
     byId("tourTxt").textContent = range
       ? `impossible ici : de ${range.min} à ${range.max} avec ces longueurs`
-      : `marches ${span.from} à ${span.to}, de ${fmt(span.z0)} à ${fmt(span.z1)} mm`;
+      : spans.length > 1
+        ? `tours : marches ${spans.map((t) => `${t.from} à ${t.to}`).join(", puis ")}`
+        : `marches ${span.from} à ${span.to}, de ${fmt(span.z0)} à ${fmt(span.z1)} mm`;
     byId("tourTxt").classList.toggle("capped", !!range);
   }
-  const capped = bal && bal.pr + 0.01 < bal.want;
+  const low = stair?.bals.reduce<typeof bal>((m, z) => (!m || z.pr < m.pr ? z : m), null);
+  const capped = low && low.pr + 0.01 < low.want;
   byId("progTxt").textContent = capped
-    ? `${p.prog} % demandés, ${fmt(bal.pr * 100)} % appliqués pour garder 100 mm au jour`
+    ? `${p.prog} % demandés, ${fmt(low.pr * 100)} % appliqués pour garder 100 mm au jour`
     : `${p.prog} % · 0 % = girons égaux au jour`;
   byId("progTxt").classList.toggle("capped", !!capped);
 }

@@ -118,6 +118,22 @@
                   <path d="M14 26h10M14 21h10M24 15l-10-4M26 15l-4-12M31 9h-7" /></svg
                 >Quart tournant droit</label
               >
+              <input type="radio" name="forme" id="f-dqg" value="dq-g" />
+              <label for="f-dqg"
+                ><svg viewBox="0 0 34 34">
+                  <path d="M3 3h28v28h-9V12H12v19H3z" />
+                  <path d="M22 26h9M22 21h9M22 15l9 1M22 12l9-6M17 12V3M12 12L3 6M12 15l-9 1M3 21h9" />
+                  <path d="M26.5 30v-6M24.5 26l2-2 2 2" /></svg
+                >Double quart gauche</label
+              >
+              <input type="radio" name="forme" id="f-dqd" value="dq-d" />
+              <label for="f-dqd"
+                ><svg viewBox="0 0 34 34">
+                  <path d="M3 3h28v28h-9V12H12v19H3z" />
+                  <path d="M3 26h9M3 21h9M3 15l9 1M3 6l9 6M17 3v9M31 6l-9 6M31 15l-9 1M22 21h9" />
+                  <path d="M7.5 30v-6M5.5 26l2-2 2 2" /></svg
+                >Double quart droit</label
+              >
             </div>
           </div>
         </details>
@@ -141,6 +157,12 @@
               <label for="A">Longueur côté départ<small>côté extérieur, hors limon</small></label>
               <div class="num">
                 <input id="A" type="number" inputmode="numeric" step="10" min="500" /><span>mm</span>
+              </div>
+            </div>
+            <div class="row" data-show="u">
+              <label for="C">Longueur côté fond<small>entre les deux tournants, côté extérieur</small></label>
+              <div class="num">
+                <input id="C" type="number" inputmode="numeric" step="10" min="500" /><span>mm</span>
               </div>
             </div>
             <div class="row" data-show="quart">
@@ -180,32 +202,47 @@
               </div>
             </div>
             <div class="row" data-show="quart">
-              <label for="tForme">Forme de la trémie<small>en L, le coin au-dessus du jour reste plancher</small></label
+              <label for="tForme"
+                >Forme de la trémie<small data-show="quart1">en L, le coin au-dessus du jour reste plancher</small
+                ><small data-show="u">en U, le milieu au-dessus du jour reste plancher</small></label
               ><select id="tForme">
                 <option value="rect">Rectangle</option>
                 <option value="L">En L</option>
               </select>
             </div>
             <div class="row" data-show="quart">
-              <label for="tX">Trémie côté arrivée<small>depuis le bord du palier</small></label>
+              <label for="tX"
+                ><span data-show="quart1">Trémie côté arrivée<small>depuis le bord du palier</small></span
+                ><span data-show="u">Trémie côté fond<small>depuis le mur côté arrivée</small></span></label
+              >
               <div class="num">
                 <input id="tX" type="number" inputmode="numeric" step="10" min="0" /><span>mm</span>
               </div>
             </div>
             <div class="row" data-show="quart">
-              <label for="tY">Trémie côté départ<small>depuis le mur face à la montée</small></label>
+              <label for="tY"
+                ><span data-show="quart1">Trémie côté départ<small>depuis le mur face à la montée</small></span
+                ><span data-show="u">Trémie côté arrivée<small>depuis le bord du palier</small></span></label
+              >
               <div class="num">
                 <input id="tY" type="number" inputmode="numeric" step="10" min="0" /><span>mm</span>
               </div>
             </div>
             <div class="row" data-show="quart" data-tre="L">
-              <label for="tbD">Branche côté départ<small>largeur, depuis le mur du départ</small></label>
+              <label for="tbD"
+                ><span data-show="quart1">Branche côté départ<small>largeur, depuis le mur du départ</small></span
+                ><span data-show="u">Branches des volées<small>largeur, depuis chaque mur de côté</small></span></label
+              >
               <div class="num">
                 <input id="tbD" type="number" inputmode="numeric" step="10" min="100" /><span>mm</span>
               </div>
             </div>
             <div class="row" data-show="quart" data-tre="L">
-              <label for="tbA">Branche côté arrivée<small>largeur, depuis le mur face à la montée</small></label>
+              <label for="tbA"
+                ><span data-show="quart1"
+                  >Branche côté arrivée<small>largeur, depuis le mur face à la montée</small></span
+                ><span data-show="u">Bande du fond<small>largeur, depuis le mur du fond</small></span></label
+              >
               <div class="num">
                 <input id="tbA" type="number" inputmode="numeric" step="10" min="100" /><span>mm</span>
               </div>
@@ -247,13 +284,18 @@
                 confort.
               </p>
               <div class="row">
-                <label for="tour">Marches droites avant le tour<small id="tourTxt"></small></label>
+                <label for="tour"
+                  >Marches droites avant le <span data-show="u">premier </span>tour<small id="tourTxt"></small
+                ></label>
                 <div class="num nounit">
                   <input id="tour" type="number" inputmode="numeric" step="1" min="0" max="38" />
                 </div>
               </div>
               <div class="row" data-adv>
-                <label for="mb">Marches balancées<small>marches touchées par le tournant</small></label>
+                <label for="mb"
+                  >Marches balancées<small data-show="quart1">marches touchées par le tournant</small
+                  ><small data-show="u">marches touchées par chaque tournant</small></label
+                >
                 <div class="num nounit">
                   <input id="mb" type="number" inputmode="numeric" step="1" min="2" max="12" />
                 </div>

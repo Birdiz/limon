@@ -1,4 +1,4 @@
-import type { Forme, FormeTremie } from "../core/params";
+import { TOURS, isLeft, type Forme, type FormeTremie } from "../core/params";
 
 /*
  * Croquis de la cote en cours de saisie, en pas à pas : où prendre la mesure sur le chantier.
@@ -6,7 +6,7 @@ import type { Forme, FormeTremie } from "../core/params";
  * Les mêmes dessins, et quelques détails de fabrication, illustrent l'aide des champs.
  */
 
-type Key = "H" | "L" | "A" | "B" | "W" | "tL" | "tX" | "tY" | "tbD" | "tbA" | "ep" | "mpP";
+type Key = "H" | "L" | "A" | "B" | "C" | "W" | "tL" | "tX" | "tY" | "tbD" | "tbA" | "ep" | "mpP";
 
 const tick = (x1: number, y1: number, x2: number, y2: number) => {
   // Cote : trait et deux butées perpendiculaires.
@@ -31,64 +31,97 @@ const QUART =
   '<path class="k-ink" d="M24 92V16H146V52H60V92Z"/>' +
   '<path class="k-mut" d="M24 80H60M24 68H60M24 56H60M60 52L24 36M60 52L40 16M60 52L72 16M86 16V52M100 16V52M114 16V52M128 16V52"/>';
 
-/** Trémie du quart tournant, en pointillés : rectangle, ou en L qui suit l'escalier. */
-const TREMIE = (L: boolean) =>
-  L ? '<path class="k-dash" d="M146 18H26V64H58V50H146"/>' : '<path class="k-dash" d="M26 18H146V64H26Z"/>';
+/** Plan d'un double quart tournant à droite : départ en bas à gauche, volée du fond en haut, arrivée en bas à droite. */
+const DQ =
+  '<path class="k-ink" d="M24 92V12H126V84H92V46H58V92Z"/>' +
+  '<path class="k-mut" d="M24 80H58M24 68H58M24 58H58M58 46L24 36M58 46L38 12M75 12V46M92 46L112 12M92 46L126 36M92 58H126M92 70H126"/>';
+/** Trémie en pointillés : rectangle, ou qui suit l'escalier (en L pour le quart, en U pour le double quart). */
+const TREMIE = (tours: number, L: boolean) =>
+  tours === 2
+    ? L
+      ? '<path class="k-dash" d="M20 84V8H130V84H88V50H62V84Z"/>'
+      : '<path class="k-dash" d="M20 84V8H130V84Z"/>'
+    : L
+      ? '<path class="k-dash" d="M146 18H26V64H58V50H146"/>'
+      : '<path class="k-dash" d="M26 18H146V64H26Z"/>';
 
-const SKETCH: Record<Key, { svg: (quart: boolean, L: boolean) => string; text: string }> = {
-  H: {
-    svg: () => COUPE + '<path class="k-mut" d="M140 18H150" stroke-dasharray="2 2"/>' + tick(146, 18, 146, 88),
-    text: "<b>Hauteur à monter</b> : du sol fini du bas au sol fini du haut.",
-  },
-  L: {
-    svg: () => COUPE + tick(20, 95, 96, 95),
-    text: "<b>Reculement</b> : du nez de la première marche au nez du palier.",
-  },
-  mpP: {
-    svg: () =>
-      '<path class="k-mut" d="M4 88H146"/>' +
-      '<path class="k-slab" d="M4 18H24V30H4ZM110 18H140V30H110Z"/>' +
-      '<path class="k-ink" d="M20 88V78H31V68H42V58H53V48H64V38H75V28H86M84 18H110V23H84Z"/>' +
-      tick(84, 10, 110, 10),
-    text: "<b>Marche palière</b> : sa profondeur depuis le nez. Le plancher reprend derrière elle.",
-  },
-  ep: {
-    svg: () => COUPE + tick(118, 18, 118, 30),
-    text: "<b>Épaisseur du plancher</b> : du sol fini du haut à la sous-face du plafond.",
-  },
-  tL: {
-    svg: () => COUPE + '<path class="k-dash" d="M24 24H96"/>' + tick(24, 8, 96, 8),
-    text: "<b>Longueur de trémie</b> : depuis le bord du palier.",
-  },
-  W: {
-    svg: (quart) => (quart ? QUART + tick(24, 99, 60, 99) : DROIT + tick(58, 98, 98, 98)),
-    text: "<b>Emmarchement</b> : la largeur des marches, entre les deux limons.",
-  },
-  A: {
-    svg: () => QUART + tick(12, 16, 12, 92),
-    text: "<b>Longueur côté départ</b> : côté extérieur, hors limon.",
-  },
-  B: {
-    svg: () => QUART + tick(24, 6, 146, 6),
-    text: "<b>Longueur côté arrivée</b> : côté extérieur, hors limon.",
-  },
-  tX: {
-    svg: (_, L) => QUART + TREMIE(L) + tick(26, 6, 146, 6),
-    text: "<b>Trémie côté arrivée</b> : depuis le bord du palier.",
-  },
-  tY: {
-    svg: (_, L) => QUART + TREMIE(L) + tick(12, 18, 12, 64),
-    text: "<b>Trémie côté départ</b> : depuis le mur face à la montée.",
-  },
-  tbD: {
-    svg: () => QUART + TREMIE(true) + tick(26, 98, 58, 98),
-    text: "<b>Branche côté départ</b> : la largeur de la trémie au-dessus de la volée de départ, depuis le mur.",
-  },
-  tbA: {
-    svg: () => QUART + TREMIE(true) + tick(12, 18, 12, 50),
-    text: "<b>Branche côté arrivée</b> : la largeur de la trémie au-dessus de la volée d'arrivée, depuis le mur face à la montée.",
-  },
-};
+const SKETCH: Record<Key, { svg: (tours: number, L: boolean) => string; text: string | ((tours: number) => string) }> =
+  {
+    H: {
+      svg: () => COUPE + '<path class="k-mut" d="M140 18H150" stroke-dasharray="2 2"/>' + tick(146, 18, 146, 88),
+      text: "<b>Hauteur à monter</b> : du sol fini du bas au sol fini du haut.",
+    },
+    L: {
+      svg: () => COUPE + tick(20, 95, 96, 95),
+      text: "<b>Reculement</b> : du nez de la première marche au nez du palier.",
+    },
+    mpP: {
+      svg: () =>
+        '<path class="k-mut" d="M4 88H146"/>' +
+        '<path class="k-slab" d="M4 18H24V30H4ZM110 18H140V30H110Z"/>' +
+        '<path class="k-ink" d="M20 88V78H31V68H42V58H53V48H64V38H75V28H86M84 18H110V23H84Z"/>' +
+        tick(84, 10, 110, 10),
+      text: "<b>Marche palière</b> : sa profondeur depuis le nez. Le plancher reprend derrière elle.",
+    },
+    ep: {
+      svg: () => COUPE + tick(118, 18, 118, 30),
+      text: "<b>Épaisseur du plancher</b> : du sol fini du haut à la sous-face du plafond.",
+    },
+    tL: {
+      svg: () => COUPE + '<path class="k-dash" d="M24 24H96"/>' + tick(24, 8, 96, 8),
+      text: "<b>Longueur de trémie</b> : depuis le bord du palier.",
+    },
+    W: {
+      svg: (tours) =>
+        tours === 2 ? DQ + tick(24, 99, 58, 99) : tours ? QUART + tick(24, 99, 60, 99) : DROIT + tick(58, 98, 98, 98),
+      text: "<b>Emmarchement</b> : la largeur des marches, entre les deux limons.",
+    },
+    A: {
+      svg: (tours) => (tours === 2 ? DQ + tick(12, 12, 12, 92) : QUART + tick(12, 16, 12, 92)),
+      text: "<b>Longueur côté départ</b> : côté extérieur, hors limon.",
+    },
+    B: {
+      svg: (tours) => (tours === 2 ? DQ + tick(138, 12, 138, 84) : QUART + tick(24, 6, 146, 6)),
+      text: "<b>Longueur côté arrivée</b> : côté extérieur, hors limon.",
+    },
+    C: {
+      svg: () => DQ + tick(24, 4, 126, 4),
+      text: "<b>Longueur côté fond</b> : entre les deux tournants, côté extérieur, hors limon.",
+    },
+
+    tX: {
+      svg: (tours, L) =>
+        tours === 2 ? DQ + TREMIE(2, L) + tick(20, 3, 130, 3) : QUART + TREMIE(1, L) + tick(26, 6, 146, 6),
+      text: (tours) =>
+        tours === 2
+          ? "<b>Trémie côté fond</b> : depuis le mur côté arrivée."
+          : "<b>Trémie côté arrivée</b> : depuis le bord du palier.",
+    },
+    tY: {
+      svg: (tours, L) =>
+        tours === 2 ? DQ + TREMIE(2, L) + tick(142, 8, 142, 84) : QUART + TREMIE(1, L) + tick(12, 18, 12, 64),
+      text: (tours) =>
+        tours === 2
+          ? "<b>Trémie côté arrivée</b> : depuis le bord du palier."
+          : "<b>Trémie côté départ</b> : depuis le mur face à la montée.",
+    },
+    tbD: {
+      svg: (tours) =>
+        tours === 2 ? DQ + TREMIE(2, true) + tick(20, 97, 62, 97) : QUART + TREMIE(1, true) + tick(26, 98, 58, 98),
+      text: (tours) =>
+        tours === 2
+          ? "<b>Branches des volées</b> : la largeur de la trémie au-dessus des volées de départ et d'arrivée, depuis chaque mur de côté."
+          : "<b>Branche côté départ</b> : la largeur de la trémie au-dessus de la volée de départ, depuis le mur.",
+    },
+    tbA: {
+      svg: (tours) =>
+        tours === 2 ? DQ + TREMIE(2, true) + tick(142, 8, 142, 50) : QUART + TREMIE(1, true) + tick(12, 18, 12, 50),
+      text: (tours) =>
+        tours === 2
+          ? "<b>Bande du fond</b> : la largeur de la trémie au-dessus de la volée du fond, depuis le mur du fond."
+          : "<b>Branche côté arrivée</b> : la largeur de la trémie au-dessus de la volée d'arrivée, depuis le mur face à la montée.",
+    },
+  };
 
 const isKey = (k: string): k is Key => k in SKETCH;
 
@@ -98,12 +131,14 @@ const NEZ =
   '<path class="k-mut" d="M54 56V24" stroke-dasharray="2 2"/>';
 
 /** Détails de fabrication, pour l'aide seulement (pas de cote à prendre sur le chantier). */
-const DETAIL: Record<string, (quart: boolean) => string> = {
+const DETAIL: Record<string, (tours: number) => string> = {
   // Ligne de foulée : trait mixte, cotée depuis le jour.
-  f: (quart) =>
-    quart
-      ? QUART + '<path class="k-dash" d="M42 92V44Q42 34 52 34H146"/>' + tick(42, 86, 60, 86)
-      : DROIT + '<path class="k-dash" d="M78 90V8"/>' + tick(78, 95, 98, 95),
+  f: (tours) =>
+    tours === 2
+      ? DQ + '<path class="k-dash" d="M41 92V39Q41 29 51 29H99Q109 29 109 39V84"/>' + tick(41, 86, 58, 86)
+      : tours
+        ? QUART + '<path class="k-dash" d="M42 92V44Q42 34 52 34H146"/>' + tick(42, 86, 60, 86)
+        : DROIT + '<path class="k-dash" d="M78 90V8"/>' + tick(78, 95, 98, 95),
   deb: () => NEZ + tick(24, 20, 54, 20),
   rn: () => NEZ + '<path class="k-dim" d="M31 36A7 7 0 0 0 24 43M24 49A7 7 0 0 0 31 56"/>',
   // Coupe en travers du limon : la marche entre dans son logement.
@@ -114,14 +149,19 @@ const DETAIL: Record<string, (quart: boolean) => string> = {
     tick(34, 12, 44, 12),
 };
 
+/** Légende d'une cote, selon le nombre de tournants. */
+const caption = (key: Key, tours: number) => {
+  const { text } = SKETCH[key];
+  return typeof text === "string" ? text : text(tours);
+};
+
 /** Croquis d'un champ pour son aide, sans légende ; null si le champ n'en a pas. */
 export function sketchSVG(key: string, forme: Forme, tForme: FormeTremie = "rect"): string | null {
   const draw = isKey(key) ? SKETCH[key].svg : DETAIL[key];
   if (!draw) return null;
-  const quart = forme !== "droit";
-  // Le quart gauche est le miroir du droit.
-  const flip = quart && forme === "quart-g" ? ' transform="matrix(-1 0 0 1 150 0)"' : "";
-  return `<svg viewBox="0 0 150 100" aria-hidden="true"><g${flip}>${draw(quart, tForme === "L")}</g></svg>`;
+  // Une forme qui tourne à gauche est le miroir de celle de droite.
+  const flip = isLeft(forme) ? ' transform="matrix(-1 0 0 1 150 0)"' : "";
+  return `<svg viewBox="0 0 150 100" aria-hidden="true"><g${flip}>${draw(TOURS[forme], tForme === "L")}</g></svg>`;
 }
 
 /** Remplit le croquis d'une section avec la cote du champ donné, ou la première cote visible. */
@@ -135,5 +175,5 @@ export function showSketch(fig: HTMLElement, forme: Forme, focused?: string, tFo
     fig.innerHTML = "";
     return;
   }
-  fig.innerHTML = `${sketchSVG(key, forme, tForme)!}<figcaption>${SKETCH[key].text}</figcaption>`;
+  fig.innerHTML = `${sketchSVG(key, forme, tForme)!}<figcaption>${caption(key, TOURS[forme])}</figcaption>`;
 }

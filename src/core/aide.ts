@@ -47,7 +47,7 @@ const mp: AideTexte = {
 export const AIDE: Partial<Record<AideKey, AideTexte>> = {
   forme: {
     texte:
-      "Droit : une seule volée. Quart tournant : la volée tourne d'un angle droit, à gauche ou à droite en montant ; les marches du tour sont balancées.",
+      "Droit : une seule volée. Quart tournant : la volée tourne d'un angle droit, à gauche ou à droite en montant. Double quart tournant : elle tourne deux fois dans le même sens, en U. Les marches des tours sont balancées.",
   },
   H: {
     texte:
@@ -69,6 +69,11 @@ export const AIDE: Partial<Record<AideKey, AideTexte>> = {
       "Longueur du côté de l'arrivée, prise côté extérieur du tournant, limon non compris. Avec le côté départ, elle donne la longueur de la ligne de foulée.",
     conseil: giron,
   },
+  C: {
+    texte:
+      "En double quart tournant, longueur du côté du fond, entre les deux tournants, prise côté extérieur, limon non compris. Elle donne la largeur du jour entre les deux volées.",
+    conseil: giron,
+  },
   W: {
     texte: "Largeur de passage des marches, d'un limon à l'autre, entre leurs faces côté marches.",
   },
@@ -82,24 +87,28 @@ export const AIDE: Partial<Record<AideKey, AideTexte>> = {
     conseil: echappee,
   },
   tX: {
-    texte: "Longueur de l'ouverture le long du côté arrivée, mesurée depuis le bord du palier.",
+    texte:
+      "Longueur de l'ouverture le long du côté arrivée, mesurée depuis le bord du palier. En double quart tournant, le long du côté fond, depuis le mur côté arrivée.",
     conseil: echappee,
   },
   tY: {
-    texte: "Longueur de l'ouverture le long du côté départ, mesurée depuis le mur face à la montée.",
+    texte:
+      "Longueur de l'ouverture le long du côté départ, mesurée depuis le mur face à la montée. En double quart tournant, le long du côté arrivée, depuis le bord du palier.",
     conseil: echappee,
   },
   tForme: {
     texte:
-      "Rectangle : toute l'ouverture d'un bloc. En L : le coin au-dessus du jour reste plancher, la trémie n'ouvre que deux bandes le long des murs, au-dessus des volées.",
+      "Rectangle : toute l'ouverture d'un bloc. En L : le coin au-dessus du jour reste plancher, la trémie n'ouvre que deux bandes le long des murs, au-dessus des volées. En U, pour deux tournants : le milieu au-dessus du jour reste plancher, la trémie n'ouvre que trois bandes.",
     conseil: echappee,
   },
   tbD: {
-    texte: "Largeur de la branche du L le long du côté départ, mesurée depuis le mur du départ.",
+    texte:
+      "Largeur de la branche du L le long du côté départ, mesurée depuis le mur du départ. En U, largeur des deux branches au-dessus des volées de départ et d'arrivée, depuis chaque mur de côté.",
     conseil: "Au moins la largeur de l'escalier, limon de jour et garde-corps compris.",
   },
   tbA: {
-    texte: "Largeur de la branche du L le long du côté arrivée, mesurée depuis le mur face à la montée.",
+    texte:
+      "Largeur de la branche du L le long du côté arrivée, mesurée depuis le mur face à la montée. En U, largeur de la bande au-dessus de la volée du fond, depuis le mur du fond.",
     conseil: "Au moins la largeur de l'escalier, limon de jour et garde-corps compris.",
   },
   ep: {

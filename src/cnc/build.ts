@@ -2,10 +2,11 @@
    Marches : vue de dessus, nez en bas, encastrement compris des deux côtés.
    Contremarches : vues de face, longueur hors tout.
    Limons : développé vu depuis la face côté marches, avec les logements à défoncer.
-   Poteau : ses quatre faces vues de l'extérieur, couchées pied à gauche, avec logements et mortaises. */
+   Poteaux : leurs quatre faces vues de l'extérieur, couchées pied à gauche, avec logements et mortaises. */
 import { fmt } from "../core/format";
 import { cncFrame, type Section } from "../core/pockets";
 import { polyPath } from "../core/poly";
+import { isLeft } from "../core/params";
 import { GC } from "../core/railing";
 import { PERCAGE, type NoseLine, type Stair } from "../core/stair";
 import { stringerOutline } from "../core/stringer";
@@ -32,8 +33,9 @@ export interface BoardPart {
   hl: number;
 }
 
-/** Poteau du quart tournant : longueur, largeur et épaisseur de débit. */
+/** Poteau d'un tournant : longueur, largeur et épaisseur de débit. */
 export interface PostPart {
+  j: number;
   L: number;
   l: number;
   e: number;
@@ -59,7 +61,7 @@ export function stockVolume(cnc: CNC, R: Stair): number {
   const p = R.params;
   const sum = (list: readonly Piece[], e: number) => list.reduce((v, q) => v + q.L * q.l * e, 0);
   const mp = cnc.mpPart ? cnc.mpPart.L * cnc.mpPart.l * p.mpE : 0;
-  const post = cnc.postPart ? cnc.postPart.L * cnc.postPart.l * cnc.postPart.e : 0;
+  const post = cnc.postParts.reduce((v, q) => v + q.L * q.l * q.e, 0);
   const rail = cnc.rail
     ? sum(cnc.rail.handrailParts, p.mcL) + sum(cnc.rail.postParts, p.bs) + sum(cnc.rail.railParts, p.bs)
     : 0;
@@ -76,14 +78,14 @@ export interface CNC {
   /** Marche palière, dans marches.dxf ; null sans elle. */
   mpPart: TreadPart | null;
   postEnts: Entity[];
-  postPart: PostPart | null;
+  postParts: PostPart[];
   /** Garde-corps côté jour, s'il y en a un. */
   rail: RailingCNC | null;
 }
 
 export function buildCNC(R: Stair): CNC {
   const p = R.params;
-  const left = p.forme === "quart-g",
+  const left = isLeft(p.forme),
     mx = left ? -1 : 1,
     M = (q: Pt): Pt => [mx * q[0], q[1]];
   const e = p.enc,
@@ -266,8 +268,7 @@ export function buildCNC(R: Stair): CNC {
     };
     boardEnts.push({ kind: "poly", layer: "DECOUPE", pts: outline.map(tr), closed: true });
     pockets.forEach((pk) => boardEnts.push({ kind: "poly", layer: "DEFONCE", pts: pk.map(tr), closed: true }));
-    const t = sp.tenon;
-    if (t)
+    sp.tenons.forEach((t) =>
       boardEnts.push({
         kind: "poly",
         layer: "TENON",
@@ -280,7 +281,8 @@ export function buildCNC(R: Stair): CNC {
           ] as Pt[]
         ).map(tr),
         closed: true,
-      });
+      }),
+    );
     sp.holes.forEach((q) => {
       const c = tr(q);
       boardEnts.push({ kind: "circle", layer: "PERCAGE", x: c[0], y: c[1], r: PERCAGE / 2 });
@@ -304,17 +306,28 @@ export function buildCNC(R: Stair): CNC {
       h: 45,
       s: `${name} - face cote marches - ${Math.ceil(L)} x ${Math.ceil(H)} x ${p.el} - defonce ${e} mm, jeu ${fmt(p.jeu, 1)} mm`,
     });
-    // Assemblage, sous le nom : tenon dans le poteau, ou about des limons de mur.
-    const joint = t
-      ? `tenon ${fmt(t.u1 - t.u0, 1)} x ${fmt(t.z1 - t.z0, 1)} ep. ${fmt(t.t1 - t.t0, 1)} : joues de ${fmt(t.t0, 1)} cote marches et ${fmt(p.el - t.t1, 1)} cote jour`
-      : sp.holes.length
-        ? `about du ${names.out} 2/2 contre cette face : ${sp.holes.length} percages D${PERCAGE} traversants (vis ou boulons dans son bout)`
-        : R.quart && sp.side === "out" && sp.idx === 1
-          ? `bout en about contre le ${names.out} 1/2 : percer en bout au droit de ses percages`
-          : "";
-    if (joint) boardEnts.push({ kind: "text", layer: "TEXTE", x: 0, y: by + H + 100, h: 30, s: joint });
+    // Assemblage, sous le nom : tenons dans les poteaux, ou about des limons de mur.
+    const ts = sp.tenons,
+      dims = (t: (typeof ts)[number]) => `${fmt(t.u1 - t.u0, 1)} x ${fmt(t.z1 - t.z0, 1)} ep. ${fmt(t.t1 - t.t0, 1)}`;
+    const joints = ts.length
+      ? [
+          `${ts.length > 1 ? `tenons ${dims(ts[0]!)} en bas et ${dims(ts[1]!)} en haut` : `tenon ${dims(ts[0]!)}`} : joues de ${fmt(ts[0]!.t0, 1)} cote marches et ${fmt(p.el - ts[0]!.t1, 1)} cote jour`,
+        ]
+      : [
+          ...(sp.holes.length
+            ? [
+                `about du ${names.out} ${sp.idx + 2}/${sp.count} contre cette face : ${sp.holes.length} percages D${PERCAGE} traversants (vis ou boulons dans son bout)`,
+              ]
+            : []),
+          ...(R.quart && sp.side === "out" && sp.idx > 0
+            ? [`bout en about contre le ${names.out} ${sp.idx}/${sp.count} : percer en bout au droit de ses percages`]
+            : []),
+        ];
+    joints.forEach((s, i) =>
+      boardEnts.push({ kind: "text", layer: "TEXTE", x: 0, y: by + H + 100 + 50 * i, h: 30, s }),
+    );
     boardParts.push({ name, L, l: H, pockets: pockets.length, need: sp.need, hl: sp.hl });
-    by += H + 180;
+    by += H + 180 + 50 * Math.max(0, joints.length - 1);
     // Balustres posés dans le chant : chant haut déroulé au-dessus du limon, dans le même sens, avec les mortaises.
     if (posts.length && G!.pose === "chant") {
       const pr = sp.prof,
@@ -372,31 +385,34 @@ export function buildCNC(R: Stair): CNC {
     }
   });
 
-  // Poteau : chaque face vue de l'extérieur, couchée pied à gauche, la suivante du tour dessous
-  // (l'arête basse d'une face est l'arête haute de la suivante).
+  // Poteaux : chaque face vue de l'extérieur, couchée pied à gauche, la suivante du tour dessous
+  // (l'arête basse d'une face est l'arête haute de la suivante) ; le poteau suivant plus bas.
   const postEnts: Entity[] = [];
-  const N = R.newel;
-  if (N) {
+  const NN = R.newels,
+    nj = NN.length + 1,
+    volee = (i: number) => (i === 0 ? "volee de depart" : i === nj - 1 ? "volee d'arrivee" : "volee du milieu");
+  let py = 0;
+  NN.forEach((N, c) => {
     const ps = N.size;
     const what = [
-      `cote marches, volee de depart - defonce ${e} mm, jeu ${fmt(p.jeu, 1)} mm`,
-      `mortaise${G ? "s" : ""} du ${names.in} 1/2`,
-      `mortaise${G ? "s" : ""} du ${names.in} 2/2`,
-      `cote marches, volee d'arrivee - defonce ${e} mm, jeu ${fmt(p.jeu, 1)} mm`,
+      `cote marches, ${volee(N.k)} - defonce ${e} mm, jeu ${fmt(p.jeu, 1)} mm`,
+      `mortaise${G ? "s" : ""} du ${names.in} ${N.k + 1}/${nj}`,
+      `mortaise${G ? "s" : ""} du ${names.in} ${N.k + 2}/${nj}`,
+      `cote marches, ${volee(N.k + 1)} - defonce ${e} mm, jeu ${fmt(p.jeu, 1)} mm`,
     ];
-    // Le miroir du quart gauche inverse le sens du tour.
+    // Le miroir d'un escalier qui tourne à gauche inverse le sens du tour.
     const order = left ? [0, 3, 2, 1] : [0, 1, 2, 3];
     postEnts.push({
       kind: "text",
       layer: "TEXTE",
       x: 0,
-      y: ps + 110,
+      y: py + ps + 110,
       h: 45,
-      s: `POTEAU ${Math.ceil(N.h)} x ${ps} x ${ps} - faces vues de l'exterieur, pied a gauche, dans l'ordre du tour`,
+      s: `POTEAU${NN.length > 1 ? ` ${c + 1}/${NN.length}` : ""} ${Math.ceil(N.h)} x ${ps} x ${ps} - faces vues de l'exterieur, pied a gauche, dans l'ordre du tour`,
     });
     order.forEach((i, k) => {
       const f = N.faces[i]!,
-        fy = -k * (ps + 150);
+        fy = py - k * (ps + 150);
       const n = M(f.n),
         right: Pt = [-n[1], n[0]],
         d = M(f.dir),
@@ -425,7 +441,7 @@ export function buildCNC(R: Stair): CNC {
       const depth = !f.mortises.length
         ? ""
         : mc
-          ? ` (profondeur ${fmt(f.mortises[0]!.depth, 1)} mm) et de la MAIN COURANTE ${mc.idx + 1}/2 (profondeur ${fmt(mc.depth, 1)} mm), jeu ${fmt(p.jeu, 1)} mm`
+          ? ` (profondeur ${fmt(f.mortises[0]!.depth, 1)} mm) et de la MAIN COURANTE ${mc.idx + 1}/${nj} (profondeur ${fmt(mc.depth, 1)} mm), jeu ${fmt(p.jeu, 1)} mm`
           : ` - profondeur ${fmt(f.mortises[0]!.depth, 1)} mm, jeu ${fmt(p.jeu, 1)} mm`;
       postEnts.push({
         kind: "text",
@@ -436,8 +452,9 @@ export function buildCNC(R: Stair): CNC {
         s: `FACE ${k + 1}/4 - ${what[i]}${depth}`,
       });
     });
-  }
-  const postPart = N ? { L: N.h, l: N.size, e: N.size } : null;
+    py -= 4 * (ps + 150) + 250;
+  });
+  const postParts = NN.map((N, c) => ({ j: c + 1, L: N.h, l: N.size, e: N.size }));
   const rail = G ? buildRailing(G, p) : null;
-  return { treadEnts, riserEnts, boardEnts, treadParts, riserParts, boardParts, mpPart, postEnts, postPart, rail };
+  return { treadEnts, riserEnts, boardEnts, treadParts, riserParts, boardParts, mpPart, postEnts, postParts, rail };
 }

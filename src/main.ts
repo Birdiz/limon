@@ -11,7 +11,7 @@ import { buildCNC, tightBoards, type CNC } from "./cnc/build";
 import { cutListCSV } from "./cnc/cutlist";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
-import { DEFAULTS, type Params } from "./core/params";
+import { DEFAULTS, changeForme, type Params } from "./core/params";
 import { NOM_PAR_DEFAUT, fileBase, newProject, type Project } from "./core/project";
 import { paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
@@ -93,7 +93,7 @@ function render(result: ComputeResult): void {
   byId("pvB").innerHTML = previewSVG(cnc.boardEnts, "Aperçu des limons développés");
   byId("pvRbox").hidden = byId("cpR").hidden = !R.params.cm;
   byId("pvR").innerHTML = previewSVG(cnc.riserEnts, "Aperçu des contremarches à découper");
-  byId("pvPbox").hidden = byId("cpP").hidden = !R.newel;
+  byId("pvPbox").hidden = byId("cpP").hidden = !R.newels.length;
   byId("pvP").innerHTML = previewSVG(cnc.postEnts, "Aperçu des faces du poteau");
   byId("pvGbox").hidden = byId("cpG").hidden = !cnc.rail;
   byId("pvG").innerHTML = cnc.rail ? previewSVG(cnc.rail.ents, "Aperçu des pièces du garde-corps") : "";
@@ -104,7 +104,9 @@ function render(result: ComputeResult): void {
 function update(): void {
   queued = false;
   const read = readInputs(params);
-  params = read.params;
+  const next = changeForme(params, read.params);
+  if (next !== read.params) writeInputs(next);
+  params = next;
   if (project && JSON.stringify(params) !== JSON.stringify(project.params)) {
     project = { ...project, params, modifie: Date.now() };
     void store.save(project);

@@ -109,7 +109,7 @@ describe("quart tournant", () => {
 
   it("coupe les limons au poteau : deux tronçons de chaque côté", () => {
     expect(D.stringers.map((s) => `${s.side}${s.idx + 1}/${s.count}`)).toEqual(["in1/2", "in2/2", "out1/2", "out2/2"]);
-    expect(D.newel).not.toBeNull();
+    expect(D.newels).toHaveLength(1);
   });
 
   it("place le tour plus bas en échangeant de la longueur entre départ et arrivée", () => {

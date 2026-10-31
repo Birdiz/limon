@@ -3,7 +3,7 @@ import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist
 import { fmt } from "../core/format";
 import { planShapes, type PlanRole } from "../core/plan-shapes";
 import type { Stair, Status } from "../core/stair";
-import { ESSENCE_LABEL, FORME_LABEL, GC_LABEL, POSE_LABEL, STATUS_LABEL, checks, turnSpan } from "../core/summary";
+import { ESSENCE_LABEL, FORME_LABEL, GC_LABEL, POSE_LABEL, STATUS_LABEL, checks, turnSpans } from "../core/summary";
 import { A4, PdfDoc, hex, wrap, type Page, type RGB, type Stroke } from "./pdf";
 
 /** Couleurs du thème clair de la page, la fiche étant faite pour l'impression. */
@@ -185,14 +185,15 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   const colW = (CW - 28) / 2;
   heading(pg, M, 114, "Cotes");
   const tre = R.quart
-    ? `${mm(R.treDims.tY)} × ${mm(R.treDims.tX)}${R.treL ? `, en L (branches ${fmt(R.treDims.tbD)} et ${fmt(R.treDims.tbA)})` : ""}`
+    ? `${mm(R.treDims.tY)} × ${mm(R.treDims.tX)}${R.treL ? `, en ${R.tours === 2 ? "U" : "L"} (branches ${fmt(R.treDims.tbD)} et ${fmt(R.treDims.tbA)})` : ""}`
     : mm(R.treDims.tL);
-  const tour = turnSpan(R);
+  const spans = turnSpans(R);
   const cotes: [string, string][] = [
     ["Hauteur à monter", mm(R.H)],
     ...(R.quart
       ? ([
           ["Longueur côté départ", mm(R.A)],
+          ...(R.tours > 1 ? ([["Longueur côté fond", mm(R.C)]] as [string, string][]) : []),
           ["Longueur côté arrivée", mm(R.B)],
         ] as [string, string][])
       : ([["Reculement", mm(R.L)]] as [string, string][])),
@@ -200,12 +201,26 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     [R.tAuto ? "Trémie à prévoir" : "Trémie", tre],
     ["Épaisseur du plancher", mm(p.ep)],
     ["Ligne de foulée (depuis le jour)", mm(R.f)],
-    ...(R.bal && tour
+    ...(R.bal && spans.length === 1
       ? ([
           ["Marches balancées", `${R.bal.m} · progressivité ${fmt(R.bal.pr * 100)} %`],
-          ["Tour", `marches ${tour.from} à ${tour.to} · ${mm(tour.z0)} à ${mm(tour.z1)}`],
+          ["Tour", `marches ${spans[0]!.from} à ${spans[0]!.to} · ${mm(spans[0]!.z0)} à ${mm(spans[0]!.z1)}`],
         ] as [string, string][])
-      : []),
+      : spans.length > 1
+        ? ([
+            [
+              "Marches balancées",
+              `${R.bals.map((z) => z.m).join(" et ")} · progressivité ${fmt(Math.min(...R.bals.map((z) => z.pr)) * 100)} %`,
+            ],
+            ...spans.map(
+              (t, i) =>
+                [`${i ? "Second" : "Premier"} tour`, `marches ${t.from} à ${t.to} · ${mm(t.z0)} à ${mm(t.z1)}`] as [
+                  string,
+                  string,
+                ],
+            ),
+          ] as [string, string][])
+        : []),
   ];
   let yL = keyValues(pg, M, 132, colW, cotes);
 

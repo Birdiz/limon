@@ -1,6 +1,6 @@
 /* Écrit l'archive d'export CNC sans navigateur, pour l'atelier ou pour vérifier les DXF.
 
-   npm run export                          trois formes avec l'exemple par défaut, dans out/
+   npm run export                          toutes les formes avec l'exemple par défaut, dans out/
    npm run export -- quart-g --out tmp     une forme, autre dossier
    npm run export -- --params projet.escalier  projet enregistré depuis la page
    npm run export -- --params reglages.json    ou réglages seuls (mêmes clés que la page) */
@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { exportFilename, exportZip } from "../src/cnc/package";
-import { FORMES, sanitizeParams, type Forme } from "../src/core/params";
+import { DEFAULTS, FORMES, changeForme, sanitizeParams, type Forme } from "../src/core/params";
 import { parseProjectFile } from "../src/core/project";
 import { compute } from "../src/core/stair";
 
@@ -47,7 +47,9 @@ for (const forme of formes) {
     failed = true;
     continue;
   }
-  const r = compute(sanitizeParams({ ...(base as object), forme }));
+  // Sans réglages donnés, chaque forme prend son exemple (cotes du double quart).
+  const p = sanitizeParams({ ...(base as object), forme });
+  const r = compute(values.params ? p : changeForme(DEFAULTS, p));
   if (!r.ok) {
     console.error(`${forme} : ${r.errors.map((e) => e.message).join(" ")}`);
     failed = true;
