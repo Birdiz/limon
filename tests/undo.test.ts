@@ -132,16 +132,15 @@ describe("annuler et rétablir", () => {
     expect(el.value).toBe(String(DEFAULTS.H));
   });
 
-  it("laisse Ctrl+Z au nom de l'escalier et aux dialogues", () => {
+  it("laisse Ctrl+Z au nom de l'escalier et à l'accueil", () => {
     type("H", "2800");
     const e = key("z", {}, field("pjName"));
     expect(e.defaultPrevented).toBe(false);
     expect(field("H").value).toBe("2800");
 
-    const dlg = document.getElementById("compte")!;
-    dlg.setAttribute("open", "");
+    document.body.classList.add("home-on");
     expect(key("z").defaultPrevented).toBe(false);
-    dlg.removeAttribute("open");
+    document.body.classList.remove("home-on");
     expect(field("H").value).toBe("2800");
 
     // Sans Ctrl ni Cmd, ou avec Alt : rien.

@@ -112,11 +112,11 @@ describe("bulle d'aide", () => {
     expect(document.querySelectorAll(".aide")).toHaveLength(1);
   });
 
-  it("se ferme par Échap, sans fermer le dialogue, et rend le focus au bouton", () => {
-    document.getElementById("compte")!.setAttribute("open", "");
+  it("se ferme par Échap, seule, et rend le focus au bouton", () => {
+    document.getElementById("home")!.hidden = document.getElementById("dpAt")!.hidden = false;
     btn("at-et").click();
     const e = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
-    document.getElementById("compte")!.dispatchEvent(e);
+    document.getElementById("dpAt")!.dispatchEvent(e);
     expect(isOpen()).toBe(false);
     expect(e.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(btn("at-et"));
