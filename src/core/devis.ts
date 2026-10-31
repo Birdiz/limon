@@ -70,6 +70,21 @@ export interface Saisie {
   remise: { pct: number } | { eur: number } | null;
 }
 
+/** Client du devis : ce que le document imprimera. */
+export interface Client {
+  nom: string;
+  /** Adresse de facturation. */
+  adresse: string;
+  /** Adresse du chantier, si elle diffère. */
+  chantier: string;
+}
+
+/** Devis d'un escalier, enregistré avec lui : le client et les réglages ; les lignes se recalculent. */
+export interface DevisProjet {
+  client: Client;
+  saisie: Saisie;
+}
+
 export const SAISIE_DEFAUT: Saisie = {
   tva: 20,
   pose: true,
@@ -80,6 +95,73 @@ export const SAISIE_DEFAUT: Saisie = {
   libres: [],
   remise: null,
 };
+
+export const CLIENT_VIDE: Client = { nom: "", adresse: "", chantier: "" };
+
+export function newDevis(tva: TauxTVA = 20): DevisProjet {
+  return { client: { ...CLIENT_VIDE }, saisie: { ...SAISIE_DEFAUT, tva } };
+}
+
+const MAX_TEXTE = 2000;
+const MAX_LIGNES = 100;
+const MAX_MONTANT = 1e7;
+const texte = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+const nombre = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= MAX_MONTANT ? v : null);
+const positif = (v: unknown) => {
+  const n = nombre(v);
+  return n !== null && n >= 0 ? n : null;
+};
+const obj = (v: unknown) => (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+
+/** Devis relu (stockage, fichier ou serveur, non fiable) ; null s'il n'y en a pas. */
+export function sanitizeDevis(raw: unknown): DevisProjet | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const c = obj(r.client),
+    s = obj(r.saisie);
+  const corrections: Record<string, Correction> = {};
+  for (const [id, v] of Object.entries(obj(s.corrections)).slice(0, MAX_LIGNES)) {
+    if (!/^[a-z][a-zA-Z-]{0,40}$/.test(id)) continue;
+    const k = obj(v);
+    const out: Correction = {};
+    if (typeof k.designation === "string") out.designation = texte(k.designation);
+    const q = positif(k.q),
+      pu = nombre(k.pu);
+    if (q !== null) out.q = q;
+    if (pu !== null) out.pu = pu;
+    if (k.retiree === true) out.retiree = true;
+    if (Object.keys(out).length) corrections[id] = out;
+  }
+  const libres: LigneLibre[] = (Array.isArray(s.libres) ? s.libres : []).slice(0, MAX_LIGNES).map((v) => {
+    const l = obj(v);
+    return {
+      designation: texte(l.designation),
+      q: positif(l.q) ?? 1,
+      unite: texte(l.unite, 20),
+      pu: nombre(l.pu) ?? 0,
+      tva: TAUX.includes(l.tva as number) ? (l.tva as number) : 20,
+    };
+  });
+  const rm = obj(s.remise);
+  const pct = positif(rm.pct),
+    eur = positif(rm.eur);
+  return {
+    client: { nom: texte(c.nom), adresse: texte(c.adresse, MAX_TEXTE), chantier: texte(c.chantier, MAX_TEXTE) },
+    saisie: {
+      tva: s.tva === 10 ? 10 : 20,
+      pose: s.pose !== false,
+      km: positif(s.km) ?? 0,
+      livraison: s.livraison === true,
+      faconDetail: s.faconDetail === true,
+      corrections,
+      libres,
+      remise: pct !== null ? { pct: Math.min(pct, 100) } : eur !== null ? { eur } : null,
+    },
+  };
+}
+
+/** Taux de TVA d'une ligne libre. */
+export const TAUX: readonly number[] = [20, 10, 5.5, 0];
 
 export interface Ligne {
   /** Repère stable d'une ligne calculée (« bois », « facon », « facon-marche »…) ou « libre-<n> ». */

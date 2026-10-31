@@ -54,6 +54,10 @@
         </button>
       </span>
       <span class="grow"></span>
+      <button class="btn hbtn" id="devisBtn" type="button" data-devis aria-pressed="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h6l2 2v10H4zM6.5 7h3M6.5 9.5h3M6.5 12h2" /></svg
+        ><span id="devisBtnTxt">Devis</span>
+      </button>
       <button class="btn hbtn" id="pjNew" type="button">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg><span>Nouvel escalier</span>
       </button>
@@ -823,6 +827,94 @@
       </main>
     </div>
 
+    <section class="devisv" id="devisView" aria-labelledby="dvTitle">
+      <div class="dvhead">
+        <h1 id="dvTitle">Devis</h1>
+        <p class="lead" id="dvLead"></p>
+      </div>
+      <div class="note warn dvneed" id="dvNeed" hidden>
+        <span id="dvNeedTxt"></span>
+        <button class="btn" id="dvTarifs" type="button">Mes tarifs</button>
+      </div>
+      <div class="dvgrid" id="dvBody">
+        <div class="dvside">
+          <div class="group">
+            <h3>Client</h3>
+            <div class="row texte">
+              <label for="dvNom">Nom du client</label>
+              <input id="dvNom" type="text" maxlength="200" autocomplete="off" />
+            </div>
+            <div class="row texte">
+              <label for="dvAdresse">Adresse</label>
+              <textarea id="dvAdresse" rows="3" maxlength="2000" autocomplete="off"></textarea>
+            </div>
+            <div class="row texte">
+              <label for="dvChantier">Adresse du chantier<small>si elle diffère</small></label>
+              <textarea id="dvChantier" rows="2" maxlength="2000" autocomplete="off"></textarea>
+            </div>
+          </div>
+          <div class="group">
+            <h3>Chantier</h3>
+            <div class="row">
+              <label for="dvTva">TVA<small>10 % : logement achevé depuis plus de deux ans</small></label>
+              <select id="dvTva">
+                <option value="20">20 %</option>
+                <option value="10">10 %</option>
+              </select>
+            </div>
+            <div class="row">
+              <span class="rl">Pose</span><label class="check"><input type="checkbox" id="dvPose" /> comprise</label>
+            </div>
+            <div class="row">
+              <label for="dvKm">Distance du chantier<small>déplacement et livraison</small></label>
+              <div class="num long">
+                <input id="dvKm" type="number" inputmode="decimal" step="1" min="0" /><span>km</span>
+              </div>
+            </div>
+            <div class="row">
+              <span class="rl">Livraison</span
+              ><label class="check"><input type="checkbox" id="dvLiv" /> comprise</label>
+            </div>
+            <div class="row">
+              <span class="rl">Façon</span
+              ><label class="check"><input type="checkbox" id="dvDetail" /> détaillée par poste</label>
+            </div>
+          </div>
+        </div>
+        <div class="dvmain">
+          <div class="dvlines" id="dvLines"></div>
+          <div class="actions">
+            <button class="btn" id="dvAdd" type="button">Ajouter une ligne</button>
+          </div>
+          <p class="disclaimer" id="dvRetirees" hidden></p>
+          <div class="dvremise">
+            <label class="visually-hidden" for="dvRemiseKind">Remise</label>
+            <select id="dvRemiseKind">
+              <option value="">Pas de remise</option>
+              <option value="pct">Remise en %</option>
+              <option value="eur">Remise en €</option>
+            </select>
+            <div class="num" id="dvRemiseBox" hidden>
+              <input
+                id="dvRemise"
+                type="number"
+                inputmode="decimal"
+                step="any"
+                min="0"
+                aria-label="Montant de la remise"
+              /><span id="dvRemiseU">%</span>
+            </div>
+          </div>
+          <table class="dvtot" id="dvTot"></table>
+          <div class="notes" id="dvNotes"></div>
+          <details class="dvself">
+            <summary>Pour vous seul : marge et heures</summary>
+            <div id="dvSelfBody"></div>
+          </details>
+        </div>
+      </div>
+    </section>
+
     <nav class="tabbar" id="tabbar" aria-label="Affichage">
       <button type="button" data-tab="reglages">
         <span class="pill"
@@ -850,6 +942,11 @@
         <span class="pill"
           ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h4" /></svg></span
         >Fiche
+      </button>
+      <button type="button" data-tab="devis" id="tabDevis" data-devis>
+        <span class="pill"
+          ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6zM9 8h6M9 12h6M13 17h2" /></svg></span
+        >Devis
       </button>
     </nav>
   </body>

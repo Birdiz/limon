@@ -1,3 +1,4 @@
+import { sanitizeDevis, type DevisProjet } from "./devis";
 import { DEFAULTS, sanitizeParams, type Params } from "./params";
 
 /** Guidé : réglage étape par étape ; complet : toutes les sections. */
@@ -19,6 +20,8 @@ export interface Project {
   /** Date du passage à « fini », 0 en brouillon. */
   finiLe: number;
   params: Params;
+  /** Devis de l'escalier, null tant qu'il n'y en a pas. */
+  devis: DevisProjet | null;
 }
 
 export const NOM_PAR_DEFAUT = "Mon escalier";
@@ -27,7 +30,7 @@ const VERSION = 1;
 
 export function newProject(id: string, nom: string, mode: Mode, now: number, params: Params = DEFAULTS): Project {
   const base = { id, nom: nom.trim() || NOM_PAR_DEFAUT, cree: now, modifie: now, mode, etape: 0 };
-  return { ...base, etat: "brouillon", finiLe: 0, params: { ...params } };
+  return { ...base, etat: "brouillon", finiLe: 0, params: { ...params }, devis: null };
 }
 
 /** Projet relu (stockage ou fichier, non fiable) ; null s'il n'a pas d'identifiant. */
@@ -49,14 +52,15 @@ export function sanitizeProject(raw: unknown): Project | null {
     etat: fini ? "fini" : "brouillon",
     finiLe: fini ? date(r.finiLe) : 0,
     params: sanitizeParams(r.params),
+    devis: sanitizeDevis(r.devis),
   };
 }
 
 /** Contenu d'un fichier .escalier (format nommé avant le renommage, gardé pour relire les fichiers .limon). */
 export function projectFile(p: Project): string {
-  const { nom, cree, modifie, mode, etape, etat, finiLe, params } = p;
+  const { nom, cree, modifie, mode, etape, etat, finiLe, params, devis } = p;
   return JSON.stringify(
-    { format: FORMAT, version: VERSION, projet: { nom, cree, modifie, mode, etape, etat, finiLe, params } },
+    { format: FORMAT, version: VERSION, projet: { nom, cree, modifie, mode, etape, etat, finiLe, params, devis } },
     null,
     2,
   );
@@ -86,6 +90,11 @@ export function fileBase(nom: string): string {
     .trim()
     .replace(/[. ]+$/, "");
   return s || "escalier";
+}
+
+/** Escalier avec son devis changé ; la date de modification avance, pour l'échange avec le compte. */
+export function withDevis(p: Project, devis: DevisProjet | null, now: number): Project {
+  return { ...p, devis, modifie: now };
 }
 
 /** Escalier passé à l'état donné ; la date de modification avance, pour l'échange avec le compte. */
