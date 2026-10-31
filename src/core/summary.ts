@@ -1,6 +1,6 @@
 import { fmt } from "./format";
 import type { Essence, Forme, GardeCorps, Params, Pose } from "./params";
-import { CONFORT, type Stair, type Status } from "./stair";
+import { CONFORT, echSidesShown, echStatus, type EchCote, type Headroom, type Stair, type Status } from "./stair";
 
 export const FORME_LABEL: Record<Forme, string> = {
   droit: "Droit",
@@ -64,6 +64,13 @@ export function sectionSummaries(p: Params, R: Stair | null): Record<Section, st
   };
 }
 
+/** Échappées détaillées, du jour au mur, avec leur intitulé (comme les girons de la fiche des marches). */
+export const ECH_COTES: [EchCote, string][] = [
+  ["jour", "Échappée jour"],
+  ["foulee", "Échappée foulée"],
+  ["mur", "Échappée mur"],
+];
+
 export const STATUS_LABEL: Record<Status, string> = { ok: "Bon", warn: "Limite", bad: "Hors norme" };
 
 /** Contrôle affiché en tuile et dans la fiche : intitulé, valeur, unité, précision, état. */
@@ -77,14 +84,14 @@ export interface Check {
 
 export function checks(R: Stair): Check[] {
   const c = (k: string, v: string, unit: string, sub: string, s: Status | null): Check => ({ k, v, unit, sub, s });
+  const ech = (k: string, e: Headroom | null, s = echStatus(e)) =>
+    e ? c(k, fmt(e.c), "mm", `sur la marche ${e.j}`, s) : c(k, "Libre", "", "tout sous la trémie", s);
   return [
     c("Hauteur de marche", fmt(R.h, 1), "mm", `${R.n} hauteurs`, R.st.h),
     c("Giron", fmt(R.g, 1), "mm", `${R.n - 1} marches · foulée`, R.st.g),
     c("Blondel 2h + g", fmt(R.blondel), "mm", `cible ${CONFORT.blondel.min} à ${CONFORT.blondel.max}`, R.st.bl),
     c("Pente", fmt(R.pente, 1), "°", `foulée ${fmt(R.Lw)} mm`, R.st.pente),
-    R.ech
-      ? c("Échappée", fmt(R.ech.c), "mm", `sur la marche ${R.ech.j}`, R.st.ech)
-      : c("Échappée", "Libre", "", "tout sous la trémie", R.st.ech),
+    ...(echSidesShown(R) ? ECH_COTES.map(([cote, k]) => ech(k, R.echCotes[cote])) : [ech("Échappée", R.ech, R.st.ech)]),
     R.bal
       ? c("Giron mini au jour", fmt(R.gInMin), "mm", `tour : marches ${R.bal.a + 1} à ${R.bal.b}`, R.st.gIn)
       : c("Reculement", fmt(R.L), "mm", `emmarchement ${fmt(R.W)}`, null),

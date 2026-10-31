@@ -2,11 +2,12 @@
    Repère plan (mm) : départ en y = 0, montée vers +y, limon extérieur en x = 0, jour (intérieur) en x = W.
    Quart tournant calculé à droite (2e volée vers +x) ; la version gauche est un miroir. */
 import { fmt, ceil10 } from "./format";
+import { headroomUnder, type Headroom, type NoseSeg } from "./headroom";
 import type { NumericKey, Params } from "./params";
 import { BOIS_SOUS_LOGEMENT, cncFrame, stringerPockets } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import { GC, railing, type Railing } from "./railing";
-import { V, bbox, clamp, inPolygon, interp, type Pt, type Vertex } from "./vec";
+import { V, bbox, clamp, interp, type Pt, type Vertex } from "./vec";
 
 export type Status = "ok" | "warn" | "bad";
 export type NoteLevel = Status | "info";
@@ -147,6 +148,7 @@ export interface TreDims {
   tbD: number;
   tbA: number;
 }
+export type { Headroom } from "./headroom";
 
 export interface Rect {
   x0: number;
@@ -156,15 +158,6 @@ export interface Rect {
 }
 
 /** Point le plus bas sous le plancher. */
-export interface Headroom {
-  /** Hauteur libre. */
-  c: number;
-  pt: Pt;
-  z: number;
-  /** Marche concernée. */
-  j: number;
-}
-
 export interface Balance {
   a: number;
   b: number;
@@ -228,7 +221,10 @@ export interface Stair {
   treDims: TreDims;
   /** Hauteur de la sous-face du plancher. */
   ceil: number;
+  /** Échappée la plus faible sur toute la largeur. */
   ech: Headroom | null;
+  /** Échappée sur la face du limon de jour, la ligne de foulée et la face du limon de mur. */
+  echCotes: Record<EchCote, Headroom | null>;
   tLmin: number | null;
   tXmin: number | null;
   tYmin: number | null;
@@ -264,6 +260,26 @@ export const CONFORT = {
 } as const;
 /** Ligne de foulée automatique du quart tournant : au plus à cette distance du jour. */
 export const FOULEE_MAX = 500;
+
+export type EchCote = "jour" | "foulee" | "mur";
+
+/** État d'une échappée (null : tout passe sous la trémie). */
+export const echStatus = (e: Headroom | null): Status =>
+  !e ? "ok" : e.c < ECHAPPEE_MIN ? "bad" : e.c < ECHAPPEE ? "warn" : "ok";
+
+/** Où tombe l'échappée la plus faible : sur un côté, sur la ligne de foulée, sur toute la largeur quand
+    les trois se valent (au demi-millimètre), "" quand elle tombe entre deux. */
+export function echWhere(ech: Headroom, cotes: Record<EchCote, Headroom | null>): string {
+  const at = (e: Headroom | null) => !!e && Math.abs(e.c - ech.c) < 0.5;
+  if (at(cotes.jour) && at(cotes.foulee) && at(cotes.mur)) return "sur toute la largeur";
+  return at(cotes.jour) ? "côté jour" : at(cotes.mur) ? "côté mur" : at(cotes.foulee) ? "sur la ligne de foulée" : "";
+}
+
+/** Échappée détaillée par côté : en quart tournant, ou quand les côtés diffèrent. */
+export function echSidesShown(R: Stair): boolean {
+  const v = Object.values(R.echCotes).map((e) => (e ? fmt(e.c) : ""));
+  return R.quart || v.some((x) => x !== v[0]);
+}
 /** Hauteur du bord haut des limons au-dessus de la ligne des nez. */
 export const LIFT = 50;
 /** Assemblage des limons de jour dans le poteau : longueur de tenon visée, épaulements haut et bas,
@@ -872,27 +888,51 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const slab: Rect = quart
     ? { x0: -el - 300, x1: B + mpD + 900, y0: -400, y1: A + el + 300 }
     : { x0: -el - 300, x1: W + el + 300, y0: -400, y1: L + mpD + 900 };
-  // Échappée : distance verticale entre la ligne des nez et la sous-face du plancher, sur toute la largeur.
+  // Échappée : distance verticale entre la ligne des nez et la sous-face du plancher, hors de la trémie.
+  // Mesurée sur la ligne de foulée, sur les faces des limons (côté jour, côté mur) et sur toute la largeur.
   const ceil = H - p.ep;
-  const headroom = (t: Pt[]): Headroom | null => {
-    let best: Headroom | null = null;
-    for (let k = 0; k < n - 1; k++) {
-      const L0 = lines[k]!,
-        L1 = lines[k + 1]!;
-      for (let a = 0; a <= 8; a++) {
-        const p0 = V.add(L0.Q, V.mul(V.sub(L0.O, L0.Q), a / 8)),
-          p1 = V.add(L1.Q, V.mul(V.sub(L1.O, L1.Q), a / 8));
-        for (let b = 0; b <= 24; b++) {
-          const pt = V.add(p0, V.mul(V.sub(p1, p0), b / 24));
-          if (inPolygon(t, pt)) continue;
-          const z = (k + 1) * h + (b / 24) * h,
-            c = ceil - z;
-          if (!best || c < best.c) best = { c, pt, z, j: k + 1 };
-        }
-      }
-    }
-    return best;
-  };
+  const zNose = (k: number) => (k + 1) * h;
+  const along = (P: Poly, s: (l: NoseLine) => number): NoseSeg[] =>
+    lines.slice(0, -1).flatMap((L0, k) => {
+      const L1 = lines[k + 1]!,
+        path = polyPath(P, s(L0), s(L1)),
+        len = Math.abs(s(L1) - s(L0)) || 1;
+      let u = 0;
+      return path.slice(1).map((b, i) => {
+        const a = path[i]!,
+          u0 = u;
+        u += V.len(V.sub(b, a));
+        return { a, b, za: zNose(k) + (h * u0) / len, zb: zNose(k) + (h * u) / len, j: k + 1 };
+      });
+    });
+  // Ligne de foulée courbe dans le tour : découpée en 8 cordes par marche.
+  const cuts = quart ? 8 : 1;
+  const walkSegs: NoseSeg[] = lines.slice(0, -1).flatMap((L0, k) =>
+    Array.from({ length: cuts }, (_, i) => {
+      const t = (v: number) => L0.t + ((lines[k + 1]!.t - L0.t) * v) / cuts;
+      return {
+        a: walkAt(t(i)),
+        b: walkAt(t(i + 1)),
+        za: zNose(k) + (h * i) / cuts,
+        zb: zNose(k) + (h * (i + 1)) / cuts,
+        j: k + 1,
+      };
+    }),
+  );
+  const sideSegs = { jour: along(inner, (l) => l.sIn), foulee: walkSegs, mur: along(outer, (l) => l.sOut) };
+  // Toute la largeur : 9 droites de nez à nez, du jour au mur.
+  const widthSegs: NoseSeg[] = lines.slice(0, -1).flatMap((L0, k) => {
+    const L1 = lines[k + 1]!;
+    return Array.from({ length: 9 }, (_, a) => ({
+      a: V.add(L0.Q, V.mul(V.sub(L0.O, L0.Q), a / 8)),
+      b: V.add(L1.Q, V.mul(V.sub(L1.O, L1.Q), a / 8)),
+      za: zNose(k),
+      zb: zNose(k + 1),
+      j: k + 1,
+    }));
+  });
+  const allSegs = [...sideSegs.jour, ...sideSegs.foulee, ...sideSegs.mur, ...widthSegs];
+  const headroom = (t: Pt[]): Headroom | null => headroomUnder(allSegs, t, ceil);
   const echOk = (t: Pt[]) => {
     const r = headroom(t);
     return !r || r.c >= ECHAPPEE;
@@ -927,6 +967,11 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const trePoly = treAt({});
   const tre: Rect = bbox(trePoly);
   const ech = headroom(trePoly);
+  const echCotes = {
+    jour: headroomUnder(sideSegs.jour, trePoly, ceil),
+    foulee: headroomUnder(sideSegs.foulee, trePoly, ceil),
+    mur: headroomUnder(sideSegs.mur, trePoly, ceil),
+  };
   const tLmin = quart ? null : minOpening((v) => treAt({ tL: v }), L + mpD + 300);
   const tYmin = quart ? minOpening((v) => treAt({ tY: v }), A + el + 300) : null;
   const tXmin = quart ? minOpening((v) => treAt({ tX: v }), B + el + mpD) : null;
@@ -938,7 +983,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const st: Stair["st"] = {
     ...comfortStatus(h, g),
     gIn: gInMin < CONFORT.gIn.bad ? "bad" : gInMin < CONFORT.gIn.min ? "warn" : "ok",
-    ech: !ech ? "ok" : ech.c < ECHAPPEE_MIN ? "bad" : ech.c < ECHAPPEE ? "warn" : "ok",
+    ech: echStatus(ech),
   };
   const N: Note[] = [];
   if (st.h !== "ok")
@@ -1004,7 +1049,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
     const fixes = quart
       ? [
           tYmin != null && `élargissez la trémie côté départ à ${fmt(tYmin)} mm`,
-          tXmin != null && `allongez-la côté arrivée à ${fmt(tXmin)} mm`,
+          tXmin != null && `${tYmin != null ? "allongez-la" : "allongez la trémie"} côté arrivée à ${fmt(tXmin)} mm`,
         ]
           .filter(Boolean)
           .join(" ou ")
@@ -1020,9 +1065,13 @@ export function compute(p: Params, suggest = true): ComputeResult {
       : tLmin != null
         ? { tL: tLmin }
         : null;
+    // Côté le plus bas, et la ligne de foulée pour comparer quand ce n'est pas elle.
+    const where = echWhere(ech, echCotes),
+      fw = echCotes.foulee;
+    const walk = fw && Math.abs(fw.c - ech.c) >= 0.5 ? ` (${fmt(fw.c)} mm sur la ligne de foulée)` : "";
     N.push([
       st.ech,
-      `Échappée de ${fmt(ech.c)} mm au-dessus de la marche ${ech.j}${fixes ? ` : pour 2 000 mm, ${fixes}` : ""}.`,
+      `Échappée de ${fmt(ech.c)} mm${where ? ` ${where}` : ""}, au-dessus de la marche ${ech.j}${walk}${fixes ? ` : pour 2 000 mm, ${fixes}` : ""}.`,
       set ? { set, label: `Passer à ${fmt(Object.values(set)[0] as number)} mm` } : undefined,
     ]);
   } else if (p.tAuto) {
@@ -1109,6 +1158,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       treDims,
       ceil,
       ech,
+      echCotes,
       tLmin,
       tXmin,
       tYmin,

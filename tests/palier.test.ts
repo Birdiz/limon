@@ -7,7 +7,8 @@ import { DEFAULTS, type Params } from "../src/core/params";
 import { fileBase, newProject, parseProjectFile, projectFile } from "../src/core/project";
 import { paramsFromHash, paramsToHash } from "../src/core/share";
 import { LIFT, compute, tremieContour, type StringerPiece } from "../src/core/stair";
-import { bbox, inPolygon } from "../src/core/vec";
+import { inPolygon } from "../src/core/headroom";
+import { bbox } from "../src/core/vec";
 import { stairOf } from "./cases";
 
 const FORMES = ["droit", "quart-g", "quart-d"] as const;
@@ -241,14 +242,14 @@ describe("point dans un polygone", () => {
     [0, 10],
   ];
   it("compte les bords et sommets comme dedans", () => {
-    expect(inPolygon(L, [5, 5])).toBe(true);
-    expect(inPolygon(L, [15, 7])).toBe(true);
-    expect(inPolygon(L, [0, 0])).toBe(true);
-    expect(inPolygon(L, [15, 5])).toBe(true);
-    expect(inPolygon(L, [10, 2])).toBe(true);
-    expect(inPolygon(L, [15, 2])).toBe(false);
-    expect(inPolygon(L, [-1, 5])).toBe(false);
-    expect(inPolygon(L, [5, 10.001])).toBe(false);
+    expect(inPolygon([5, 5], L)).toBe(true);
+    expect(inPolygon([15, 7], L)).toBe(true);
+    expect(inPolygon([0, 0], L)).toBe(true);
+    expect(inPolygon([15, 5], L)).toBe(true);
+    expect(inPolygon([10, 2], L)).toBe(true);
+    expect(inPolygon([15, 2], L)).toBe(false);
+    expect(inPolygon([-1, 5], L)).toBe(false);
+    expect(inPolygon([5, 10.001], L)).toBe(false);
   });
 });
 

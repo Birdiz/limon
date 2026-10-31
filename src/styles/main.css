@@ -807,33 +807,44 @@ input[type="range"] {
   stroke-width: 1.6;
   stroke-dasharray: 12 4 2 4;
 }
-.pl-ech {
+.pl-ech,
+.pl-ech-cote {
   fill: none;
   stroke-width: 2.2;
 }
-.pl-ech.ok {
+.pl-ech-cote {
+  stroke-width: 1.4;
+}
+.pl-ech.ok,
+.pl-ech-cote.ok {
   stroke: var(--ok);
 }
-.pl-ech.warn {
+.pl-ech.warn,
+.pl-ech-cote.warn {
   stroke: var(--warn);
 }
-.pl-ech.bad {
+.pl-ech.bad,
+.pl-ech-cote.bad {
   stroke: var(--bad);
 }
-.pl-echtxt {
+.pl-echtxt,
+.pl-echtxt-cote {
   font-family: var(--f-data);
   font-weight: 500;
   paint-order: stroke;
   stroke: var(--panel);
   stroke-linejoin: round;
 }
-.pl-echtxt.ok {
+.pl-echtxt.ok,
+.pl-echtxt-cote.ok {
   fill: var(--ok);
 }
-.pl-echtxt.warn {
+.pl-echtxt.warn,
+.pl-echtxt-cote.warn {
   fill: var(--warn);
 }
-.pl-echtxt.bad {
+.pl-echtxt.bad,
+.pl-echtxt-cote.bad {
   fill: var(--bad);
 }
 
@@ -1895,6 +1906,11 @@ body.avance .auto {
   }
   .tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* Sur le plan, seul le point le plus bas : les trois côtés restent dans les tuiles. */
+  .pl-ech-cote,
+  .pl-echtxt-cote {
+    display: none;
   }
   .shead .actions {
     width: 100%;
