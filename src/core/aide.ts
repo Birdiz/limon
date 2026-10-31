@@ -134,6 +134,11 @@ export const AIDE: Partial<Record<AideKey, AideTexte>> = {
     texte:
       "Nombre de marches droites avant d'entrer dans le tournant. Le changer déplace le tour sans toucher au confort : les longueurs côté départ et côté arrivée s'ajustent.",
   },
+  tournant: {
+    texte:
+      "Marches balancées : le tournant se passe en marchant, les marches pivotent. Palier : un plateau plat à chaque tournant (un seul sur tout le fond en demi-tournant), pour se reposer ou passer un meuble.",
+    conseil: `Avec un palier, la longueur côté arrivée règle le giron ; main courante à ${mm(GC.hPalier)} au-dessus d'un palier.`,
+  },
   mb: {
     texte:
       "Nombre de marches dont le nez pivote pour passer le tournant. Plus il y en a, plus les marches restent larges côté jour.",

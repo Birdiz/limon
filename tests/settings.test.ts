@@ -109,3 +109,18 @@ describe("marche palière et trémie en L", () => {
     expect(field("tbA").value).toBe(String(R.treDims.tbA));
   });
 });
+
+describe("passage du tournant", () => {
+  it("lit le palier, masque les réglages du balancement et montre sa légende", () => {
+    const shown = (sel: string) => [...document.querySelectorAll<HTMLElement>(sel)].map((el) => !el.hidden);
+    (document.getElementById("tournant") as HTMLSelectElement).value = "palier";
+    const { params } = readInputs(DEFAULTS);
+    expect(params.tournant).toBe("palier");
+    syncInputs(params, null);
+    expect(shown("[data-bal]").some(Boolean)).toBe(false);
+    expect(shown("[data-pal]").every(Boolean)).toBe(true);
+    writeInputs(DEFAULTS);
+    syncInputs(DEFAULTS, null);
+    expect(shown("[data-pal]").some(Boolean)).toBe(false);
+  });
+});

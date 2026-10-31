@@ -37,9 +37,12 @@ export function cncFrame(R: Pick<StairGeom, "inner" | "outer">, p: Params): Fram
     outOff = offsetPoly(R.outer, -p.enc);
   const at = (ln: NoseLine, off: number): Section => {
     const pt = V.add(ln.Q, V.mul(ln.nr, off));
+    const inF = polyCut(R.inner, pt, ln.dir, "near");
+    // Le nez qui part du coin du jour, après un palier, ne coupe le fond des logements que sur son prolongement.
+    const corner = !!inF && R.inner.cum.slice(1, -1).some((v) => Math.abs(inF.s - v) < 1e-6);
     const cuts = {
-      inF: polyCut(R.inner, pt, ln.dir, "near"),
-      inD: polyCut(inOff, pt, ln.dir, "near"),
+      inF,
+      inD: polyCut(inOff, pt, ln.dir, "near") ?? (corner ? polyCut(inOff, pt, ln.dir, "near", true) : null),
       outF: polyCut(R.outer, pt, ln.dir, "ahead"),
       outD: polyCut(outOff, pt, ln.dir, "ahead"),
     };
@@ -87,11 +90,17 @@ export function stringerPockets(R: StairGeom, p: Params, F: Frame): StringerPock
       );
     const pockets: Vertex[][] = [];
     let need = 0;
-    const pocket = (c1: Section, c2: Section, z0: number, z1: number, nose: boolean) => {
+    // Abscisse du début du tronçon de polyligne qui porte cette pièce.
+    const s0 = Number.isFinite(sp.sLo) ? sp.sLo - uLo : 0;
+    const pocket = (c1: Section, c2: Section, z0: number, z1: number, nose: boolean, around = false) => {
       if (!touches(c1[keyF].s, c2[keyF].s)) return;
-      const us = [c1[keyF].p, c1[keyD].p, c2[keyF].p, c2[keyD].p].map(proj);
-      const a = Math.min(...us),
-        b = Math.max(...us);
+      // Un palier fait le tour d'un angle : sur une pièce où il commence (ou finit) plus loin, il la couvre
+      // depuis son bout ; ses lignes posées sur un autre côté n'y comptent pas.
+      const before = around && c1[keyF].s < sp.sLo,
+        after = around && c2[keyF].s > sp.sHi;
+      const us = [...(before ? [] : [c1[keyF].p, c1[keyD].p]), ...(after ? [] : [c2[keyF].p, c2[keyD].p])].map(proj);
+      const a = before ? uLo : Math.min(...us),
+        b = after ? sp.sHi - s0 : Math.max(...us);
       const u0 = clamp(a - jeu, uLo, uHi),
         u1 = clamp(b + jeu, uLo, uHi);
       if (!(u1 - u0 > 2 && z1 > z0)) return;
@@ -122,7 +131,9 @@ export function stringerPockets(R: StairGeom, p: Params, F: Frame): StringerPock
       );
       if (z0 > 0.5) need = Math.max(need, topAt(u0) - lo + BOIS_SOUS_LOGEMENT, topAt(u1) - lo + BOIS_SOUS_LOGEMENT);
     };
-    R.treads.forEach((t) => pocket(F.at(R.lines[t.j - 1]!, 0), F.at(R.lines[t.j]!, bo), t.top - p.et, t.top, true));
+    R.treads.forEach((t) =>
+      pocket(F.at(R.lines[t.j - 1]!, 0), F.at(R.lines[t.j]!, bo), t.top - p.et, t.top, true, t.palier),
+    );
     // La marche palière va jusqu'au bout des limons, prolongés pour elle.
     const mp = R.mp;
     if (mp) pocket(F.at(mp.line, 0), F.at(mp.line, mp.depth), mp.top - mp.e, mp.top, true);

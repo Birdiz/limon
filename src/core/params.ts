@@ -6,6 +6,8 @@ export type GardeCorps = "aucun" | "balustres" | "lisses";
 export type Pose = "chant" | "anglaise";
 /** Contour de la trémie : rectangle, ou en L qui suit le quart tournant. */
 export type FormeTremie = "rect" | "L";
+/** Passage des tournants : marches balancées, ou palier (le même pour tous les tournants). */
+export type Tournant = "balance" | "palier";
 
 /** Réglages saisis par l'utilisateur. Longueurs en millimètres. */
 export interface Params {
@@ -34,6 +36,7 @@ export interface Params {
   mb: number;
   /** Progressivité du balancement, en %. */
   prog: number;
+  tournant: Tournant;
   ess: Essence;
   /** Épaisseur de marche. */
   et: number;
@@ -108,6 +111,7 @@ export const DEFAULTS: Readonly<Params> = {
   n: 15,
   mb: 7,
   prog: 60,
+  tournant: "balance",
   ess: "chene",
   et: 40,
   deb: 30,
@@ -192,6 +196,7 @@ export const ESSENCES: readonly Essence[] = ["chene", "hetre", "frene", "sapin",
 export const GARDE_CORPS: readonly GardeCorps[] = ["aucun", "balustres", "lisses"];
 export const POSES: readonly Pose[] = ["chant", "anglaise"];
 export const FORMES_TREMIE: readonly FormeTremie[] = ["rect", "L"];
+export const TOURNANTS: readonly Tournant[] = ["balance", "palier"];
 
 /** Masse volumique moyenne à 12 % d'humidité, en kg/m³ (ordre de grandeur pour le poids). */
 export const DENSITE: Record<Essence, number> = { chene: 710, hetre: 720, frene: 700, sapin: 450, noyer: 650 };
@@ -253,6 +258,7 @@ export function sanitizeParams(raw: unknown): Params {
   if (GARDE_CORPS.includes(r.gc as GardeCorps)) p.gc = r.gc as GardeCorps;
   if (POSES.includes(r.gcPose as Pose)) p.gcPose = r.gcPose as Pose;
   if (FORMES_TREMIE.includes(r.tForme as FormeTremie)) p.tForme = r.tForme as FormeTremie;
+  if (TOURNANTS.includes(r.tournant as Tournant)) p.tournant = r.tournant as Tournant;
   for (const k of NUMERIC_KEYS) if (typeof r[k] === "number" && Number.isFinite(r[k])) p[k] = r[k];
   for (const k of BOOLEAN_KEYS) if (typeof r[k] === "boolean") p[k] = r[k];
   return p;

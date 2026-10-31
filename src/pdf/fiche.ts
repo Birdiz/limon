@@ -226,7 +226,13 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
                 ],
             ),
           ] as [string, string][])
-        : []),
+        : R.paliers.map(
+            (q, i) =>
+              [
+                R.paliers.length > 1 ? `Palier ${i + 1}` : "Palier",
+                `marche ${q.j} · ${mm(R.W + q.reste)} de profondeur`,
+              ] as [string, string],
+          )),
   ];
   let yL = keyValues(pg, M, 132, colW, cotes);
 
@@ -319,7 +325,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   y += 10;
   const cols: [string, (t: Stair["treads"][number]) => string][] = R.quart
     ? [
-        ["Marche", (t) => String(t.j)],
+        ["Marche", (t) => (t.palier ? `${t.j} palier` : String(t.j))],
         ["Dessus", (t) => fmt(t.top, 1)],
         ["Giron jour", (t) => fmt(t.gIn, 1)],
         ["Giron foulée", (t) => fmt(t.gWalk, 1)],

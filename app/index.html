@@ -301,11 +301,22 @@
             </div>
             <div class="sub" data-show="quart">
               <h4>Tournant</h4>
-              <p class="hint">
+              <div class="row">
+                <label for="tournant">Passage du tournant</label
+                ><select id="tournant">
+                  <option value="balance">Marches balancées</option>
+                  <option value="palier">Palier</option>
+                </select>
+              </div>
+              <p class="hint" data-bal>
                 Déplacer le tour change les longueurs côté départ et côté arrivée ; leur total ne bouge pas, ni le
                 confort.
               </p>
-              <div class="row">
+              <p class="hint" data-pal>
+                Même giron sur toutes les volées, réglé par la longueur côté arrivée ; le reste s'ajoute à la profondeur
+                du palier.
+              </p>
+              <div class="row" data-bal>
                 <label for="tour"
                   >Marches droites avant le <span data-show="u">premier </span>tour<small id="tourTxt"></small
                 ></label>
@@ -313,7 +324,7 @@
                   <input id="tour" type="number" inputmode="numeric" step="1" min="0" max="38" />
                 </div>
               </div>
-              <div class="row" data-adv>
+              <div class="row" data-adv data-bal>
                 <label for="mb"
                   >Marches balancées<small data-show="quart1">marches touchées par le tournant</small
                   ><small data-show="u">marches touchées par chaque tournant</small></label
@@ -322,7 +333,7 @@
                   <input id="mb" type="number" inputmode="numeric" step="1" min="2" max="12" />
                 </div>
               </div>
-              <div class="row" data-adv>
+              <div class="row" data-adv data-bal>
                 <label for="prog">Progressivité<small id="progTxt">0 % = girons égaux au jour</small></label
                 ><input id="prog" type="range" min="0" max="100" step="5" />
               </div>
@@ -471,7 +482,9 @@
             <div class="vhead">
               <h2>Plan</h2>
               <div class="legend">
-                <span><i></i>ligne de foulée</span><span data-show="quart"><i class="bal"></i>marches balancées</span
+                <span><i></i>ligne de foulée</span
+                ><span data-show="quart"
+                  ><i class="bal"></i><b data-bal>marches balancées</b><b data-pal>palier</b></span
                 ><span><i class="tre"></i>trémie</span>
               </div>
             </div>

@@ -8,6 +8,8 @@ import { interp, type Pt } from "./vec";
 export const GC = {
   /** Hauteur de la main courante au-dessus des nez (NF P01-012). */
   h: 900,
+  /** Hauteur de la main courante horizontale au-dessus d'un palier. */
+  hPalier: 1000,
   /** Écart libre maximal entre les éléments du remplissage. */
   ecart: 110,
   /** Entraxe maximal des montants qui portent les lisses. */
@@ -169,7 +171,9 @@ export function railing({ p, quart, jour, cum, noseS, noseZ, mpD = 0 }: RailingI
           sp.prof.map((q) => q[1]),
           u,
         ),
-      want = (u: number) => nose(s0 + u) + GC.h;
+      // Tronçon tout entier au-dessus d'un palier (limon de palier du demi-tour) : main courante horizontale.
+      flat = sp.prof.every((q) => Math.abs(q[1] - sp.prof[0]![1]) < 1e-6),
+      want = (u: number) => nose(s0 + u) + (flat ? GC.hPalier : GC.h);
     const us = [u0, ...noseS.map((s) => s - s0).filter((u) => u > u0 && u < u1), u1];
     // Main courante droite au plus près de 900 mm : la pente qui donne le moins de surhauteur.
     // La surhauteur est convexe en la pente (maximum de fonctions affines) : recherche ternaire.

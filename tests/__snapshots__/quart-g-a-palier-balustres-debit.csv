@@ -1,0 +1,23 @@
+Pièce;Essence;Épaisseur (mm);Longueur (mm);Largeur (mm);Quantité;Volume (m³)
+Limon de jour 1/2;Chêne;45;2077;281;1;0,0263
+Limon de jour 2/2;Chêne;45;2320;273;1;0,0285
+Limon de mur 1/2;Chêne;45;2883;850;1;0,1103
+Limon de mur 2/2;Chêne;45;3234;611;1;0,0889
+Marches 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14;Chêne;40;880;317;13;0,1451
+Palier;Chêne;40;917;980;1;0,0359
+Contremarches 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15;Chêne;22;880;140;15;0,0407
+Main courante 1/2;Chêne;50;1997;70;1;0,007
+Main courante 2/2;Chêne;50;2185;70;1;0,0076
+Balustre 1;Chêne;30;816;30;1;0,0007
+Balustre 2;Chêne;30;815;30;1;0,0007
+Balustre 3;Chêne;30;814;30;1;0,0007
+Balustre 4;Chêne;30;813;30;1;0,0007
+Balustres 5, 6;Chêne;30;812;30;2;0,0015
+Balustre 7;Chêne;30;811;30;1;0,0007
+Balustre 8;Chêne;30;810;30;1;0,0007
+Balustre 9;Chêne;30;809;30;1;0,0007
+Balustre 10;Chêne;30;808;30;1;0,0007
+Balustres 11, 12;Chêne;30;807;30;2;0,0015
+Balustres 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25;Chêne;30;806;30;13;0,0094
+Poteau;Chêne;100;2470;100;1;0,0247
+Total;;;;;61;0,5331

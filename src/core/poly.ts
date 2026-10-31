@@ -1,4 +1,4 @@
-import { V, type Pt } from "./vec";
+import { V, clamp, type Pt } from "./vec";
 
 /** Polyligne paramétrée par l'abscisse curviligne ; les segments extrêmes se prolongent à l'infini. */
 export interface Poly {
@@ -15,6 +15,8 @@ export interface Cut {
   /** Abscisse curviligne sur la polyligne. */
   s: number;
   p: Pt;
+  /** Point pris sur le prolongement d'un segment, hors de la polyligne : s est ramené au bout du segment. */
+  outside?: true;
 }
 
 export function makePoly(pts: Pt[]): Poly {
@@ -44,8 +46,9 @@ export function polyPath(P: Poly, s1: number, s2: number): Pt[] {
   return out;
 }
 
-/** Intersection de la droite (pt, dir) avec la polyligne. 'near' : la plus proche de pt ; 'ahead' : la première devant. */
-export function polyCut(P: Poly, pt: Pt, dir: Pt, mode: "near" | "ahead"): Cut | null {
+/** Intersection de la droite (pt, dir) avec la polyligne. 'near' : la plus proche de pt ; 'ahead' : la première devant.
+    extend : à défaut, sur le prolongement d'un segment (nez d'une volée qui part du coin du jour, après un palier). */
+export function polyCut(P: Poly, pt: Pt, dir: Pt, mode: "near" | "ahead", extend = false): Cut | null {
   let best: Cut | null = null;
   const n = P.pts.length;
   for (let i = 0; i < n - 1; i++) {
@@ -56,11 +59,16 @@ export function polyCut(P: Poly, pt: Pt, dir: Pt, mode: "near" | "ahead"): Cut |
     const ap = V.sub(A, pt),
       lam = V.cross(ap, e) / den,
       u = V.cross(ap, dir) / den;
-    if (i > 0 && u < -1e-9) continue;
-    if (i < n - 2 && u > 1 + 1e-9) continue;
+    const off = (i > 0 && u < -1e-9) || (i < n - 2 && u > 1 + 1e-9);
+    if (off && !extend) continue;
     if (mode === "ahead" && lam <= 1e-6) continue;
     if (!best || Math.abs(lam) < best.key)
-      best = { key: Math.abs(lam), s: P.cum[i]! + u * (P.cum[i + 1]! - P.cum[i]!), p: V.add(pt, V.mul(dir, lam)) };
+      best = {
+        key: Math.abs(lam),
+        s: P.cum[i]! + (off ? clamp(u, 0, 1) : u) * (P.cum[i + 1]! - P.cum[i]!),
+        p: V.add(pt, V.mul(dir, lam)),
+        ...(off ? { outside: true as const } : {}),
+      };
   }
   return best;
 }

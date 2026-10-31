@@ -42,7 +42,7 @@ export function readme(R: Stair): string {
       `  DECOUPE     contour de découpe, encastrement de ${p.enc} mm compris de chaque côté`,
       "  CM_DESSUS   contremarche posée sur la marche (face supérieure)",
       "  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)",
-      `  TEXTE       numéro de marche${R.rn > 0 ? `, nez arrondi R${fmt(R.rn, 1)} dessus et dessous (à profiler, hors contour)` : ""}`,
+      `  TEXTE       numéro de marche${R.paliers.length ? " (PALIER : plateau du palier, collé à chant, logé comme une marche)" : ""}${R.rn > 0 ? `, nez arrondi R${fmt(R.rn, 1)} dessus et dessous (à profiler, hors contour)` : ""}`,
       ...(R.mp
         ? [
             `  La pièce MP est la marche palière : ${fmt(R.mp.e)} mm d'épaisseur, ${fmt(R.mp.depth)} mm de profondeur depuis le nez,`,
