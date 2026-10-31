@@ -28,7 +28,7 @@ const courant = (k: keyof Params) => `Courant : ${mm(DEFAULTS[k] as number)}.`;
 const hauteur = `Hauteur de marche conseillée : ${plage(C.h)}.`;
 const giron = `Giron conseillé sur la ligne de foulée : ${plage(C.g)}.`;
 const blondel = `Loi de Blondel : 2 hauteurs + 1 giron de ${plage(C.blondel)}, idéalement ${mm(C.blondel.cible)}.`;
-const echappee = `Échappée visée : ${mm(ECHAPPEE)} au-dessus des nez, jamais moins de ${mm(ECHAPPEE_MIN)}.`;
+const echappee = `Échappée visée : ${mm(ECHAPPEE)} au-dessus des nez, du jour au mur, jamais moins de ${mm(ECHAPPEE_MIN)}.`;
 const logements = `Au moins ${mm(BOIS_SOUS_LOGEMENT)} de bois sous chaque logement : le calcul vous prévient sinon.`;
 const jour = `Au moins ${mm(C.gIn.min)} de giron côté jour.`;
 
