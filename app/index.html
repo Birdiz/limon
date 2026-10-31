@@ -273,53 +273,45 @@
                   <path d="M11 9h12M11 15h12M11 21h12M11 27h12" /></svg
                 >Droit</label
               >
-              <input type="radio" name="forme" id="f-qg" value="quart-g" />
-              <label for="f-qg"
-                ><svg viewBox="0 0 34 34">
-                  <path d="M20 31V3H3v12h7v16z" />
-                  <path d="M10 26h10M10 21h10M10 15l10-4M8 15l4-12M3 9h7" /></svg
-                >Quart tournant gauche</label
-              >
-              <input type="radio" name="forme" id="f-qd" value="quart-d" />
-              <label for="f-qd"
-                ><svg viewBox="0 0 34 34">
+              <input type="radio" name="forme" id="f-quart" value="quart" />
+              <label for="f-quart"
+                ><svg class="tourne" viewBox="0 0 34 34">
                   <path d="M14 31V3h17v12h-7v16z" />
                   <path d="M14 26h10M14 21h10M24 15l-10-4M26 15l-4-12M31 9h-7" /></svg
-                >Quart tournant droit</label
+                >Quart tournant</label
               >
-              <input type="radio" name="forme" id="f-dqg" value="dq-g" />
-              <label for="f-dqg"
-                ><svg viewBox="0 0 34 34">
-                  <path d="M3 3h28v28h-9V12H12v19H3z" />
-                  <path d="M22 26h9M22 21h9M22 15l9 1M22 12l9-6M17 12V3M12 12L3 6M12 15l-9 1M3 21h9" />
-                  <path d="M26.5 30v-6M24.5 26l2-2 2 2" /></svg
-                >Double quart gauche</label
-              >
-              <input type="radio" name="forme" id="f-dqd" value="dq-d" />
-              <label for="f-dqd"
-                ><svg viewBox="0 0 34 34">
+              <input type="radio" name="forme" id="f-dq" value="dq" />
+              <label for="f-dq"
+                ><svg class="tourne" viewBox="0 0 34 34">
                   <path d="M3 3h28v28h-9V12H12v19H3z" />
                   <path d="M3 26h9M3 21h9M3 15l9 1M3 6l9 6M17 3v9M31 6l-9 6M31 15l-9 1M22 21h9" />
                   <path d="M7.5 30v-6M5.5 26l2-2 2 2" /></svg
-                >Double quart droit</label
+                >Double quart tournant</label
               >
-              <input type="radio" name="forme" id="f-demig" value="demi-g" />
-              <label for="f-demig"
-                ><svg viewBox="0 0 34 34">
-                  <path d="M3 3h28v28H19V15h-4v16H3z" />
-                  <path d="M19 26h12M19 21h12M19 15l12 1M19 15l9-12M17 15V3M15 15L6 3M15 15L3 16M3 21h12" />
-                  <path d="M25 30v-6M23 26l2-2 2 2" /></svg
-                >Demi-tournant gauche</label
-              >
-              <input type="radio" name="forme" id="f-demid" value="demi-d" />
-              <label for="f-demid"
-                ><svg viewBox="0 0 34 34">
+              <input type="radio" name="forme" id="f-demi" value="demi" />
+              <label for="f-demi"
+                ><svg class="tourne" viewBox="0 0 34 34">
                   <path d="M3 3h28v28H19V15h-4v16H3z" />
                   <path d="M3 26h12M3 21h12M15 15L3 16M15 15L6 3M17 15V3M19 15l9-12M19 15l12 1M19 21h12" />
                   <path d="M9 30v-6M7 26l2-2 2 2" /></svg
-                >Demi-tournant droit</label
+                >Demi-tournant</label
               >
             </div>
+            <div class="sensrow" data-show="quart">
+              <span>En montant, l'escalier tourne</span>
+              <div class="sens" role="radiogroup" aria-label="Sens du tournant">
+                <input type="radio" name="sens" id="s-g" value="g" /><label for="s-g">à gauche</label>
+                <input type="radio" name="sens" id="s-d" value="d" checked /><label for="s-d">à droite</label>
+              </div>
+            </div>
+            <p class="formenote" data-show="dq">
+              <b>Double quart tournant :</b> deux tournants séparés par une volée au fond, assez longue pour quelques
+              marches. Les deux volées sont loin l'une de l'autre.
+            </p>
+            <p class="formenote" data-show="demi">
+              <b>Demi-tournant :</b> les deux volées côte à côte, séparées par un jour étroit. On fait demi-tour d'un
+              coup, au fond, sans volée entre les deux.
+            </p>
           </div>
         </details>
         <details class="sec" data-step="dimensions" open>

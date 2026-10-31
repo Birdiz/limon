@@ -83,6 +83,28 @@ describe("garde-corps", () => {
   });
 });
 
+describe("forme et sens du tournant", () => {
+  it("se choisissent à part et se relisent ensemble", () => {
+    const checked = () =>
+      [...document.querySelectorAll<HTMLInputElement>("input[name=forme], input[name=sens]")]
+        .filter((r) => r.checked)
+        .map((r) => r.value);
+    for (const forme of ["quart-g", "quart-d", "dq-g", "dq-d", "demi-g", "demi-d"] as const) {
+      writeInputs({ ...DEFAULTS, forme });
+      expect(readInputs(DEFAULTS).params.forme).toBe(forme);
+    }
+    writeInputs({ ...DEFAULTS, forme: "quart-g" });
+    expect(checked()).toEqual(["quart", "g"]);
+    // L'escalier droit n'a pas de sens : il garde le précédent pour la forme suivante.
+    writeInputs({ ...DEFAULTS, forme: "droit" });
+    expect(readInputs(DEFAULTS).params.forme).toBe("droit");
+    field("f-demi").checked = true;
+    expect(readInputs(DEFAULTS).params.forme).toBe("demi-g");
+    field("s-d").checked = true;
+    expect(readInputs(DEFAULTS).params.forme).toBe("demi-d");
+  });
+});
+
 describe("marche palière et trémie en L", () => {
   it("relisent leurs champs", () => {
     const p = { ...DEFAULTS, mp: true, mpP: 320, mpE: 50, tForme: "L" as const, tbD: 1000, tbA: 1100 };

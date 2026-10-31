@@ -23,7 +23,11 @@ const input = (id: string) => byId<HTMLInputElement>(id);
 const TRE_KEYS = ["tL", "tX", "tY", "tbD", "tbA"] as const;
 
 export function writeInputs(p: Params): void {
-  document.querySelectorAll<HTMLInputElement>('input[name="forme"]').forEach((r) => (r.checked = r.value === p.forme));
+  // La forme se choisit sans son sens (« quart »), le sens à part (« d ») ; l'escalier droit garde le sens précédent.
+  const [base, sens] = p.forme.split("-");
+  document.querySelectorAll<HTMLInputElement>('input[name="forme"]').forEach((r) => (r.checked = r.value === base));
+  if (sens)
+    document.querySelectorAll<HTMLInputElement>('input[name="sens"]').forEach((r) => (r.checked = r.value === sens));
   NUMERIC_KEYS.forEach((k) => (input(k).value = String(p[k])));
   BOOLEAN_KEYS.forEach((k) => (input(k).checked = p[k]));
   // La trémie se choisit entre deux cases : « Pas encore » (tAuto) et « Oui, je la mesure ».
@@ -39,8 +43,9 @@ export function writeInputs(p: Params): void {
 export function readInputs(prev: Params): { params: Params; missing: NumericKey[] } {
   const p = { ...prev };
   const missing: NumericKey[] = [];
-  const r = document.querySelector<HTMLInputElement>('input[name="forme"]:checked');
-  p.forme = (r ? r.value : "droit") as Forme;
+  const base = document.querySelector<HTMLInputElement>('input[name="forme"]:checked')?.value ?? "droit";
+  const sens = document.querySelector<HTMLInputElement>('input[name="sens"]:checked')?.value ?? "d";
+  p.forme = (base === "droit" ? base : `${base}-${sens}`) as Forme;
   NUMERIC_KEYS.forEach((k) => {
     const v = parseFloat(input(k).value);
     if (!Number.isNaN(v)) p[k] = v;
