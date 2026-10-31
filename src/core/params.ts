@@ -1,4 +1,4 @@
-export type Forme = "droit" | "quart-g" | "quart-d";
+export type Forme = "droit" | "quart-g" | "quart-d" | "dq-g" | "dq-d";
 export type Essence = "chene" | "hetre" | "frene" | "sapin" | "noyer";
 /** Remplissage du garde-corps côté jour. */
 export type GardeCorps = "aucun" | "balustres" | "lisses";
@@ -16,8 +16,10 @@ export interface Params {
   L: number;
   /** Longueur côté départ (quart tournant). */
   A: number;
-  /** Longueur côté arrivée (quart tournant). */
+  /** Longueur côté arrivée (quart tournant, double quart). */
   B: number;
+  /** Longueur côté fond, entre les deux tournants (double quart). */
+  C: number;
   /** Emmarchement, entre limons. */
   W: number;
   fAuto: boolean;
@@ -61,9 +63,9 @@ export interface Params {
   bs: number;
   /** Longueur de trémie (droit). */
   tL: number;
-  /** Trémie côté arrivée (quart). */
+  /** Trémie côté arrivée (quart), côté fond en travers (double quart). */
   tX: number;
-  /** Trémie côté départ (quart). */
+  /** Trémie côté départ (quart), côté arrivée (double quart). */
   tY: number;
   /** Contour de la trémie (le L ne sert qu'en quart tournant). */
   tForme: FormeTremie;
@@ -95,6 +97,7 @@ export const DEFAULTS: Readonly<Params> = {
   L: 3650,
   A: 2900,
   B: 1800,
+  C: 2400,
   W: 850,
   fAuto: true,
   f: 425,
@@ -135,7 +138,25 @@ export const DEFAULTS: Readonly<Params> = {
   pW: 600,
 };
 
-export const FORMES: readonly Forme[] = ["droit", "quart-g", "quart-d"];
+export const FORMES: readonly Forme[] = ["droit", "quart-g", "quart-d", "dq-g", "dq-d"];
+/** Nombre de tournants de chaque forme, tous du même sens. */
+export const TOURS: Record<Forme, number> = { droit: 0, "quart-g": 1, "quart-d": 1, "dq-g": 2, "dq-d": 2 };
+/** Forme qui tourne à gauche : calculée à droite, puis vue en miroir. */
+export const isLeft = (f: Forme): boolean => f.endsWith("-g");
+/** Cotes de l'exemple pour une forme en U, reprises en passant d'une autre forme au double quart :
+    celles du quart tournant donneraient une ligne de foulée bien trop longue. */
+export const EXEMPLE_U: Readonly<Pick<Params, "A" | "B" | "C" | "tX" | "tY">> = {
+  A: 2000,
+  B: 1900,
+  C: 2400,
+  tX: 2500,
+  tY: 1950,
+};
+
+/** Réglages après un changement de forme : en entrant dans une forme en U, ses cotes d'exemple. */
+export function changeForme(prev: Params, next: Params): Params {
+  return TOURS[next.forme] === 2 && TOURS[prev.forme] !== 2 ? { ...next, ...EXEMPLE_U } : next;
+}
 export const ESSENCES: readonly Essence[] = ["chene", "hetre", "frene", "sapin", "noyer"];
 export const GARDE_CORPS: readonly GardeCorps[] = ["aucun", "balustres", "lisses"];
 export const POSES: readonly Pose[] = ["chant", "anglaise"];
@@ -149,6 +170,7 @@ export const NUMERIC_KEYS = [
   "L",
   "A",
   "B",
+  "C",
   "W",
   "f",
   "n",

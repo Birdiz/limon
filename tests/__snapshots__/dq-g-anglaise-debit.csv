@@ -1,0 +1,51 @@
+Pièce;Essence;Épaisseur (mm);Longueur (mm);Largeur (mm);Quantité;Volume (m³)
+Limon de jour 1/3;Chêne;45;1475;450;1;0,0299
+Limon de jour 2/3;Chêne;45;994;357;1;0,016
+Limon de jour 3/3;Chêne;45;1546;469;1;0,0326
+Limon de mur 1/3;Chêne;45;2313;413;1;0,043
+Limon de mur 2/3;Chêne;45;2715;466;1;0,0569
+Limon de mur 3/3;Chêne;45;2201;435;1;0,0431
+Marches 1, 2, 14, 15;Chêne;40;880;335;4;0,0472
+Marche 3;Chêne;40;880;411;1;0,0145
+Marche 4;Chêne;40;970;448;1;0,0174
+Marche 5;Chêne;40;1206;570;1;0,0275
+Marche 6;Chêne;40;1324;510;1;0,027
+Marche 7;Chêne;40;1054;423;1;0,0178
+Marche 8;Chêne;40;937;404;1;0,0151
+Marche 9;Chêne;40;880;434;1;0,0153
+Marche 10;Chêne;40;1177;608;1;0,0286
+Marche 11;Chêne;40;1406;497;1;0,028
+Marche 12;Chêne;40;1109;431;1;0,0191
+Marche 13;Chêne;40;953;422;1;0,0161
+Contremarches 1, 2, 3, 9, 14, 15, 16;Chêne;22;880;129;7;0,0175
+Contremarches 4, 8;Chêne;22;897;129;2;0,0051
+Contremarche 5;Chêne;22;969;129;1;0,0028
+Contremarche 6;Chêne;22;1214;129;1;0,0034
+Contremarche 7;Chêne;22;974;129;1;0,0028
+Contremarches 10, 13;Chêne;22;907;129;2;0,0051
+Contremarche 11;Chêne;22;1285;129;1;0,0036
+Contremarche 12;Chêne;22;1031;129;1;0,0029
+Main courante 1/3;Chêne;50;1394;70;1;0,0049
+Main courante 2/3;Chêne;50;753;70;1;0,0026
+Main courante 3/3;Chêne;50;1302;70;1;0,0046
+Balustre 1;Chêne;30;1012;30;1;0,0009
+Balustre 2;Chêne;30;1113;30;1;0,001
+Balustre 3;Chêne;30;1215;30;1;0,0011
+Balustre 4;Chêne;30;1316;30;1;0,0012
+Balustre 5;Chêne;30;1374;30;1;0,0012
+Balustre 6;Chêne;30;1378;30;1;0,0012
+Balustre 7;Chêne;30;1371;30;1;0,0012
+Balustre 8;Chêne;30;1342;30;1;0,0012
+Balustre 9;Chêne;30;1283;30;1;0,0012
+Balustre 10;Chêne;30;1288;30;1;0,0012
+Balustre 11;Chêne;30;1295;30;1;0,0012
+Balustre 12;Chêne;30;1336;30;1;0,0012
+Balustre 13;Chêne;30;1293;30;1;0,0012
+Balustre 14;Chêne;30;1280;30;1;0,0012
+Balustre 15;Chêne;30;1311;30;1;0,0012
+Balustre 16;Chêne;30;1341;30;1;0,0012
+Balustre 17;Chêne;30;1372;30;1;0,0012
+Balustre 18;Chêne;30;1403;30;1;0,0013
+Poteau 1;Chêne;100;2200;100;1;0,022
+Poteau 2;Chêne;100;3010;100;1;0,0301
+Total;;;;;60;0,6234

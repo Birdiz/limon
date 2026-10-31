@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { handrailOutline, postOutline, railOutline } from "../cnc/railing";
-import type { Essence } from "../core/params";
+import { isLeft, type Essence } from "../core/params";
 import type { StringerPiece, Stair, Tread } from "../core/stair";
 import { stringerOutline } from "../core/stringer";
 import { V, type Pt } from "../core/vec";
@@ -278,11 +278,11 @@ export class Scene3D {
     R.risers.forEach((r) => g.add(extrudePlan(r.plan, r.z0, Math.max(1, r.z1 - r.z0), wood)));
     R.stringers.forEach((sp) => g.add(stringerMesh(sp, woodDark)));
     railingMeshes(R, wood).forEach((m) => g.add(m));
-    if (R.newel) {
-      const nb = shaded(new THREE.BoxGeometry(R.newel.size, R.newel.h, R.newel.size), woodDark);
-      nb.position.set(R.newel.c[0], R.newel.h / 2, -R.newel.c[1]);
+    R.newels.forEach((N) => {
+      const nb = shaded(new THREE.BoxGeometry(N.size, N.h, N.size), woodDark);
+      nb.position.set(N.c[0], N.h / 2, -N.c[1]);
       g.add(nb);
-    }
+    });
     // Plancher haut, translucide pour garder l'escalier lisible, percé de la trémie.
     const S = R.slab;
     const outline = new THREE.Shape(
@@ -324,7 +324,7 @@ export class Scene3D {
         g.add(rod);
       }
     }
-    const mirrored = p.forme === "quart-g";
+    const mirrored = isLeft(p.forme);
     if (mirrored) g.scale.x = -1;
     this.stair = g;
     this.scene.add(g);

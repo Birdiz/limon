@@ -1,11 +1,13 @@
 import { fmt } from "./format";
-import type { Essence, Forme, GardeCorps, Params, Pose } from "./params";
+import { TOURS, type Essence, type Forme, type GardeCorps, type Params, type Pose } from "./params";
 import { CONFORT, echSidesShown, echStatus, type EchCote, type Headroom, type Stair, type Status } from "./stair";
 
 export const FORME_LABEL: Record<Forme, string> = {
   droit: "Droit",
   "quart-g": "Quart tournant gauche",
   "quart-d": "Quart tournant droit",
+  "dq-g": "Double quart tournant gauche",
+  "dq-d": "Double quart tournant droit",
 };
 
 export const ESSENCE_LABEL: Record<Essence, string> = {
@@ -36,26 +38,39 @@ export const SECTION_TITLE: Record<Section, string> = {
   gardecorps: "Garde-corps",
 };
 
-/** Tour du quart tournant : première et dernière marche balancée, et hauteur de leur dessus. */
-export function turnSpan(R: Stair): { from: number; to: number; z0: number; z1: number } | null {
-  if (!R.bal) return null;
-  const { a, b } = R.bal;
-  return { from: a + 1, to: b, z0: (a + 1) * R.h, z1: b * R.h };
+export interface TurnSpan {
+  from: number;
+  to: number;
+  z0: number;
+  z1: number;
 }
+
+/** Chaque tournant : première et dernière marche balancée, et hauteur de leur dessus. */
+export const turnSpans = (R: Stair): TurnSpan[] =>
+  R.bals.map(({ a, b }) => ({ from: a + 1, to: b, z0: (a + 1) * R.h, z1: b * R.h }));
+
+/** Premier tournant ; null pour un escalier droit. */
+export const turnSpan = (R: Stair): TurnSpan | null => turnSpans(R)[0] ?? null;
 
 /** Résumé d'une ligne de chaque section, lisible quand elle est repliée. */
 export function sectionSummaries(p: Params, R: Stair | null): Record<Section, string> {
-  const quart = p.forme !== "droit";
+  const tours = TOURS[p.forme],
+    quart = tours > 0;
   const tre = R ? R.treDims : { tL: p.tL, tX: p.tX, tY: p.tY };
-  const treTxt = quart ? `${p.tForme === "L" ? "en L, " : ""}${fmt(tre.tY)} × ${fmt(tre.tX)}` : fmt(tre.tL);
-  const tour = R && turnSpan(R);
+  const treTxt = quart
+    ? `${p.tForme === "L" ? (tours === 2 ? "en U, " : "en L, ") : ""}${fmt(tre.tY)} × ${fmt(tre.tX)}`
+    : fmt(tre.tL);
+  const spans = R ? turnSpans(R) : [];
+  const tourTxt = spans.length
+    ? ` · tour${spans.length > 1 ? "s" : ""} ${spans.map((t) => `de ${fmt(t.z0)} à ${fmt(t.z1)}`).join(" et ")}`
+    : "";
   return {
     forme: FORME_LABEL[p.forme],
-    dimensions: `${fmt(p.H)} de haut · ${quart ? `${fmt(p.A)} × ${fmt(p.B)}` : `${fmt(p.L)} de long`} · ${fmt(p.W)} de large`,
+    dimensions: `${fmt(p.H)} de haut · ${tours === 2 ? `${fmt(p.A)} × ${fmt(p.C)} × ${fmt(p.B)}` : quart ? `${fmt(p.A)} × ${fmt(p.B)}` : `${fmt(p.L)} de long`} · ${fmt(p.W)} de large`,
     tremie: p.tAuto ? (R ? `à calculer : ${treTxt}` : "à calculer") : treTxt,
     marches:
       (R
-        ? `${R.n} hauteurs de ${fmt(R.h, 1)}${p.nAuto ? ", automatique" : ""}${tour ? ` · tour de ${fmt(tour.z0)} à ${fmt(tour.z1)}` : ""}`
+        ? `${R.n} hauteurs de ${fmt(R.h, 1)}${p.nAuto ? ", automatique" : ""}${tourTxt}`
         : p.nAuto
           ? "automatique"
           : `${p.n} hauteurs`) + (p.mp ? ` · marche palière de ${fmt(p.mpP)}` : ""),
@@ -93,7 +108,15 @@ export function checks(R: Stair): Check[] {
     c("Pente", fmt(R.pente, 1), "°", `foulée ${fmt(R.Lw)} mm`, R.st.pente),
     ...(echSidesShown(R) ? ECH_COTES.map(([cote, k]) => ech(k, R.echCotes[cote])) : [ech("Échappée", R.ech, R.st.ech)]),
     R.bal
-      ? c("Giron mini au jour", fmt(R.gInMin), "mm", `tour : marches ${R.bal.a + 1} à ${R.bal.b}`, R.st.gIn)
+      ? c(
+          "Giron mini au jour",
+          fmt(R.gInMin),
+          "mm",
+          `tour${R.bals.length > 1 ? "s" : ""} : ${turnSpans(R)
+            .map((t) => `${R.bals.length > 1 ? "" : "marches "}${t.from} à ${t.to}`)
+            .join(" et ")}`,
+          R.st.gIn,
+        )
       : c("Reculement", fmt(R.L), "mm", `emmarchement ${fmt(R.W)}`, null),
   ];
 }

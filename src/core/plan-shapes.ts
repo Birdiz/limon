@@ -1,4 +1,5 @@
 import { fmt } from "./format";
+import { isLeft } from "./params";
 import { echSidesShown, echStatus, type Stair, type Status } from "./stair";
 import { V, type Pt } from "./vec";
 
@@ -48,9 +49,9 @@ export interface PlanDrawing {
 
 /** Plan coté de l'escalier, vue de dessus (montée vers le haut de l'écran). */
 export function planShapes(R: Stair): PlanDrawing {
-  const mx = R.params.forme === "quart-g" ? -1 : 1;
+  const mx = isLeft(R.params.forme) ? -1 : 1;
   const T = (q: Pt): Pt => [mx * q[0], -q[1]];
-  const span = Math.max(R.quart ? Math.max(R.A, R.B) : R.L, R.W);
+  const span = Math.max(R.tours === 2 ? Math.max(R.A, R.B, R.C) : R.quart ? Math.max(R.A, R.B) : R.L, R.W);
   const fs = span / 34;
   const pts: Pt[] = [],
     shapes: PlanShape[] = [];
@@ -68,9 +69,9 @@ export function planShapes(R: Stair): PlanDrawing {
       b = V.add(sp.origin, V.mul(sp.dir, u1));
     poly([a, b, V.add(b, V.mul(sp.rn, sp.width)), V.add(a, V.mul(sp.rn, sp.width))], "pl-str");
   });
-  if (R.newel) {
-    const c = R.newel.c,
-      d = R.newel.size / 2;
+  R.newels.forEach((N) => {
+    const c = N.c,
+      d = N.size / 2;
     poly(
       [
         [c[0] - d, c[1] - d],
@@ -80,7 +81,7 @@ export function planShapes(R: Stair): PlanDrawing {
       ],
       "pl-str",
     );
-  }
+  });
   // Marches et marche palière
   R.treads.forEach((t) => poly(t.plan, t.balanced ? "pl-bal" : "pl-tread"));
   if (R.mp) poly(R.mp.plan, "pl-tread");
@@ -205,7 +206,11 @@ export function planShapes(R: Stair): PlanDrawing {
     shapes.push({ k: "path", role: "pl-dim", segs: [tick(tB)] });
     shapes.push({ k: "text", role: "pl-dimtxt", at: mid, size: fs * 0.62, anchor: "middle", rot: deg, text: label });
   };
-  if (R.quart) {
+  if (R.tours === 2) {
+    dim([0, 0], [0, R.A], [-1, 0], fmt(R.A));
+    dim([0, R.A], [R.C, R.A], [0, 1], fmt(R.C));
+    dim([R.C, R.A], [R.C, R.A - R.B], [1, 0], fmt(R.B));
+  } else if (R.quart) {
     dim([0, 0], [0, R.A], [-1, 0], fmt(R.A));
     dim([0, R.A], [R.B, R.A], [0, 1], fmt(R.B));
   } else dim([0, 0], [0, R.L], [-1, 0], fmt(R.L));

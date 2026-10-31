@@ -32,16 +32,36 @@ const rect = (x0: number, y0: number, x1: number, y1: number): Pt[] => [
 /** Contour d'une main courante dans son plan (u, z) : dessus, bouts d'aplomb ou d'onglet, tenon dans le poteau. */
 export function handrailOutline(hr: Handrail): Pt[] {
   const top = (u: number) => hr.z0 + hr.b * u,
-    t = hr.tenon,
     c0 = hr.cut0 ?? 0,
     c1 = hr.cut1 ?? 0;
   const tl: Pt = [hr.u0, top(hr.u0)],
     tr: Pt = [hr.u1, top(hr.u1)],
     br: Pt = [hr.u1 + c1, top(hr.u1 + c1) - hr.hv],
     bl: Pt = [hr.u0 + c0, top(hr.u0 + c0) - hr.hv];
-  if (t && t.u0 >= hr.u1 - 1e-6) return [tl, tr, [t.u0, t.z1], [t.u1, t.z1], [t.u1, t.z0], [t.u0, t.z0], br, bl];
-  if (t) return [tl, tr, br, bl, [t.u1, t.z0], [t.u0, t.z0], [t.u0, t.z1], [t.u1, t.z1]];
-  return [tl, tr, br, bl];
+  const hi = hr.tenons.find((t) => t.u0 >= hr.u1 - 1e-6),
+    lo = hr.tenons.find((t) => t !== hi);
+  return [
+    tl,
+    tr,
+    ...(hi
+      ? ([
+          [hi.u0, hi.z1],
+          [hi.u1, hi.z1],
+          [hi.u1, hi.z0],
+          [hi.u0, hi.z0],
+        ] as Pt[])
+      : []),
+    br,
+    bl,
+    ...(lo
+      ? ([
+          [lo.u1, lo.z0],
+          [lo.u0, lo.z0],
+          [lo.u0, lo.z1],
+          [lo.u1, lo.z1],
+        ] as Pt[])
+      : []),
+  ];
 }
 
 /** Contour d'un balustre ou montant dans le plan du garde-corps (u, z) : coupes biais, tenons en bout. */
@@ -114,8 +134,9 @@ export function buildRailing(G: Railing, p: Params): RailingCNC {
       sec = Math.hypot(1, hr.b);
     const side = lay(out, th, y);
     ents.push({ kind: "poly", layer: "DECOUPE", pts: out.map(side.tr), closed: true });
-    const t = hr.tenon;
-    if (t) ents.push({ kind: "poly", layer: "TENON", pts: rect(t.u0, t.z0, t.u1, t.z1).map(side.tr), closed: true });
+    hr.tenons.forEach((t) =>
+      ents.push({ kind: "poly", layer: "TENON", pts: rect(t.u0, t.z0, t.u1, t.z1).map(side.tr), closed: true }),
+    );
     const name = hr.retour ? "RETOUR DE MAIN COURANTE" : `MAIN COURANTE${ramp > 1 ? ` ${++k}/${ramp}` : ""}`;
     const miter = (c: number | undefined) => (c ? "d'onglet" : "d'aplomb");
     const ends =
@@ -130,12 +151,17 @@ export function buildRailing(G: Railing, p: Params): RailingCNC {
         ? `${name} - vue de cote - ${Math.ceil(side.L)} x ${p.mcH} x ${p.mcL} - horizontal au-dessus de la marche paliere, ${ends}`
         : `${name} - vue de cote - ${Math.ceil(side.L)} x ${p.mcH} x ${p.mcL} - pente ${fmt((th * 180) / Math.PI, 1)} deg, ${ends}`,
     );
-    if (t)
+    const dims = (t: Handrail["tenons"][number]) =>
+      `${fmt(t.u1 - t.u0, 1)} x ${fmt(t.z1 - t.z0, 1)} ep. ${fmt(t.t1 - t.t0, 1)}`;
+    const [t0, t1] = hr.tenons;
+    if (t0)
       text(
         0,
         y + side.H + 85,
         30,
-        `tenon ${fmt(t.u1 - t.u0, 1)} x ${fmt(t.z1 - t.z0, 1)} ep. ${fmt(t.t1 - t.t0, 1)}, centre sur la largeur`,
+        t1
+          ? `tenons ${dims(t0)} en bas et ${dims(t1)} en haut, centres sur la largeur`
+          : `tenon ${dims(t0)}, centre sur la largeur`,
       );
     handrailParts.push({
       name: name.charAt(0) + name.slice(1).toLowerCase(),

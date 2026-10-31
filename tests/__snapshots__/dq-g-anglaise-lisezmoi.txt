@@ -1,0 +1,50 @@
+Quart de tour - export CNC
+Escalier double quart tournant gauche : 16 hauteurs de 168,8 mm, giron 282,3 mm, emmarchement 850 mm.
+Unités : millimètres. Format DXF R12 (AC1009).
+
+marches.dxf : chaque marche vue de dessus, nez en bas.
+  DECOUPE     contour de découpe, encastrement de 15 mm compris de chaque côté
+  CM_DESSUS   contremarche posée sur la marche (face supérieure)
+  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)
+  TEXTE       numéro de marche, nez arrondi R10,0 dessus et dessous (à profiler, hors contour)
+
+contremarches.dxf : chaque contremarche vue de face depuis l'escalier, bas en bas,
+  longueur hors tout, encastrement de 15 mm compris de chaque côté.
+  DECOUPE     contour de découpe
+  TEXTE       numéro de contremarche ; dans le tournant, angle des bouts biais
+              et face la plus courte (parement = face vue depuis l'escalier, dos = face cachée)
+
+limons.dxf : chaque limon développé, vu depuis la face côté marches, haut en haut,
+  couché dans le sens de la planche (cotes = plus petit rectangle de débit).
+  DECOUPE     contour du limon
+  DEFONCE     logements des marches et contremarches, profondeur 15 mm,
+              jeu de 0,5 mm par côté compris, bout avant arrondi comme le nez (arcs)
+  TENON       tenon des limons de jour dans les poteaux : enlever les joues de part et d'autre
+              (épaisseurs sous le nom de la pièce), épaulements de 30 mm en haut et en bas
+  PERCAGE     limons de mur 1/3 et 2/3 : perçages D10 traversants dans la partie qui reçoit
+              le bout du limon de mur suivant (about vissé ou boulonné)
+  PERCAGE     perçages D8 traversants pour visser les balustres posés à l'anglaise
+  TEXTE       nom de la pièce et cotes brutes
+
+poteau.dxf : 2 poteaux de 100 x 100 mm, du sol à 2 200 et 3 010 mm,
+  affleurant les limons de jour côté marches, dans l'ordre de la montée. Les quatre faces de chacun
+  vues de l'extérieur, couchées pied à gauche, dans l'ordre du tour :
+  l'arête basse d'une face est l'arête haute de la suivante.
+  DECOUPE     contour de la face (débit à la longueur)
+  DEFONCE     logements des marches et contremarches, profondeur 15 mm, jeu compris
+  MORTAISE    mortaises de chaque limon de jour et de la main courante, profondeur indiquée sur la face, jeu compris
+  TEXTE       numéro et rôle de chaque face
+
+garde-corps.dxf : garde-corps côté jour, main courante à au moins 900 mm au-dessus des nez,
+  écart libre de 110 mm au plus.
+  Mains courantes vues de côté (bouts d'aplomb), puis leur dessous déroulé avec les mortaises
+  des balustres ; balustres vus de côté, couchés, numérotés dans l'ordre de la montée.
+  DECOUPE     contours
+  TENON       tenon de chaque main courante dans les poteaux
+  MORTAISE    mortaises d'aplomb sous la main courante, jeu compris
+  TEXTE       noms, sections, pentes
+
+fiche-marches.csv : girons et longueurs de nez de chaque marche.
+liste-debit.csv : liste de débit (essence, épaisseur, cotes brutes, quantité, volume) pour le tableur.
+
+À vérifier avant usinage : sens des pièces, fixation des limons au sol et au plancher haut.

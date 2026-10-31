@@ -23,7 +23,7 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
     await expect(marches).toMatchFileSnapshot(`__snapshots__/${name}-marches.dxf`);
     await expect(limons).toMatchFileSnapshot(`__snapshots__/${name}-limons.dxf`);
     if (R.params.cm) await expect(contremarches).toMatchFileSnapshot(`__snapshots__/${name}-contremarches.dxf`);
-    if (R.newel) await expect(poteau).toMatchFileSnapshot(`__snapshots__/${name}-poteau.dxf`);
+    if (R.newels.length) await expect(poteau).toMatchFileSnapshot(`__snapshots__/${name}-poteau.dxf`);
     if (R.rail) await expect(gardeCorps).toMatchFileSnapshot(`__snapshots__/${name}-garde-corps.dxf`);
     await expect(treadsCSV(R)).toMatchFileSnapshot(`__snapshots__/${name}.csv`);
     await expect(readme(R)).toMatchFileSnapshot(`__snapshots__/${name}-lisezmoi.txt`);
@@ -71,7 +71,9 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
   });
 
   it("nomme l'archive d'après la forme et le nombre de hauteurs", () => {
-    expect(exportFilename(R)).toMatch(/^escalier-(droit|quart-gauche|quart-droit)-\d+h\.zip$/);
+    expect(exportFilename(R)).toMatch(
+      /^escalier-(droit|quart-gauche|quart-droit|double-quart-gauche|double-quart-droit)-\d+h\.zip$/,
+    );
   });
 });
 
@@ -113,7 +115,7 @@ describe("plateaux et volume", () => {
 
 describe("poteau et raccord des limons", () => {
   const R = stairOf({ forme: "quart-d" });
-  const N = R.newel!,
+  const N = R.newels[0]!,
     p = R.params;
   const jour = R.stringers.filter((sp) => sp.side === "in");
 
@@ -129,7 +131,7 @@ describe("poteau et raccord des limons", () => {
 
   it("donne à chaque limon de jour un tenon qui sort de son bout côté poteau", () => {
     for (const sp of jour) {
-      const t = sp.tenon!,
+      const t = sp.tenons[0]!,
         o = bbox(stringerOutline(sp, sp.hl));
       expect(t.u1 - t.u0).toBe(TENON.long);
       expect(sp.idx === 0 ? o.x1 : o.x0).toBeCloseTo(sp.idx === 0 ? t.u1 : t.u0, 6);
@@ -138,14 +140,15 @@ describe("poteau et raccord des limons", () => {
       expect(t.t1).toBeLessThan(p.el);
       expect(t.z1 - t.z0).toBeGreaterThan(200);
     }
-    for (const sp of R.stringers.filter((s) => s.side === "out")) expect(sp.tenon).toBeNull();
+    for (const sp of jour) expect(sp.tenons).toHaveLength(1);
+    for (const sp of R.stringers.filter((s) => s.side === "out")) expect(sp.tenons).toEqual([]);
   });
 
   it("creuse dans le poteau une mortaise à la mesure de chaque tenon, jeu compris", () => {
     const ms = N.faces.flatMap((f) => f.mortises);
     expect(ms.map((m) => m.idx)).toEqual([0, 1]);
     for (const m of ms) {
-      const t = jour[m.idx]!.tenon!,
+      const t = jour[m.idx]!.tenons[0]!,
         b = bbox(m.pts);
       expect(b.x1 - b.x0).toBeCloseTo(t.t1 - t.t0 + 2 * p.jeu, 6);
       expect(b.y1 - b.y0).toBeCloseTo(t.z1 - t.z0 + 2 * p.jeu, 6);
@@ -201,8 +204,8 @@ describe("poteau et raccord des limons", () => {
 
   it("compte le poteau dans le volume débité", () => {
     const cnc = buildCNC(R);
-    expect(cnc.postPart).toEqual({ L: N.h, l: p.ps, e: p.ps });
-    const sans = { ...cnc, postPart: null };
+    expect(cnc.postParts).toEqual([{ j: 1, L: N.h, l: p.ps, e: p.ps }]);
+    const sans = { ...cnc, postParts: [] };
     expect(stockVolume(cnc, R) - stockVolume(sans, R)).toBeCloseTo((N.h * p.ps * p.ps) / 1e9, 9);
   });
 });

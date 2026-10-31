@@ -1,6 +1,6 @@
 /* Garde-corps côté jour : main courante rampante, balustres ou montants et lisses.
    Chaque tronçon de main courante suit en plan un tronçon de limon de jour (même abscisse u, depuis sp.a) ;
-   en quart tournant, il s'assemble dans le poteau à tenon et mortaise, comme le limon. */
+   quand l'escalier tourne, il s'assemble dans chaque poteau à tenon et mortaise, comme le limon. */
 import type { Params, Pose } from "./params";
 import type { StringerPiece } from "./stair";
 import { interp, type Pt } from "./vec";
@@ -41,8 +41,9 @@ export interface Handrail {
   b: number;
   /** Épaisseur mesurée d'aplomb. */
   hv: number;
-  /** Tenon dans le poteau : de u0 à u1, de z0 à z1, de t0 à t1 depuis la face du limon côté marches. */
-  tenon: { u0: number; u1: number; z0: number; z1: number; t0: number; t1: number } | null;
+  /** Tenons dans les poteaux, au bout bas puis au bout haut : de u0 à u1, de z0 à z1,
+      de t0 à t1 depuis la face du limon côté marches. */
+  tenons: { u0: number; u1: number; z0: number; z1: number; t0: number; t1: number }[];
 }
 
 /** Balustre ou montant, d'axe u : bas et haut à l'axe, avec la pente de chaque coupe. */
@@ -193,16 +194,15 @@ export function railing({ p, quart, jour, cum, noseS, noseZ, mpD = 0 }: RailingI
       hMin = Math.min(hMin, d);
       hMax = Math.max(hMax, d);
     });
-    let tenon: Handrail["tenon"] = null;
-    if (postA || postB) {
-      const tm = Math.max(6, Math.round(p.mcL / 3)),
-        t0 = off - tm / 2,
-        t1 = off + tm / 2,
-        tl = Math.min(GC.tenonMC, p.ps - t1 - 5);
-      const sh = postB ? u1 : u0,
-        far = postB ? u1 + tl : u0 - tl;
+    const tm = Math.max(6, Math.round(p.mcL / 3)),
+      t0 = off - tm / 2,
+      t1 = off + tm / 2,
+      tl = Math.min(GC.tenonMC, p.ps - t1 - 5);
+    const tenonAt = (end: boolean): Handrail["tenons"][number] => {
+      const sh = end ? u1 : u0,
+        far = end ? u1 + tl : u0 - tl;
       const zt = (u: number) => z0 + b * u;
-      tenon = {
+      return {
         u0: Math.min(sh, far),
         u1: Math.max(sh, far),
         z0: Math.max(zt(sh), zt(far)) - hv + GC.epaulMC,
@@ -210,16 +210,17 @@ export function railing({ p, quart, jour, cum, noseS, noseZ, mpD = 0 }: RailingI
         t0,
         t1,
       };
-    }
+    };
+    const tenons = [...(postA ? [tenonAt(false)] : []), ...(postB ? [tenonAt(true)] : [])];
     // Marche palière : retour horizontal à la hauteur où arrive la main courante, coupé d'onglet avec elle.
     const zr = z0 + b * u1,
       uE = u1 + mpD,
       retour = last && mpD > 0 && b > 1e-6;
     const cut = retour ? (hv - p.mcH) / b : 0;
-    handrails.push({ idx: sp.idx, u0, u1, z0, b, hv, tenon, ...(retour ? { cut1: cut } : {}) });
+    handrails.push({ idx: sp.idx, u0, u1, z0, b, hv, tenons, ...(retour ? { cut1: cut } : {}) });
     fill(sp, top, u0, u1, z0, b, hv, postA, postB, us);
     if (retour) {
-      handrails.push({ idx: sp.idx, u0: u1, u1: uE, z0: zr, b: 0, hv: p.mcH, tenon: null, cut0: cut, retour: true });
+      handrails.push({ idx: sp.idx, u0: u1, u1: uE, z0: zr, b: 0, hv: p.mcH, tenons: [], cut0: cut, retour: true });
       const d = zr - nose(s0 + u1);
       hMin = Math.min(hMin, d);
       hMax = Math.max(hMax, d);

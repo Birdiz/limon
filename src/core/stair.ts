@@ -1,9 +1,9 @@
 /* Calcul de l'escalier.
    Repère plan (mm) : départ en y = 0, montée vers +y, limon extérieur en x = 0, jour (intérieur) en x = W.
-   Quart tournant calculé à droite (2e volée vers +x) ; la version gauche est un miroir. */
+   Tournants calculés à droite (2e volée vers +x, 3e vers −y en double quart) ; la version gauche est un miroir. */
 import { fmt, ceil10 } from "./format";
 import { headroomUnder, type Headroom, type NoseSeg } from "./headroom";
-import type { NumericKey, Params } from "./params";
+import { TOURS, type NumericKey, type Params } from "./params";
 import { BOIS_SOUS_LOGEMENT, cncFrame, stringerPockets } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import { GC, railing, type Railing } from "./railing";
@@ -111,8 +111,8 @@ export interface StringerPiece extends StringerGeom {
   need: number;
   /** Hauteur retenue pour cette pièce. */
   hl: number;
-  /** Tenon dans le poteau (limons de jour du quart tournant). */
-  tenon: Tenon | null;
+  /** Tenons dans les poteaux (limons de jour qui tournent) : au bout bas, puis au bout haut. */
+  tenons: Tenon[];
   /** Perçages traversants (u, z) pour visser ou boulonner l'about du limon de mur suivant. */
   holes: Pt[];
 }
@@ -130,12 +130,14 @@ export interface NewelFace {
   mortises: { idx: number; of: "limon" | "main courante"; pts: Pt[]; depth: number }[];
 }
 
-/** Poteau du quart tournant, du sol à h, affleurant les faces des limons de jour côté marches. */
+/** Poteau d'un tournant, du sol à h, affleurant les faces des limons de jour côté marches. */
 export interface Newel {
+  /** Tournant reçu : entre les tronçons de limon de jour k et k + 1. */
+  k: number;
   c: Pt;
   size: number;
   h: number;
-  /** Les quatre faces dans l'ordre du tour, en commençant par la face côté marches de la volée de départ. */
+  /** Les quatre faces dans l'ordre du tour, en commençant par la face côté marches de la volée qui arrive. */
   faces: NewelFace[];
 }
 
@@ -157,7 +159,7 @@ export interface Rect {
   y1: number;
 }
 
-/** Point le plus bas sous le plancher. */
+/** Zone de marches balancées d'un tournant, de la ligne de nez a à la ligne b. */
 export interface Balance {
   a: number;
   b: number;
@@ -172,7 +174,10 @@ export interface Balance {
 export interface Stair {
   params: Params;
   notes: Note[];
+  /** Escalier qui tourne (quart ou double quart). */
   quart: boolean;
+  /** Nombre de tournants. */
+  tours: number;
   n: number;
   nAuto: number;
   h: number;
@@ -181,11 +186,13 @@ export interface Stair {
   fAuto: number;
   /** Longueur de la ligne de foulée. */
   Lw: number;
+  /** Début et fin de l'arc de la ligne de foulée au premier tournant. */
   T1: number;
   T2: number;
   W: number;
   A: number;
   B: number;
+  C: number;
   L: number;
   H: number;
   inner: Poly;
@@ -205,7 +212,8 @@ export interface Stair {
   hljAuto: number;
   needJ: number;
   needM: number;
-  newel: Newel | null;
+  /** Un poteau par tournant. */
+  newels: Newel[];
   /** Garde-corps côté jour ; null sans garde-corps. */
   rail: Railing | null;
   /** Marche palière ; null sans marche palière. */
@@ -228,7 +236,10 @@ export interface Stair {
   tLmin: number | null;
   tXmin: number | null;
   tYmin: number | null;
+  /** Balancement du premier tournant. */
   bal: Balance | null;
+  /** Balancement de chaque tournant. */
+  bals: Balance[];
   blondel: number;
   pente: number;
   gInMin: number;
@@ -339,7 +350,8 @@ export function pickN(H: number, Lw: number): number {
   return best ? best.n : Math.max(3, Math.round(H / 175));
 }
 
-function validate(p: Params, quart: boolean): InputError[] {
+function validate(p: Params, tours: number): InputError[] {
+  const quart = tours > 0;
   const errors: InputError[] = [];
   const err = (key: NumericKey, message: string) => errors.push({ key, message });
   const { H, W } = p;
@@ -348,6 +360,11 @@ function validate(p: Params, quart: boolean): InputError[] {
   if (quart) {
     if (!(p.A > W + 1)) err("A", "La longueur côté départ doit dépasser l'emmarchement.");
     if (!(p.B > W + 1)) err("B", "La longueur côté arrivée doit dépasser l'emmarchement.");
+    if (tours === 2 && p.ps >= p.el + 30 && !(p.C - 2 * W >= 2 * p.ps + 100))
+      err(
+        "C",
+        `Le côté fond doit laisser au moins 100 mm de limon de jour entre les deux poteaux : au moins ${fmt(2 * W + 2 * p.ps + 100)} mm.`,
+      );
   } else if (!(p.L >= 500)) err("L", "Le reculement doit faire au moins 500 mm.");
   if (quart && !(p.ps >= p.el + 30))
     err("ps", "La section du poteau doit dépasser l'épaisseur de limon d'au moins 30 mm.");
@@ -407,27 +424,47 @@ function runFix(p: Params, quart: boolean, Lw: number, n: number, nAuto: number)
 }
 
 /** Contour de la trémie, adossé au bord du plancher d'arrivée (reculé de la marche palière, mpD) ;
-    en quart tournant, aussi au mur face à la montée. En L, le coin au-dessus du jour, hors de l'escalier,
-    reste plancher. */
-export function tremieContour(p: Params, d: TreDims, mpD: number): Pt[] {
+    en quart tournant, aussi au mur face à la montée ; en U (double quart), au mur côté arrivée, tY se prenant
+    le long du côté arrivée et tX en travers. En L, le coin au-dessus du jour, hors de l'escalier, reste plancher ;
+    en U, le milieu au-dessus du jour : branches des volées de tbD depuis chaque mur de côté, bande du fond de tbA. */
+export function tremieContour(p: Params, d: TreDims, mpD: number, C = p.C): Pt[] {
   const { A, B, L, W, el } = p,
-    quart = p.forme !== "droit";
-  const r = quart
-    ? { x0: Math.max(-el, B + mpD - d.tX), x1: B + mpD, y0: Math.max(-300, A + el - d.tY), y1: A + el }
-    : { x0: -el, x1: W + el, y0: Math.max(-300, L + mpD - d.tL), y1: L + mpD };
+    tours = TOURS[p.forme];
+  const y0U = A - B - mpD;
+  const r =
+    tours === 2
+      ? { x0: Math.max(-el, C + el - d.tX), x1: C + el, y0: y0U, y1: Math.min(A + el, y0U + d.tY) }
+      : tours
+        ? { x0: Math.max(-el, B + mpD - d.tX), x1: B + mpD, y0: Math.max(-300, A + el - d.tY), y1: A + el }
+        : { x0: -el, x1: W + el, y0: Math.max(-300, L + mpD - d.tL), y1: L + mpD };
   const rect: Pt[] = [
     [r.x0, r.y0],
     [r.x1, r.y0],
     [r.x1, r.y1],
     [r.x0, r.y1],
   ];
-  const xb = r.x0 + d.tbD,
+  if (!tours || p.tForme !== "L") return rect;
+  const xa = r.x0 + d.tbD,
     yb = r.y1 - d.tbA;
-  if (!quart || p.tForme !== "L" || !(xb < r.x1 - 0.5 && yb > r.y0 + 0.5)) return rect;
+  if (tours === 2) {
+    const xb = r.x1 - d.tbD;
+    if (!(xa < xb - 0.5 && yb > r.y0 + 0.5)) return rect;
+    return [
+      [r.x0, r.y0],
+      [xa, r.y0],
+      [xa, yb],
+      [xb, yb],
+      [xb, r.y0],
+      [r.x1, r.y0],
+      [r.x1, r.y1],
+      [r.x0, r.y1],
+    ];
+  }
+  if (!(xa < r.x1 - 0.5 && yb > r.y0 + 0.5)) return rect;
   return [
     [r.x0, r.y0],
-    [xb, r.y0],
-    [xb, yb],
+    [xa, r.y0],
+    [xa, yb],
     [r.x1, yb],
     [r.x1, r.y1],
     [r.x0, r.y1],
@@ -464,51 +501,93 @@ function landingTread(
 
 /** Calcule l'escalier ; suggest ajoute aux notes les corrections chiffrées (calculs supplémentaires). */
 export function compute(p: Params, suggest = true): ComputeResult {
-  const quart = p.forme !== "droit";
-  const errors = validate(p, quart);
+  const tours = TOURS[p.forme],
+    quart = tours > 0;
+  const errors = validate(p, tours);
   if (errors.length) return { ok: false, errors };
 
-  const { H, W, A, B, L } = p;
+  const { H, W, A, B, C, L } = p;
   const fAuto = quart ? Math.min(W / 2, FOULEE_MAX) : W / 2;
   const f = p.fAuto ? fAuto : clamp(p.f, 100, W - 100);
   const inner = makePoly(
-    quart
+    tours === 2
       ? [
           [W, 0],
           [W, A - W],
-          [B, A - W],
+          [C - W, A - W],
+          [C - W, A - B],
         ]
-      : [
-          [W, 0],
-          [W, L],
-        ],
+      : quart
+        ? [
+            [W, 0],
+            [W, A - W],
+            [B, A - W],
+          ]
+        : [
+            [W, 0],
+            [W, L],
+          ],
   );
   const outer = makePoly(
-    quart
+    tours === 2
       ? [
           [0, 0],
           [0, A],
-          [B, A],
+          [C, A],
+          [C, A - B],
         ]
-      : [
-          [0, 0],
-          [0, L],
-        ],
+      : quart
+        ? [
+            [0, 0],
+            [0, A],
+            [B, A],
+          ]
+        : [
+            [0, 0],
+            [0, L],
+          ],
   );
-  const T1 = quart ? A - W : L,
-    T2 = quart ? T1 + (Math.PI / 2) * f : L;
-  const Lw = quart ? T2 + (B - W) : L;
+  // Ligne de foulée : les côtés du jour décalés de f vers l'extérieur, raccordés par un quart de cercle
+  // de rayon f autour de chaque angle du jour. Tronçons droits : longueurs len, départ des arcs tA, fins tB.
+  const len = tours === 2 ? [A - W, C - 2 * W, B - W] : quart ? [A - W, B - W] : [L];
+  const dirs = inner.pts.slice(1).map((q, i) => V.norm(V.sub(q, inner.pts[i]!)));
+  const sIn = [0],
+    tA: number[] = [],
+    tB: number[] = [];
+  for (let i = 0; i < tours; i++) {
+    sIn.push(sIn[i]! + len[i]!);
+    tA.push((i ? tB[i - 1]! : 0) + len[i]!);
+    tB.push(tA[i]! + (Math.PI / 2) * f);
+  }
+  const T1 = quart ? tA[0]! : L,
+    T2 = quart ? tB[0]! : L;
+  const Lw = quart ? tB[tours - 1]! + len[tours]! : L;
+  // Tronçon droit i : vers l'extérieur, à gauche du sens de montée.
+  const out = (i: number): Pt => [-dirs[i]![1], dirs[i]![0]];
   const walkAt = (t: number): Pt => {
-    if (!quart || t <= T1) return [W - f, t];
-    if (t >= T2) return [W + (t - T2), A - W + f];
-    const th = (t - T1) / f;
-    return [W - f * Math.cos(th), A - W + f * Math.sin(th)];
+    let i = 0;
+    while (i < tours && t >= tB[i]!) i++;
+    if (i === 0 && (!quart || t <= T1)) return [W - f, t];
+    if (i < tours && t > tA[i]!) {
+      const th = (t - tA[i]!) / f,
+        K = inner.pts[i + 1]!;
+      return [
+        K[0] + f * (out(i)[0] * Math.cos(th) + dirs[i]![0] * Math.sin(th)),
+        K[1] + f * (out(i)[1] * Math.cos(th) + dirs[i]![1] * Math.sin(th)),
+      ];
+    }
+    const u = t - (i ? tB[i - 1]! : 0),
+      P0 = inner.pts[i]!;
+    return [P0[0] + dirs[i]![0] * u + out(i)[0] * f, P0[1] + dirs[i]![1] * u + out(i)[1] * f];
   };
   const walkTan = (t: number): Pt => {
-    if (!quart || t <= T1) return [0, 1];
-    if (t >= T2) return [1, 0];
-    const th = (t - T1) / f;
-    return [Math.sin(th), Math.cos(th)];
+    let i = 0;
+    while (i < tours && t >= tB[i]!) i++;
+    if (i < tours && t > tA[i]!) {
+      const th = (t - tA[i]!) / f;
+      return V.sub(V.mul(dirs[i]!, Math.cos(th)), V.mul(out(i), Math.sin(th)));
+    }
+    return dirs[i]!;
   };
 
   const nAuto = pickN(H, Lw);
@@ -517,12 +596,19 @@ export function compute(p: Params, suggest = true): ComputeResult {
     g = Lw / (n - 1);
 
   // Position de chaque nez sur le limon du jour : perpendiculaire en partie droite, puis balancement.
-  const sPerp = (t: number) => (!quart || t <= T1 ? t : t >= T2 ? T1 + (t - T2) : T1);
+  const sPerp = (t: number) => {
+    let i = 0;
+    while (i < tours && t >= tB[i]!) i++;
+    if (i < tours && t > tA[i]!) return sIn[i + 1]!;
+    return i ? sIn[i]! + (t - tB[i - 1]!) : t;
+  };
   const s = Array.from({ length: n }, (_, k) => sPerp(k * g));
-  let bal: Balance | null = null;
-  if (quart) {
-    const m0 = clamp(Math.round(p.mb), 2, n - 1);
-    let a = Math.round((T1 + T2) / 2 / g - m0 / 2),
+  // Zone balancée de chaque tournant : mb marches centrées sur l'arc, étendues pour le couvrir tout entier.
+  const m0 = clamp(Math.round(p.mb), 2, n - 1);
+  const zones = tA.map((t1, i) => {
+    const t2 = tB[i]!;
+    // « || 0 » : pas de zéro négatif pour la première marche du tour, affichée et comparée telle quelle.
+    let a = Math.round((t1 + t2) / 2 / g - m0 / 2) || 0,
       b = a + m0;
     if (a < 0) {
       b -= a;
@@ -534,14 +620,28 @@ export function compute(p: Params, suggest = true): ComputeResult {
       a = Math.max(0, a);
     }
     let extended = false;
-    while (a > 0 && a * g > T1 + 1e-6) {
+    while (a > 0 && a * g > t1 + 1e-6) {
       a--;
       extended = true;
     }
-    while (b < n - 1 && b * g < T2 - 1e-6) {
+    while (b < n - 1 && b * g < t2 - 1e-6) {
       b++;
       extended = true;
     }
+    return { a, b, extended };
+  });
+  // Deux zones qui se chevauchent se partagent à la ligne la plus proche du milieu de la volée entre les deux :
+  // le giron au jour garde un creux à chaque angle. Cette ligne s'appuie sur le côté du jour entre les angles.
+  for (let i = 1; i < zones.length; i++) {
+    const z0 = zones[i - 1]!,
+      z1 = zones[i]!;
+    if (z0.b <= z1.a) continue;
+    const mid = (tB[i - 1]! + tA[i]!) / 2,
+      k = clamp(Math.round(mid / g), z0.a + 1, z1.b - 1);
+    z0.b = z1.a = k;
+    s[k] = clamp(sIn[i]! + (k * g - tB[i - 1]!), sIn[i]!, sIn[i + 1]!);
+  }
+  const bals: Balance[] = zones.map(({ a, b, extended }) => {
     const m = b - a,
       S = s[b]! - s[a]!,
       base = S / m,
@@ -561,8 +661,9 @@ export function compute(p: Params, suggest = true): ComputeResult {
       acc += base + pr * amp * c(i);
       s[a + i + 1] = acc;
     }
-    bal = { a, b, m, extended, pr, want };
-  }
+    return { a, b, m, extended, pr, want };
+  });
+  const bal = bals[0] ?? null;
 
   // Lignes de nez : du point sur le jour, passant par la ligne de foulée, jusqu'au limon extérieur.
   const lines: NoseLine[] = [];
@@ -616,7 +717,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       gOut: bk.sOut - fr.sOut,
       gWalk: g,
       nez: V.len(V.sub(fr.O, fr.Q)),
-      balanced: !!bal && j > bal.a && j <= bal.b,
+      balanced: bals.some((z) => j > z.a && j <= z.b),
     });
   }
   // Marche palière : dans le prolongement du plancher d'arrivée, son nez sur la dernière ligne de nez.
@@ -669,9 +770,8 @@ export function compute(p: Params, suggest = true): ComputeResult {
       lines.map((l) => (l.k + 1) * h + LIFT),
       v,
     );
-  // Poteau affleurant les faces côté marches, au coin du jour : les limons de jour s'arrêtent sur ses faces.
-  const ps = p.ps,
-    sK = A - W;
+  // Poteau affleurant les faces côté marches, à chaque coin du jour : les limons de jour s'arrêtent sur ses faces.
+  const ps = p.ps;
   const pieces = (P: Poly, arr: number[], zf: (v: number) => number, isOuter: boolean): StringerGeom[] => {
     const out: StringerGeom[] = [],
       N = P.pts.length,
@@ -719,15 +819,16 @@ export function compute(p: Params, suggest = true): ComputeResult {
       true,
     ),
   ];
-  // Faces du poteau côté marches, traitées comme des bouts de limon pour y loger marches et contremarches.
-  const newelTop = quart ? ceil10(Math.max(zIn(sK - ps), zIn(sK + ps)) + TENON.tete) : 0;
-  const face = (a: Pt, dir: Pt, u0: number, sLo: number): StringerGeom => ({
+  // Faces des poteaux côté marches, traitées comme des bouts de limon pour y loger marches et contremarches.
+  const corners = Array.from({ length: tours }, (_, k) => k);
+  const newelTop = corners.map((k) => ceil10(Math.max(zIn(sIn[k + 1]! - ps), zIn(sIn[k + 1]! + ps)) + TENON.tete));
+  const face = (a: Pt, dir: Pt, u0: number, sLo: number, top: number): StringerGeom => ({
     origin: a,
     dir,
     rn: [dir[1], -dir[0]],
     prof: [
-      [u0, newelTop],
-      [u0 + ps, newelTop],
+      [u0, top],
+      [u0 + ps, top],
     ],
     width: ps,
     side: "in",
@@ -737,7 +838,10 @@ export function compute(p: Params, suggest = true): ComputeResult {
     sLo,
     sHi: sLo + ps,
   });
-  const postFaces = quart ? [face([W, 0], [0, 1], sK - ps, sK - ps), face([W, sK], [1, 0], 0, sK)] : [];
+  const postFaces = corners.flatMap((k) => [
+    face(inner.pts[k]!, dirs[k]!, len[k]! - ps, sIn[k + 1]! - ps, newelTop[k]!),
+    face(inner.pts[k + 1]!, dirs[k + 1]!, 0, sIn[k + 1]!, newelTop[k]!),
+  ]);
   // Logements de chaque limon et hauteur qui garde 20 mm de bois sous le plus bas.
   // Le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.
   const geo = {
@@ -778,9 +882,9 @@ export function compute(p: Params, suggest = true): ComputeResult {
     t0 = Math.max(0, p.enc + (el - p.enc - tt) / 2),
     t1 = t0 + tt,
     tl = Math.min(TENON.long, ps - t1 - 5);
-  const tenonOf = (sp: StringerGeom, hs: number): Tenon => {
-    const sh = sp.idx === 0 ? sp.prof[sp.prof.length - 1]![0] : sp.prof[0]![0],
-      far = sp.idx === 0 ? sh + tl : sh - tl;
+  const tenonOf = (sp: StringerGeom, hs: number, end: boolean): Tenon => {
+    const sh = end ? sp.prof[sp.prof.length - 1]![0] : sp.prof[0]![0],
+      far = end ? sh + tl : sh - tl;
     const top = (u: number) => zIn(inner.cum[sp.idx]! + u),
       bot = (u: number) => Math.max(0, top(u) - hs);
     return {
@@ -792,13 +896,14 @@ export function compute(p: Params, suggest = true): ComputeResult {
       t1,
     };
   };
-  // About des limons de mur : le tronçon 1 dépasse de son épaisseur et reçoit le bout du 2, vissé ou boulonné.
+  // About des limons de mur : chaque tronçon dépasse de son épaisseur et reçoit le bout du suivant, vissé ou boulonné.
   // Perçages au milieu du bois laissé derrière les logements, pour rester loin de ceux de la marche d'angle.
   const holesOf = (sp: StringerGeom): Pt[] => {
-    if (!quart || sp.side !== "out" || sp.idx !== 0) return [];
-    const zt = zOut(outer.cum[1]!),
+    if (!quart || sp.side !== "out" || sp.idx === sp.count - 1) return [];
+    const i = sp.idx,
+      zt = zOut(outer.cum[i + 1]!),
       zb = Math.max(0, zt - hl),
-      u = outer.cum[1]! - outer.cum[0]! + (p.enc + jeu + el) / 2;
+      u = outer.cum[i + 1]! - outer.cum[i]! + (p.enc + jeu + el) / 2;
     return [
       [u, zb + (zt - zb) / 3],
       [u, zb + ((zt - zb) * 2) / 3],
@@ -806,11 +911,15 @@ export function compute(p: Params, suggest = true): ComputeResult {
   };
   const stringers: StringerPiece[] = withPockets.map((sp) => {
     const hs = isJour(sp) ? hlj : hl;
-    return { ...sp, hl: hs, tenon: isJour(sp) ? tenonOf(sp, hs) : null, holes: holesOf(sp) };
+    const tenons = isJour(sp)
+      ? [...(sp.idx > 0 ? [tenonOf(sp, hs, false)] : []), ...(sp.idx < sp.count - 1 ? [tenonOf(sp, hs, true)] : [])]
+      : [];
+    return { ...sp, hl: hs, tenons, holes: holesOf(sp) };
   });
-  // Poteau : faces dans l'ordre du tour (vu de dessus, sens trigonométrique pour le quart droit).
-  const mortise = (idx: number) => {
-    const t = stringers.find((sp) => isJour(sp) && sp.idx === idx)!.tenon!;
+  // Poteaux : faces dans l'ordre du tour (vu de dessus, sens trigonométrique pour un tournant à droite).
+  const mortise = (idx: number, end: boolean) => {
+    const ts = stringers.find((sp) => isJour(sp) && sp.idx === idx)!.tenons,
+      t = end ? ts[ts.length - 1]! : ts[0]!;
     return {
       idx,
       of: "limon" as const,
@@ -833,9 +942,9 @@ export function compute(p: Params, suggest = true): ComputeResult {
     noseZ: lines.map((l) => (l.k + 1) * h),
     mpD,
   });
-  const mcMortise = (idx: number) => {
-    const hr = rail?.handrails.find((r) => r.idx === idx);
-    const t = hr?.tenon;
+  const mcMortise = (idx: number, end: boolean) => {
+    const ts = rail?.handrails.find((r) => r.idx === idx)?.tenons;
+    const t = ts?.length ? (end ? ts[ts.length - 1] : ts[0]) : undefined;
     if (!t) return [];
     return [
       {
@@ -851,43 +960,63 @@ export function compute(p: Params, suggest = true): ComputeResult {
       },
     ];
   };
-  const mcTop = Math.max(
-    0,
-    ...(rail?.handrails.filter((r) => r.tenon).map((r) => r.z0 + r.b * (r.idx === 0 ? r.u1 : r.u0)) ?? []),
-  );
-  const newel: Newel | null = quart
-    ? {
-        c: [W + ps / 2, sK - ps / 2],
-        size: ps,
-        h: rail ? Math.max(newelTop, ceil10(mcTop + GC.tete)) : newelTop,
-        faces: [
-          { n: [-1, 0], o: [W, 0], dir: [0, 1], u0: sK - ps, u1: sK, pockets: pk[geoms.length]!.pockets, mortises: [] },
-          {
-            n: [0, -1],
-            o: [W, sK - ps],
-            dir: [1, 0],
-            u0: 0,
-            u1: ps,
-            pockets: [],
-            mortises: [mortise(0), ...mcMortise(0)],
-          },
-          {
-            n: [1, 0],
-            o: [W + ps, sK],
-            dir: [0, -1],
-            u0: 0,
-            u1: ps,
-            pockets: [],
-            mortises: [mortise(1), ...mcMortise(1)],
-          },
-          { n: [0, 1], o: [W, sK], dir: [1, 0], u0: 0, u1: ps, pockets: pk[geoms.length + 1]!.pockets, mortises: [] },
-        ],
-      }
-    : null;
+  // Le poteau monte recevoir la main courante : dessus des deux tronçons à leur bout contre le poteau.
+  const mcTop = (k: number) =>
+    Math.max(
+      0,
+      ...(rail?.handrails
+        .filter((r) => r.tenons.length && (r.idx === k || r.idx === k + 1))
+        .map((r) => r.z0 + r.b * (r.idx === k ? r.u1 : r.u0)) ?? []),
+    );
+  const newels: Newel[] = corners.map((k) => {
+    const K = inner.pts[k + 1]!,
+      d0 = dirs[k]!,
+      d1 = dirs[k + 1]!,
+      back = V.sub(K, V.mul(d0, ps));
+    return {
+      k,
+      c: V.add(V.sub(K, V.mul(d0, ps / 2)), V.mul(d1, ps / 2)),
+      size: ps,
+      h: rail ? Math.max(newelTop[k]!, ceil10(mcTop(k) + GC.tete)) : newelTop[k]!,
+      faces: [
+        {
+          n: V.sub([0, 0], d1),
+          o: inner.pts[k]!,
+          dir: d0,
+          u0: len[k]! - ps,
+          u1: len[k]!,
+          pockets: pk[geoms.length + 2 * k]!.pockets,
+          mortises: [],
+        },
+        {
+          n: V.sub([0, 0], d0),
+          o: back,
+          dir: d1,
+          u0: 0,
+          u1: ps,
+          pockets: [],
+          mortises: [mortise(k, true), ...mcMortise(k, true)],
+        },
+        {
+          n: d1,
+          o: V.add(K, V.mul(d1, ps)),
+          dir: V.sub([0, 0], d0),
+          u0: 0,
+          u1: ps,
+          pockets: [],
+          mortises: [mortise(k + 1, false), ...mcMortise(k + 1, false)],
+        },
+        { n: d0, o: K, dir: d1, u0: 0, u1: ps, pockets: pk[geoms.length + 2 * k + 1]!.pockets, mortises: [] },
+      ],
+    };
+  });
   // Plancher haut et trémie (voir tremieContour).
-  const slab: Rect = quart
-    ? { x0: -el - 300, x1: B + mpD + 900, y0: -400, y1: A + el + 300 }
-    : { x0: -el - 300, x1: W + el + 300, y0: -400, y1: L + mpD + 900 };
+  const U = tours === 2;
+  const slab: Rect = U
+    ? { x0: -el - 300, x1: C + el + 300, y0: Math.min(-400, A - B - mpD - 900), y1: A + el + 300 }
+    : quart
+      ? { x0: -el - 300, x1: B + mpD + 900, y0: -400, y1: A + el + 300 }
+      : { x0: -el - 300, x1: W + el + 300, y0: -400, y1: L + mpD + 900 };
   // Échappée : distance verticale entre la ligne des nez et la sous-face du plancher, hors de la trémie.
   // Mesurée sur la ligne de foulée, sur les faces des limons (côté jour, côté mur) et sur toute la largeur.
   const ceil = H - p.ep;
@@ -955,11 +1084,16 @@ export function compute(p: Params, suggest = true): ComputeResult {
   const treDims: TreDims = { tL: p.tL, tX: p.tX, tY: p.tY, tbD: p.tbD, tbA: p.tbA };
   const treAt = (d: Partial<TreDims>) => tremieContour(p, { ...treDims, ...d }, mpD);
   if (p.tAuto) {
-    if (quart) {
-      if (treL) {
-        const jour = Math.max(el, ps, rail ? rail.off + Math.max(p.mcL, p.bs) / 2 : 0);
-        treDims.tbD = treDims.tbA = ceil10(el + W + jour);
-      }
+    const branches = () => {
+      const jour = Math.max(el, ps, rail ? rail.off + Math.max(p.mcL, p.bs) / 2 : 0);
+      treDims.tbD = treDims.tbA = ceil10(el + W + jour);
+    };
+    if (U) {
+      if (treL) branches();
+      treDims.tX = C + 2 * el;
+      treDims.tY = minOpening((v) => treAt({ tY: v }), B + el + mpD) ?? B + el + mpD;
+    } else if (quart) {
+      if (treL) branches();
       treDims.tX = B + el + mpD;
       treDims.tY = minOpening((v) => treAt({ tY: v }), A + el + 300) ?? A + el + 300;
     } else treDims.tL = minOpening((v) => treAt({ tL: v }), L + mpD + 300) ?? L + mpD + 300;
@@ -973,8 +1107,16 @@ export function compute(p: Params, suggest = true): ComputeResult {
     mur: headroomUnder(sideSegs.mur, trePoly, ceil),
   };
   const tLmin = quart ? null : minOpening((v) => treAt({ tL: v }), L + mpD + 300);
-  const tYmin = quart ? minOpening((v) => treAt({ tY: v }), A + el + 300) : null;
-  const tXmin = quart ? minOpening((v) => treAt({ tX: v }), B + el + mpD) : null;
+  const tYmin = U
+    ? minOpening((v) => treAt({ tY: v }), B + el + mpD)
+    : quart
+      ? minOpening((v) => treAt({ tY: v }), A + el + 300)
+      : null;
+  const tXmin = U
+    ? minOpening((v) => treAt({ tX: v }), C + 2 * el)
+    : quart
+      ? minOpening((v) => treAt({ tX: v }), B + el + mpD)
+      : null;
 
   // Contrôles
   const gInMin = Math.min(...treads.map((t) => t.gIn));
@@ -1023,9 +1165,16 @@ export function compute(p: Params, suggest = true): ComputeResult {
       mb ? { set: { mb }, label: `Passer à ${mb}` } : undefined,
     ]);
   }
-  if (bal && bal.extended) N.push(["warn", `Balancement étendu à ${bal.m} marches pour couvrir tout le tournant.`]);
-  if (bal && bal.pr + 0.01 < bal.want)
-    N.push(["warn", `Progressivité limitée à ${fmt(bal.pr * 100)} % pour garder au moins 100 mm au jour.`]);
+  bals.forEach((z, i) => {
+    if (z.extended)
+      N.push([
+        "warn",
+        `Balancement étendu à ${z.m} marches pour couvrir tout le ${tours > 1 ? `${i ? "second" : "premier"} ` : ""}tournant.`,
+      ]);
+  });
+  const prMin = bals.reduce<Balance | null>((m, z) => (!m || z.pr < m.pr ? z : m), null);
+  if (prMin && prMin.pr + 0.01 < prMin.want)
+    N.push(["warn", `Progressivité limitée à ${fmt(prMin.pr * 100)} % pour garder au moins 100 mm au jour.`]);
   if (p.rn > p.et / 2 + 0.01)
     N.push(["info", `Rayon du nez ramené à ${fmt(rn, 1)} mm, la moitié de l'épaisseur de marche (demi-rond).`]);
   if (p.cm && rn > p.deb)
@@ -1046,16 +1195,23 @@ export function compute(p: Params, suggest = true): ComputeResult {
       { set: { hljAuto: true }, label: `Passer à ${fmt(hljAuto)} mm` },
     ]);
   if (ech && st.ech !== "ok") {
-    const fixes = quart
+    const fixes = U
       ? [
-          tYmin != null && `élargissez la trémie côté départ à ${fmt(tYmin)} mm`,
-          tXmin != null && `${tYmin != null ? "allongez-la" : "allongez la trémie"} côté arrivée à ${fmt(tXmin)} mm`,
+          tYmin != null && `allongez la trémie côté arrivée à ${fmt(tYmin)} mm`,
+          tXmin != null && `${tYmin != null ? "élargissez-la" : "élargissez la trémie"} côté fond à ${fmt(tXmin)} mm`,
         ]
           .filter(Boolean)
           .join(" ou ")
-      : tLmin != null
-        ? `allongez la trémie à ${fmt(tLmin)} mm`
-        : "";
+      : quart
+        ? [
+            tYmin != null && `élargissez la trémie côté départ à ${fmt(tYmin)} mm`,
+            tXmin != null && `${tYmin != null ? "allongez-la" : "allongez la trémie"} côté arrivée à ${fmt(tXmin)} mm`,
+          ]
+            .filter(Boolean)
+            .join(" ou ")
+        : tLmin != null
+          ? `allongez la trémie à ${fmt(tLmin)} mm`
+          : "";
     const set: Partial<Params> | null = quart
       ? tYmin != null
         ? { tY: tYmin }
@@ -1077,16 +1233,20 @@ export function compute(p: Params, suggest = true): ComputeResult {
   } else if (p.tAuto) {
     N.push([
       "info",
-      quart
-        ? `Trémie${treL ? " en L" : ""} à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté départ, sur tout le côté arrivée (${fmt(treDims.tX)} mm)${treL ? `, branches de ${fmt(treDims.tbD)} mm` : ""}.`
-        : `Trémie à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tL)} mm de long.`,
+      U
+        ? `Trémie${treL ? " en U" : ""} à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté arrivée, sur toute la largeur (${fmt(treDims.tX)} mm)${treL ? `, branches de ${fmt(treDims.tbD)} mm` : ""}.`
+        : quart
+          ? `Trémie${treL ? " en L" : ""} à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tY)} mm côté départ, sur tout le côté arrivée (${fmt(treDims.tX)} mm)${treL ? `, branches de ${fmt(treDims.tbD)} mm` : ""}.`
+          : `Trémie à prévoir pour 2 000 mm d'échappée : ${fmt(treDims.tL)} mm de long.`,
     ]);
   } else if (quart ? tYmin != null : tLmin != null) {
     N.push([
       "info",
-      quart
-        ? `Trémie minimale pour 2 000 mm d'échappée : ${fmt(tYmin!)} mm côté départ, avec ${fmt(p.tX)} mm côté arrivée.`
-        : `Trémie minimale pour 2 000 mm d'échappée : ${fmt(tLmin!)} mm de long.`,
+      U
+        ? `Trémie minimale pour 2 000 mm d'échappée : ${fmt(tYmin!)} mm côté arrivée, avec ${fmt(p.tX)} mm côté fond.`
+        : quart
+          ? `Trémie minimale pour 2 000 mm d'échappée : ${fmt(tYmin!)} mm côté départ, avec ${fmt(p.tX)} mm côté arrivée.`
+          : `Trémie minimale pour 2 000 mm d'échappée : ${fmt(tLmin!)} mm de long.`,
     ]);
   }
   if (rail) {
@@ -1120,6 +1280,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       params: p,
       notes: N,
       quart,
+      tours,
       n,
       nAuto,
       h,
@@ -1132,6 +1293,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       W,
       A,
       B,
+      C,
       L,
       H,
       inner,
@@ -1147,7 +1309,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       hljAuto,
       needJ,
       needM,
-      newel,
+      newels,
       rail,
       mp,
       slab,
@@ -1163,6 +1325,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       tXmin,
       tYmin,
       bal,
+      bals,
       blondel,
       pente,
       gInMin,

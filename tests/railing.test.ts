@@ -24,7 +24,8 @@ function gaps(R: Stair, G: Railing): number[] {
   return G.handrails.flatMap((hr) => {
     const us = G.posts.filter((q) => q.idx === hr.idx).map((q) => q.u);
     const out = us.slice(1).map((u, i) => u - us[i]! - p.bs);
-    if (hr.tenon) out.push(hr.idx === 0 ? hr.u1 - us[us.length - 1]! - p.bs / 2 : us[0]! - p.bs / 2 - hr.u0);
+    for (const t of hr.tenons)
+      out.push(t.u0 >= hr.u1 - 1e-6 ? hr.u1 - us[us.length - 1]! - p.bs / 2 : us[0]! - p.bs / 2 - hr.u0);
     return out;
   });
 }
@@ -97,11 +98,11 @@ describe("garde-corps côté jour", () => {
 
   it("assemble la main courante dans le poteau, qui monte la recevoir", () => {
     const R = stairOf({ forme: "quart-d", gc: "balustres" }),
-      N = R.newel!;
-    const sans = stairOf({ forme: "quart-d" }).newel!;
+      N = R.newels[0]!;
+    const sans = stairOf({ forme: "quart-d" }).newels[0]!;
     expect(N.h).toBeGreaterThan(sans.h);
     for (const hr of R.rail!.handrails) {
-      const t = hr.tenon!;
+      const t = hr.tenons[0]!;
       expect(t.u1 - t.u0).toBe(GC.tenonMC);
       expect(t.z1).toBeGreaterThan(t.z0);
       const face = N.faces.find((f) => f.mortises.some((m) => m.of === "main courante" && m.idx === hr.idx))!;
