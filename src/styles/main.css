@@ -1036,6 +1036,9 @@ input[type="range"] {
 .pl-dimtxt {
   fill: var(--muted);
   font-family: var(--f-data);
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-linejoin: round;
 }
 .pl-tremie {
   fill: none;
@@ -2095,9 +2098,11 @@ body.avance .auto {
   .tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  /* Sur le plan, seul le point le plus bas : les trois côtés restent dans les tuiles. */
+  /* Sur le plan, seul le point le plus bas : les trois côtés restent dans les tuiles. Cotes de détail
+     (position et branches de la trémie) masquées : les réglages les donnent. */
   .pl-ech-cote,
-  .pl-echtxt-cote {
+  .pl-echtxt-cote,
+  .pl-detail {
     display: none;
   }
   .shead .actions {
