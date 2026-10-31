@@ -23,3 +23,8 @@ export function paramsFromHash(hash: string): Params | null {
   });
   return Object.keys(raw).some((k) => (KEYS as readonly string[]).includes(k)) ? sanitizeParams(raw) : null;
 }
+
+/** Adresse qui rouvre ces réglages dans l'outil en ligne (code QR de la fiche) ; la forme y est toujours. */
+export function projectUrl(p: Params): string {
+  return `https://quart-de-tour.fr/app/#${paramsToHash(p) || `forme=${p.forme}`}`;
+}

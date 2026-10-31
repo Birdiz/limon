@@ -31,11 +31,17 @@ describe.each(Object.entries(CASES))("fiche %s", (name, over) => {
     expect(Buffer.from(pdf).equals(readFileSync(file))).toBe(true);
   });
 
-  it("écrit un PDF 1.4 de trois pages aux décalages justes", () => {
+  it("écrit un PDF 1.4 aux décalages justes : trois pages, puis les limons à l'italienne", () => {
     const s = latin1(pdf);
     expect(s.startsWith("%PDF-1.4\n%")).toBe(true);
-    expect(s.match(/\/Type \/Page /g)).toHaveLength(3);
+    const pages = s.match(/\/MediaBox \[0 0 [\d.]+ [\d.]+\]/g)!;
+    expect(pages.slice(0, 3)).toEqual(Array(3).fill("/MediaBox [0 0 595.28 841.89]"));
+    expect(pages.length).toBeGreaterThan(3);
+    expect(new Set(pages.slice(3))).toEqual(new Set(["/MediaBox [0 0 841.89 595.28]"]));
+    expect(s.match(/\(Limons\) Tj/g)).toHaveLength(pages.length - 3);
+    expect(s).toContain(`(page ${pages.length}/${pages.length}) Tj`);
     checkXref(pdf);
+    expect(s).toContain("(Rouvrir cet escalier) Tj");
     expect(s).toContain("(FICHE DES MARCHES) Tj");
     expect(s).toContain("(Liste de d\\351bit) Tj");
     expect(s).toContain("(Volume brut d\\351bit\\351 : ");

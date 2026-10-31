@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULTS } from "../src/core/params";
-import { paramsFromHash, paramsToHash } from "../src/core/share";
+import { paramsFromHash, paramsToHash, projectUrl } from "../src/core/share";
 
 describe("lien de projet", () => {
   it("ne garde que les réglages qui diffèrent de l'exemple", () => {
@@ -33,5 +33,13 @@ describe("lien de projet", () => {
     expect(paramsFromHash("")).toBeNull();
     expect(paramsFromHash("#autre=1")).toBeNull();
     expect(paramsFromHash("#H=abc&forme=spirale&cm=oui&W=900")).toEqual({ ...DEFAULTS, W: 900 });
+  });
+
+  it("donne l'adresse qui rouvre l'escalier, forme comprise", () => {
+    expect(projectUrl(DEFAULTS)).toBe("https://quart-de-tour.fr/app/#forme=quart-d");
+    expect(paramsFromHash(projectUrl(DEFAULTS).split("#")[1]!)).toEqual(DEFAULTS);
+    expect(projectUrl({ ...DEFAULTS, forme: "droit", H: 2850 })).toBe(
+      "https://quart-de-tour.fr/app/#forme=droit&H=2850",
+    );
   });
 });
