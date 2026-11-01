@@ -5,6 +5,19 @@ import "@fontsource/barlow/latin-600.css";
 import "@fontsource/barlow-condensed/latin-700.css";
 import "./styles/vitrine.css";
 
+/* Connecté sur cet appareil (état tenu par SyncStore, src/ui/sync.ts) : le bouton mène à ses escaliers. */
+let connecte = false;
+try {
+  connecte = !!(JSON.parse(localStorage.getItem("limon-synchro") ?? "null") as { compte?: unknown } | null)?.compte;
+} catch {
+  // Stockage bloqué ou illisible : la page reste celle d'un visiteur.
+}
+if (connecte)
+  for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-outil]")) {
+    a.textContent = "Mes escaliers";
+    a.href = "app/?accueil";
+  }
+
 /* Chaque bloc monte quand il entre à l'écran ; ceux qui entrent ensemble se suivent de près. Rien
    ne bouge pour qui a coupé les animations sur son appareil. */
 if (!matchMedia("(prefers-reduced-motion: reduce)").matches && "IntersectionObserver" in window) {
