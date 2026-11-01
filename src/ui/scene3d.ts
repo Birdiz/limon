@@ -200,14 +200,17 @@ export class Scene3D {
     else this.render();
   }
 
-  /** Capture JPEG de la vue, rendue dans le thème clair pour l'impression ; le thème est rétabli aussitôt. */
+  /** Image pour les PDF, rendue dans le thème clair : toujours le même cadre en perspective, quels que soient la vue à
+      l'écran et son point de vue, rétablis aussitôt. */
   snapshot(): { data: Uint8Array; w: number; h: number } | null {
     if (!this.last) return null;
     const root = document.documentElement,
-      prev = root.getAttribute("data-theme");
-    // Vue masquée (téléphone, autre onglet) : on rend à une taille fixe le temps de la capture.
-    const hidden = !this.host.clientWidth || !this.host.clientHeight;
-    if (hidden) this.setViewSize(960, 640);
+      prev = root.getAttribute("data-theme"),
+      aspect = this.camera.aspect,
+      position = this.camera.position.clone(),
+      target = this.controls.target.clone();
+    this.setViewSize(960, 640);
+    this.viewPerspective();
     root.setAttribute("data-theme", "light");
     this.applyTheme();
     const url = this.renderer.domElement.toDataURL("image/jpeg", 0.9);
@@ -215,7 +218,12 @@ export class Scene3D {
     if (prev === null) root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", prev);
     this.applyTheme();
-    if (hidden) this.setViewSize(this.host.clientWidth || 300, this.host.clientHeight || 150);
+    this.camera.position.copy(position);
+    this.controls.target.copy(target);
+    this.controls.update();
+    this.camera.aspect = aspect;
+    this.camera.updateProjectionMatrix();
+    this.resize();
     const bin = atob(url.slice(url.indexOf(",") + 1));
     const data = Uint8Array.from(bin, (c) => c.charCodeAt(0));
     return w && h ? { data, w, h } : null;
