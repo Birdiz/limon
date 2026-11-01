@@ -8,6 +8,8 @@ import {
   parseProjectFile,
   projectFile,
   sanitizeProject,
+  stamped,
+  withDevis,
   withEtat,
 } from "../src/core/project";
 import { compute, type ComputeResult } from "../src/core/stair";
@@ -19,6 +21,18 @@ const fichier = (champs: object) => JSON.stringify({ format: "limon-projet", ver
 
 describe("projets", () => {
   const p = newProject("a1", "  Escalier Dupont ", "guide", 1000, { ...DEFAULTS, forme: "droit", H: 2800 });
+
+  it("une modification est toujours plus récente que ce qu'elle remplace", () => {
+    expect(stamped(p, 9000)).toBe(9000);
+    // L'horloge de cet appareil retarde sur la version reçue.
+    expect(stamped(p, 500)).toBe(1001);
+    expect(stamped(p, 1000)).toBe(1001);
+    expect(withDevis(p, null, 500).modifie).toBe(1001);
+    expect(withEtat(p, "fini", 500)).toMatchObject({ modifie: 1001, finiLe: 500 });
+    expect(withEtat(withEtat(p, "fini", 500), "brouillon", 500).modifie).toBe(1002);
+    expect(edited(p, { ...p.params, H: 2900 }, 500).modifie).toBe(1001);
+    expect(edited(withEtat(p, "fini", 500), { ...p.params, H: 2900 }, 500).modifie).toBe(1002);
+  });
 
   it("crée un projet aux réglages donnés", () => {
     expect(p).toMatchObject({ id: "a1", nom: "Escalier Dupont", cree: 1000, modifie: 1000, mode: "guide", etape: 0 });

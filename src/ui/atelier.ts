@@ -10,6 +10,7 @@ import {
 } from "../core/atelier";
 import { fmt } from "../core/format";
 import { DEFAULTS, sanitizeParams, type Params } from "../core/params";
+import { stamped } from "../core/project";
 import { ESSENCE_LABEL, GC_LABEL } from "../core/summary";
 import { byId, flash } from "./dom";
 import { browserStorage, read, write, type KeyValue } from "./store";
@@ -47,7 +48,7 @@ export class AtelierStore {
   /** Change une partie du profil (réglages, tarifs ou fiche de l'entreprise) en gardant le reste. */
   set(part: Partial<Omit<Atelier, "modifie">>, now = Date.now()): void {
     const base = this.a ?? newAtelier(atelierDefauts(DEFAULTS), now);
-    this.put({ ...base, ...part, modifie: now });
+    this.put({ ...base, ...part, modifie: this.a ? stamped(this.a, now) : now });
   }
 
   /** Version reçue du compte, plus récente que celle d'ici. */

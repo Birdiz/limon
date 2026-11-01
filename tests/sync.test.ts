@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { atelierDefauts, newAtelier } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
-import { newProject, type Project } from "../src/core/project";
+import { edited, newProject, parseProjectFile, projectFile, withEtat, type Project } from "../src/core/project";
 import { AtelierStore } from "../src/ui/atelier";
 import { Api } from "../src/ui/api";
 import { LocalStore, type KeyValue } from "../src/ui/store";
@@ -158,6 +158,115 @@ describe("synchronisation des projets", () => {
     expect(await a.names()).toEqual(["Martin repris"]);
   });
 
+  describe("avec une horloge en avance", () => {
+    const HEURE = 3_600_000;
+    const MINUTE = 60_000;
+    /** Date du projet sur le serveur. */
+    const onServer = async (id: string) =>
+      (await s.db.query<{ modifie: string }>("select modifie from projets where id = $1", [id])).map((r) =>
+        Number(r.modifie),
+      )[0];
+    const hauteur = async (d: ReturnType<typeof device>, id: string) => (await d.store.get(id))!.params.H;
+
+    it("une modification reste chez les deux appareils, même faite avant l'heure de la version reçue", async () => {
+      const t = Date.now();
+      const a = device();
+      const b = device();
+      await a.signIn("jean@exemple.fr");
+      await b.signIn("jean@exemple.fr");
+
+      // A a une heure d'avance ; B reçoit sa version, puis la corrige cinq minutes plus tard.
+      await a.store.save(newProject("p", "Dupont", "complet", t + HEURE, { ...DEFAULTS, H: 2700 }));
+      await a.store.sync();
+      await b.store.sync();
+      const recu = (await b.store.get("p"))!;
+      expect(recu.params.H).toBe(2700);
+      const corrige = edited(recu, { ...recu.params, H: 3300 }, t + 5 * MINUTE);
+      await b.store.save(corrige);
+
+      await b.store.sync();
+      // Le champ ne revient pas en arrière, et le serveur garde la correction.
+      expect(await hauteur(b, "p")).toBe(3300);
+      expect(await b.store.status()).toMatchObject({ pending: 0, offline: false });
+      expect(await onServer("p")).toBe(corrige.modifie);
+      await a.store.sync();
+      expect(await hauteur(a, "p")).toBe(3300);
+      await b.store.sync();
+      expect(await hauteur(b, "p")).toBe(3300);
+    });
+
+    it("un fichier daté du futur : chaque modification suivante tient", async () => {
+      const t = Date.now();
+      const a = device();
+      await a.signIn("jean@exemple.fr");
+      const futur = { ...newProject("x", "Importé", "complet", t), modifie: t + 365 * 24 * HEURE };
+      const importe = parseProjectFile(projectFile(futur), "p") as Project;
+      await a.store.save(importe);
+      await a.store.sync();
+
+      let p = importe;
+      for (const H of [2800, 2900, 3000]) {
+        p = edited(p, { ...p.params, H }, Date.now());
+        await a.store.save(p);
+        await a.store.sync();
+        expect(await hauteur(a, "p")).toBe(H);
+        expect(await onServer("p")).toBe(p.modifie);
+      }
+      p = withEtat(p, "fini", Date.now());
+      await a.store.save(p);
+      await a.store.sync();
+      expect((await a.store.get("p"))!.etat).toBe("fini");
+      expect(await onServer("p")).toBe(p.modifie);
+
+      const b = device();
+      await b.signIn("jean@exemple.fr");
+      expect((await b.store.get("p"))!).toMatchObject({ etat: "fini", params: { H: 3000 } });
+    });
+
+    it("un escalier daté du futur se supprime pour de bon", async () => {
+      const t = Date.now();
+      const a = device();
+      const b = device();
+      await a.signIn("jean@exemple.fr");
+      await b.signIn("jean@exemple.fr");
+      await a.store.save(newProject("p", "Dupont", "complet", t + HEURE));
+      await a.store.sync();
+      await b.store.sync();
+      await b.store.remove("p");
+      await b.store.sync();
+      expect(await b.names()).toEqual([]);
+      await a.store.sync();
+      expect(await a.names()).toEqual([]);
+      await b.store.sync();
+      expect(await b.names()).toEqual([]);
+    });
+
+    it("deux modifications concurrentes hors ligne : la plus récente gagne toujours", async () => {
+      const t = Date.now();
+      const a = device();
+      const b = device();
+      await a.signIn("jean@exemple.fr");
+      await b.signIn("jean@exemple.fr");
+      await a.store.save(newProject("p", "Dupont", "complet", t, { ...DEFAULTS, H: 2700 }));
+      await a.store.sync();
+      await b.store.sync();
+
+      a.online = b.online = false;
+      const pa = (await a.store.get("p"))!;
+      const pb = (await b.store.get("p"))!;
+      // B modifie en dernier mais envoie en premier : l'ordre d'envoi ne décide pas.
+      await a.store.save(edited(pa, { ...pa.params, H: 2800 }, t + MINUTE));
+      await b.store.save(edited(pb, { ...pb.params, H: 2900 }, t + 2 * MINUTE));
+      a.online = b.online = true;
+      await b.store.sync();
+      await a.store.sync();
+      await b.store.sync();
+      expect(await hauteur(a, "p")).toBe(2900);
+      expect(await hauteur(b, "p")).toBe(2900);
+      expect(await onServer("p")).toBe(t + 2 * MINUTE);
+    });
+  });
+
   it("garde le projet ouvert propre à chaque appareil", async () => {
     const a = device();
     const b = device();
@@ -262,6 +371,13 @@ describe("synchronisation des projets", () => {
 
 describe("synchronisation du profil de l'atelier", () => {
   const defauts = (ess: "chene" | "noyer" | "frene" | "sapin") => ({ ...atelierDefauts(DEFAULTS), ess });
+  /** Le profil tel que le serveur le garde. */
+  const atelierEnLigne = async () => {
+    const rows = await s.db.query<{ modifie: string; ess: string }>(
+      "select modifie, donnees->>'ess' as ess from ateliers",
+    );
+    return { modifie: Number(rows[0]!.modifie), ess: rows[0]!.ess };
+  };
 
   it("monte dans le compte à la connexion et descend sur l'autre appareil", async () => {
     const a = device();
@@ -282,7 +398,30 @@ describe("synchronisation du profil de l'atelier", () => {
     expect(b.atelier.get()).toMatchObject({ tarifs: { taux: 45 }, entreprise: { nom: "Exemple" } });
   });
 
-  it("garde la version modifiée en dernier", async () => {
+  it("deux modifications concurrentes hors ligne : garde la version modifiée en dernier", async () => {
+    const a = device();
+    const b = device();
+    await a.signIn("jean@exemple.fr");
+    await b.signIn("jean@exemple.fr");
+    a.atelier.set({ defauts: defauts("noyer") }, 1000);
+    await a.store.sync();
+    await b.store.sync();
+    expect(b.atelier.get()!.modifie).toBe(1000);
+
+    a.online = b.online = false;
+    a.atelier.set({ defauts: defauts("sapin") }, 2000);
+    b.atelier.set({ defauts: defauts("frene") }, 3000);
+    a.online = b.online = true;
+    // B modifie en dernier mais envoie en premier : l'ordre d'envoi ne décide pas.
+    await b.store.sync();
+    await a.store.sync();
+    await b.store.sync();
+    expect(a.atelier.get()!.defauts.ess).toBe("frene");
+    expect(b.atelier.get()!.defauts.ess).toBe("frene");
+    expect(await atelierEnLigne()).toEqual({ modifie: 3000, ess: "frene" });
+  });
+
+  it("avec une horloge en retard, une modification l'emporte sur la version qu'elle remplace", async () => {
     const a = device();
     const b = device();
     await a.signIn("jean@exemple.fr");
@@ -291,10 +430,17 @@ describe("synchronisation du profil de l'atelier", () => {
     await b.store.sync();
     await a.store.sync();
     expect(a.atelier.get()!.defauts.ess).toBe("frene");
-    // Une version plus ancienne ne reprend pas la main, même envoyée après.
-    a.atelier.set({ defauts: defauts("sapin") }, 500);
-    await a.store.sync();
-    expect(a.atelier.get()!.defauts.ess).toBe("frene");
+
+    // L'horloge de A retarde sur celle de B : sa modification tient quand même, et la suivante aussi.
+    for (const ess of ["sapin", "noyer"] as const) {
+      a.atelier.set({ defauts: defauts(ess) }, 500);
+      await a.store.sync();
+      await b.store.sync();
+      expect(a.atelier.get()!.defauts.ess).toBe(ess);
+      expect(b.atelier.get()!.defauts.ess).toBe(ess);
+      expect(await atelierEnLigne()).toEqual({ modifie: a.atelier.get()!.modifie, ess });
+    }
+    expect(a.atelier.get()!.modifie).toBe(2002);
   });
 
   it("quitte l'appareil à la déconnexion, et ne suit pas sur un autre compte", async () => {

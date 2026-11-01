@@ -26,7 +26,7 @@ Minimales (e-mail, projets, clés publiques, empreinte des sessions ; pas d'IP c
 
 `SyncStore` (`src/ui/sync.ts`) implémente `ProjectStore` au-dessus de `LocalStore` : écriture locale immédiate, échange en arrière-plan (démarrage, retour du réseau, retour sur la page, 3 s après une modification, toutes les 5 min).
 
-Le serveur renvoie l'index (`id`, `modifie`, `supprime`) ; la version la plus récente gagne sur `modifie`, projet par projet ; une suppression est une trace datée. État dans `limon-synchro`. `currentId` reste propre à l'appareil. Toute modification du projet (réglages, nom, étape du mode guidé) avance `modifie`.
+Le serveur renvoie l'index (`id`, `modifie`, `supprime`) ; la version la plus récente gagne sur `modifie`, projet par projet ; une suppression est une trace datée. État dans `limon-synchro`. `currentId` reste propre à l'appareil. Toute modification du projet (réglages, nom, étape du mode guidé, devis, état) et toute suppression sont datées par `stamped` (`src/core/project.ts`) : toujours après la version remplacée, même si l'horloge de l'appareil retarde sur celle qui l'a écrite.
 
 - **Première connexion** : les projets de l'appareil montent dans le compte.
 - **Déconnexion** : tout est envoyé, puis les projets du compte quittent l'appareil (refusée s'il reste des envois).
@@ -37,7 +37,7 @@ Le serveur renvoie l'index (`id`, `modifie`, `supprime`) ; la version la plus r�
 
 `Atelier` et `ATELIER_KEYS` dans `src/core/atelier.ts`, `AtelierStore` et `AtelierPanel` dans `src/ui/atelier.ts`. Les réglages qui tiennent à l'habitude de l'artisan (bois, limons, poteau, assemblage, plateaux, garde-corps), repris par chaque nouvel escalier ; les cotes du chantier n'en font pas partie, et l'escalier d'exemple comme « Revenir à l'exemple » gardent les valeurs d'origine.
 
-Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garder ces réglages pour mes prochains escaliers » (masqué en pas à pas, comme « Revenir à l'exemple »). Enregistré dans `limon-atelier` ; avec un compte, table `ateliers` et `/api/atelier` (GET, PUT), échangé avec les projets, la version la plus récente gagnant, et il quitte l'appareil à la déconnexion.
+Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garder ces réglages pour mes prochains escaliers » (masqué en pas à pas, comme « Revenir à l'exemple »). Enregistré dans `limon-atelier` ; avec un compte, table `ateliers` et `/api/atelier` (GET, PUT), échangé avec les projets, la version la plus récente gagnant, et il quitte l'appareil à la déconnexion. Toute modification est datée par `stamped`, comme un projet : un appareil à l'horloge en retard ne perd pas contre la version qu'il remplace.
 
 ## Compte à l'écran
 

@@ -19,6 +19,7 @@ import {
   edited,
   fileBase,
   newProject,
+  stamped,
   withDevis,
   withEtat,
   type Project,
@@ -241,10 +242,10 @@ byId("etatBtn").addEventListener("click", () => {
   flash(byId("etatMsg"), fini ? "Repassé en brouillon" : "Terminé : la fiche ne porte plus la mention brouillon");
 });
 
-/** Ouvre un escalier ; null quand il n'en reste aucun : l'accueil prend alors la page. */
-function openProject(p: Project | null): void {
-  if (p) home.hide();
-  else void home.show();
+/** Met un escalier à l'écran (état, champs, calcul), sans toucher à l'accueil ni à l'export. */
+function showProject(p: Project | null): void {
+  // Le bouton « Reprendre » de Mon atelier suit la présence d'un escalier ; recharger ce panneau effacerait sa saisie.
+  const reprendre = !p !== !project;
   project = p;
   params = p ? { ...p.params } : { ...DEFAULTS };
   byId<HTMLInputElement>("pjName").value = p?.nom ?? "";
@@ -252,17 +253,24 @@ function openProject(p: Project | null): void {
   steps.apply(p?.mode ?? "complet", p?.etape ?? 0);
   // Le devis n'existe pas en pas à pas : l'escalier n'est pas encore dessiné.
   if (tabs.current === "devis" && p?.mode !== "complet") tabs.show("reglages");
-  setCNC(false);
-  atelierPanel.refresh();
+  if (reprendre) atelierPanel.refresh();
   showEtat();
   update();
+}
+
+/** Ouvre un escalier ; null quand il n'en reste aucun : l'accueil prend alors la page. */
+function openProject(p: Project | null): void {
+  if (p) home.hide();
+  else void home.show();
+  setCNC(false);
+  showProject(p);
   // L'historique appartient à l'escalier ouvert.
   undo.reset(params);
 }
 
 const steps = new Steps((mode, etape) => {
   if (!project) return;
-  project = { ...project, mode, etape, modifie: Date.now() };
+  project = { ...project, mode, etape, modifie: stamped(project, Date.now()) };
   void store.save(project);
 });
 
@@ -397,15 +405,24 @@ for (const [id, plan] of [
   });
 }
 
-/** Projets changés sur un autre appareil ou dans un autre onglet : le projet ouvert se recharge, ou laisse la place s'il a été supprimé. */
+/** Projets changés sur un autre appareil ou dans un autre onglet : le projet ouvert se met à jour, ou laisse la place s'il a été supprimé. */
 store.onChange(async (ids) => {
   if (project && ids.includes(project.id)) {
     const p = await store.get(project.id);
     if (p) {
-      if (p.modifie !== project.modifie) openProject(p);
+      // Même escalier : l'écran en cours reste, seul l'historique repart de la version reçue.
+      if (p.modifie !== project.modifie) {
+        showProject(p);
+        undo.reset(params);
+      }
     } else {
       const next = (await store.list())[0] ?? null;
-      openProject(next);
+      if (home.visible) {
+        // Supprimé ailleurs pendant que l'artisan est sur l'accueil : il y reste, l'escalier suivant prend place derrière.
+        setCNC(false);
+        showProject(next);
+        undo.reset(params);
+      } else openProject(next);
       if (next) void store.setCurrent(next.id);
     }
   }
@@ -414,7 +431,7 @@ store.onChange(async (ids) => {
 byId<HTMLInputElement>("pjName").addEventListener("change", (e) => {
   const el = e.target as HTMLInputElement;
   if (!project) return;
-  project = { ...project, nom: el.value.trim() || NOM_PAR_DEFAUT, modifie: Date.now() };
+  project = { ...project, nom: el.value.trim() || NOM_PAR_DEFAUT, modifie: stamped(project, Date.now()) };
   el.value = project.nom;
   void store.save(project);
 });
