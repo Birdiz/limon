@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULTS } from "../src/core/params";
-import { paramsFromHash, paramsToHash, projectUrl } from "../src/core/share";
+import { linkOpensNew, paramsFromHash, paramsToHash, projectUrl, sameLink } from "../src/core/share";
 
 describe("lien de projet", () => {
   it("ne garde que les réglages qui diffèrent de l'exemple", () => {
@@ -41,5 +41,23 @@ describe("lien de projet", () => {
     expect(projectUrl({ ...DEFAULTS, forme: "droit", H: 2850 })).toBe(
       "https://quart-de-tour.fr/app/#forme=droit&H=2850",
     );
+  });
+
+  it("compare les réglages comme le lien les écrit", () => {
+    expect(sameLink(DEFAULTS, { ...DEFAULTS })).toBe(true);
+    // Les valeurs calculées enregistrées ne comptent pas, le réglage manuel oui.
+    expect(sameLink({ ...DEFAULTS, H: 3000 }, { ...DEFAULTS, H: 3000, n: 16, f: 400, hlj: 380 })).toBe(true);
+    expect(sameLink({ ...DEFAULTS, nAuto: false, n: 16 }, { ...DEFAULTS, nAuto: false, n: 17 })).toBe(false);
+    expect(sameLink({ ...DEFAULTS, nAuto: false, n: 16 }, { ...DEFAULTS, n: 16 })).toBe(false);
+    expect(sameLink({ ...DEFAULTS, H: 3000 }, { ...DEFAULTS, H: 3100 })).toBe(false);
+  });
+
+  it("ouvre un lien en nouvel escalier sauf s'il redonne l'escalier ouvert", () => {
+    const open = { ...DEFAULTS, H: 3000, n: 16 };
+    const relu = paramsFromHash(`#${paramsToHash(open)}`)!;
+    expect(relu.n).toBe(DEFAULTS.n);
+    expect(linkOpensNew(relu, open)).toBe(false);
+    expect(linkOpensNew({ ...relu, W: 900 }, open)).toBe(true);
+    expect(linkOpensNew(relu, null)).toBe(true);
   });
 });

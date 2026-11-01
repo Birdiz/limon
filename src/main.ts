@@ -13,8 +13,17 @@ import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "./core/tarifs";
 import { DEFAULTS, changeForme, type Params } from "./core/params";
-import { NOM_PAR_DEFAUT, fileBase, newProject, withDevis, withEtat, type Project } from "./core/project";
-import { paramsFromHash, paramsToHash } from "./core/share";
+import {
+  NOM_PAR_DEFAUT,
+  canFinish,
+  edited,
+  fileBase,
+  newProject,
+  withDevis,
+  withEtat,
+  type Project,
+} from "./core/project";
+import { linkOpensNew, paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
 import { fichePDF } from "./pdf/fiche";
 import { compute, turnLengths, type ComputeResult, type Stair } from "./core/stair";
@@ -138,15 +147,15 @@ function update(): void {
   const next = changeForme(params, read.params);
   if (next !== read.params) writeInputs(next);
   params = next;
-  if (project && JSON.stringify(params) !== JSON.stringify(project.params)) {
-    // Un escalier terminé qu'on modifie redevient un brouillon : sa fiche n'est plus celle qui a été validée.
-    if (project.etat === "fini") {
-      project = withEtat(project, "brouillon", Date.now());
-      flash(byId("etatMsg"), "Modifié : l'escalier repasse en brouillon", false, 6000);
+  if (project) {
+    const changed = edited(project, params, Date.now());
+    if (changed !== project) {
+      if (changed.etat !== project.etat)
+        flash(byId("etatMsg"), "Modifié : l'escalier repasse en brouillon", false, 6000);
+      project = changed;
+      void store.save(project);
+      showEtat();
     }
-    project = { ...project, params, modifie: Date.now() };
-    void store.save(project);
-    showEtat();
   }
   undo.record(params);
   const hash = paramsToHash(params);
@@ -216,14 +225,13 @@ byId("etatBtn").addEventListener("click", () => {
   if (!project) return;
   if (queued) update();
   const fini = project.etat === "fini";
-  if (!fini && !current?.ok) {
+  const can = fini ? "oui" : canFinish(current);
+  if (can === "non") {
     flash(byId("etatMsg"), "Corrigez d'abord les cotes signalées en rouge", true, 6000);
     return;
   }
   if (
-    !fini &&
-    current?.ok &&
-    current.stair.notes.some(([st]) => st === "bad") &&
+    can === "confirmer" &&
     !confirm("Des contrôles ne sont pas respectés (en rouge). Dire l'escalier terminé quand même ?")
   )
     return;
@@ -417,13 +425,13 @@ startPWA(() => {
 });
 
 /* ---------- Événements ---------- */
-const edited = (e: Event) => {
+const onEdit = (e: Event) => {
   undo.touched(e.target);
   schedule();
 };
 for (const el of [document.querySelector<HTMLElement>(".side")!, byId("cncBody")]) {
-  el.addEventListener("input", edited);
-  el.addEventListener("change", edited);
+  el.addEventListener("input", onEdit);
+  el.addEventListener("change", onEdit);
 }
 document.querySelector<HTMLElement>(".side")!.addEventListener("focusin", (e) => {
   if ((e.target as HTMLElement).matches("input[type=number]")) sketches((e.target as HTMLElement).id);
@@ -445,10 +453,8 @@ byId("notes").addEventListener("click", (ev) => {
   if (!fix) return;
   setParams({ ...params, ...fix.set });
 });
-/** Un lien de projet devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert. */
 async function openShared(p: Params): Promise<void> {
-  if (project && JSON.stringify(p) === JSON.stringify(project.params)) return;
-  await startNew("Escalier reçu par lien", "complet", p);
+  if (linkOpensNew(p, project?.params ?? null)) await startNew("Escalier reçu par lien", "complet", p);
 }
 const example = () => startNew("Exemple", "complet", { ...DEFAULTS });
 window.addEventListener("hashchange", () => {
