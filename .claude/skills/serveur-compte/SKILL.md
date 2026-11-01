@@ -37,7 +37,7 @@ Le serveur renvoie l'index (`id`, `modifie`, `supprime`) ; la version la plus r�
 
 `Atelier` et `ATELIER_KEYS` dans `src/core/atelier.ts`, `AtelierStore` et `AtelierPanel` dans `src/ui/atelier.ts`. Les réglages qui tiennent à l'habitude de l'artisan (bois, limons, poteau, assemblage, plateaux, garde-corps), repris par chaque nouvel escalier ; les cotes du chantier n'en font pas partie, et l'escalier d'exemple comme « Revenir à l'exemple » gardent les valeurs d'origine.
 
-Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garder ces réglages pour mes prochains escaliers » (masqué en pas à pas, comme « Revenir à l'exemple »). Enregistré dans `limon-atelier` ; avec un compte, table `ateliers` et `/api/atelier` (GET, PUT), échangé avec les projets, la version la plus récente gagnant, et il quitte l'appareil à la déconnexion.
+Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garder ces réglages pour mes prochains escaliers » (masqué en pas à pas, comme « Revenir à l'exemple »). Enregistré dans `limon-atelier` ; avec un compte, table `ateliers` et `/api/atelier` (GET, PUT), échangé avec les projets, la version la plus récente gagnant, et il quitte l'appareil à la déconnexion. Toute modification est datée par `stamped`, comme un projet : un appareil à l'horloge en retard ne perd pas contre la version qu'il remplace.
 
 ## Compte à l'écran
 

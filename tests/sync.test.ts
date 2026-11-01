@@ -371,6 +371,13 @@ describe("synchronisation des projets", () => {
 
 describe("synchronisation du profil de l'atelier", () => {
   const defauts = (ess: "chene" | "noyer" | "frene" | "sapin") => ({ ...atelierDefauts(DEFAULTS), ess });
+  /** Le profil tel que le serveur le garde. */
+  const atelierEnLigne = async () => {
+    const rows = await s.db.query<{ modifie: string; ess: string }>(
+      "select modifie, donnees->>'ess' as ess from ateliers",
+    );
+    return { modifie: Number(rows[0]!.modifie), ess: rows[0]!.ess };
+  };
 
   it("monte dans le compte à la connexion et descend sur l'autre appareil", async () => {
     const a = device();
@@ -391,7 +398,30 @@ describe("synchronisation du profil de l'atelier", () => {
     expect(b.atelier.get()).toMatchObject({ tarifs: { taux: 45 }, entreprise: { nom: "Exemple" } });
   });
 
-  it("garde la version modifiée en dernier", async () => {
+  it("deux modifications concurrentes hors ligne : garde la version modifiée en dernier", async () => {
+    const a = device();
+    const b = device();
+    await a.signIn("jean@exemple.fr");
+    await b.signIn("jean@exemple.fr");
+    a.atelier.set({ defauts: defauts("noyer") }, 1000);
+    await a.store.sync();
+    await b.store.sync();
+    expect(b.atelier.get()!.modifie).toBe(1000);
+
+    a.online = b.online = false;
+    a.atelier.set({ defauts: defauts("sapin") }, 2000);
+    b.atelier.set({ defauts: defauts("frene") }, 3000);
+    a.online = b.online = true;
+    // B modifie en dernier mais envoie en premier : l'ordre d'envoi ne décide pas.
+    await b.store.sync();
+    await a.store.sync();
+    await b.store.sync();
+    expect(a.atelier.get()!.defauts.ess).toBe("frene");
+    expect(b.atelier.get()!.defauts.ess).toBe("frene");
+    expect(await atelierEnLigne()).toEqual({ modifie: 3000, ess: "frene" });
+  });
+
+  it("avec une horloge en retard, une modification l'emporte sur la version qu'elle remplace", async () => {
     const a = device();
     const b = device();
     await a.signIn("jean@exemple.fr");
@@ -400,10 +430,17 @@ describe("synchronisation du profil de l'atelier", () => {
     await b.store.sync();
     await a.store.sync();
     expect(a.atelier.get()!.defauts.ess).toBe("frene");
-    // Une version plus ancienne ne reprend pas la main, même envoyée après.
-    a.atelier.set({ defauts: defauts("sapin") }, 500);
-    await a.store.sync();
-    expect(a.atelier.get()!.defauts.ess).toBe("frene");
+
+    // L'horloge de A retarde sur celle de B : sa modification tient quand même, et la suivante aussi.
+    for (const ess of ["sapin", "noyer"] as const) {
+      a.atelier.set({ defauts: defauts(ess) }, 500);
+      await a.store.sync();
+      await b.store.sync();
+      expect(a.atelier.get()!.defauts.ess).toBe(ess);
+      expect(b.atelier.get()!.defauts.ess).toBe(ess);
+      expect(await atelierEnLigne()).toEqual({ modifie: a.atelier.get()!.modifie, ess });
+    }
+    expect(a.atelier.get()!.modifie).toBe(2002);
   });
 
   it("quitte l'appareil à la déconnexion, et ne suit pas sur un autre compte", async () => {
