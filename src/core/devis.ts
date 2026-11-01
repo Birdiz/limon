@@ -240,6 +240,9 @@ export interface Devis {
 
 const cents = (eur: number) => Math.round(eur * 100);
 const euros = (c: number) => c / 100;
+/** Total d'une ligne, en centimes : quantité en millièmes et prix en centimes, tels qu'ils s'impriment, multipliés
+    en entiers puis arrondis à la demi-unité supérieure. */
+const ligneCents = (q: number, pu: number) => Math.round((Math.round(q * 1000) * cents(pu)) / 1000);
 /** Arrondi d'une quantité, pour qu'elle s'imprime telle qu'elle est comptée. */
 const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
 
@@ -411,14 +414,14 @@ export function devis(Q: Quantites, T: Tarifs, S: Saisie): Devis {
       corrigee,
     };
     if (l.q === 0) continue;
-    if (l.q !== null && l.pu !== null) l.total = euros(cents(l.q * l.pu));
+    if (l.q !== null && l.pu !== null) l.total = euros(ligneCents(l.q, l.pu));
     // Ce qui manque à une ligne corrigée à la main se dit par sa désignation.
     else aCompleter.push(...(corrigee ? [l.designation] : manque));
     lignes.push(l);
   }
   S.libres.forEach((l, i) => {
     if (l.q === 0) return;
-    lignes.push({ id: `libre-${i + 1}`, ...l, total: euros(cents(l.q * l.pu)), auto: false, corrigee: false });
+    lignes.push({ id: `libre-${i + 1}`, ...l, total: euros(ligneCents(l.q, l.pu)), auto: false, corrigee: false });
   });
 
   // Totaux
@@ -427,12 +430,12 @@ export function devis(Q: Quantites, T: Tarifs, S: Saisie): Devis {
   const tot = [...base.values()].reduce((s, v) => s + v, 0);
   const r = S.remise;
   const remise = Math.min(tot, Math.max(0, r ? ("pct" in r ? Math.round((tot * r.pct) / 100) : cents(r.eur)) : 0));
-  // La remise se répartit sur les taux au prorata, le reste d'arrondi sur le dernier.
+  // La remise se répartit sur les taux au prorata, le reste d'arrondi sur le dernier. Lignes à 0 € : rien à répartir.
   const parTaux = [...base.keys()].sort((a, b) => b - a);
   let reste = remise;
   const tvas = parTaux.map((t, i) => {
     const b = base.get(t)!;
-    const part = i === parTaux.length - 1 ? reste : Math.round((remise * b) / tot);
+    const part = i === parTaux.length - 1 ? reste : tot === 0 ? 0 : Math.round((remise * b) / tot);
     reste -= part;
     const net = b - part;
     return { taux: t, base: euros(net), montant: euros(Math.round((net * t) / 100)) };
