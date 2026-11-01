@@ -3,6 +3,7 @@ import { atelierDefauts, newAtelier } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
 import { edited, newProject, parseProjectFile, projectFile, withEtat, type Project } from "../src/core/project";
+import { compute } from "../src/core/stair";
 import { AtelierStore } from "../src/ui/atelier";
 import { Api } from "../src/ui/api";
 import { LocalStore, type KeyValue } from "../src/ui/store";
@@ -136,6 +137,22 @@ describe("synchronisation des projets", () => {
     const storage = memory();
     storage.setItem("limon-projets", JSON.stringify([bad]));
     expect(await new LocalStore(storage).list()).toEqual([]);
+  });
+
+  it("un escalier hors bornes reçu du compte se signale sur son champ et se supprime", async () => {
+    const a = device();
+    const b = device();
+    await a.signIn("jean@exemple.fr");
+    await a.store.save({ ...project("p", "Dupont", 1), params: { ...DEFAULTS, H: 1e15 } });
+    await a.store.sync();
+    await b.signIn("jean@exemple.fr");
+    const [recu] = await b.store.list();
+    const r = compute(recu!.params);
+    expect(r.ok ? [] : r.errors.map((e) => e.key)).toEqual(["H"]);
+    await b.store.remove("p");
+    await b.store.sync();
+    await a.store.sync();
+    expect(await a.names()).toEqual([]);
   });
 
   it("une suppression ne revient pas, sauf modification plus récente ailleurs", async () => {

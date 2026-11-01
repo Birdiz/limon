@@ -174,7 +174,12 @@ export class Home {
     const key = `${p.id}:${p.modifie}`;
     let svg = this.thumbs.get(key);
     if (svg === undefined) {
-      svg = thumbSVG(p.params);
+      // Sans dessin, la carte reste : l'escalier s'y ouvre ou s'y supprime.
+      try {
+        svg = thumbSVG(p.params);
+      } catch {
+        svg = "";
+      }
       this.thumbs.set(key, svg);
     }
     return svg;

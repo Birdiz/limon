@@ -159,7 +159,7 @@ export function stairNotes(ctx: NotesCtx, suggest: boolean): Note[] {
   if (quart && st.gIn !== "ok") {
     // Plus petit nombre de marches balancées qui garde 100 mm au jour.
     let mb: number | null = null;
-    for (let m = p.mb + 1; suggest && m <= 12 && mb == null; m++) {
+    for (let m = Math.max(p.mb, 1) + 1; suggest && m <= 12 && mb == null; m++) {
       const r = compute({ ...p, mb: m }, false);
       if (r.ok && r.stair.gInMin >= CONFORT.gIn.min) mb = m;
     }
