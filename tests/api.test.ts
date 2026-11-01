@@ -2,7 +2,8 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { atelierDefauts, newAtelier } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
-import { newProject } from "../src/core/project";
+import { newDevis } from "../src/core/devis";
+import { newProject, NOM_PAR_DEFAUT, type Project } from "../src/core/project";
 import { migrate, pgliteDb } from "../server/db";
 import { browser, login, ORIGIN, testServer, type TestServer } from "./server";
 
@@ -244,6 +245,241 @@ describe("projets", () => {
 
   it("demande une session", async () => {
     expect((await browser(s)("/api/projets")).status).toBe(401);
+  });
+});
+
+describe("refus à l'envoi des projets", () => {
+  const DAY = 86_400_000;
+  const p = (id: string, modifie: number, nom = id) => ({ ...newProject(id, nom, "complet", 1), modifie });
+  const put = async (f: typeof fetch, changements: unknown[]) => {
+    const res = await post(f, "/api/projets", { changements, detail: true }, "PUT");
+    const b = (await res.json()) as { index: { id: string }[]; refus: { id: string; raison: string }[] };
+    return { status: res.status, ...b, ids: b.index.map((e) => e.id).sort() };
+  };
+  const signedIn = async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    return f;
+  };
+
+  it.each([1e300, 1e19, 1e30])("une date de %d n'arrête pas le reste de l'envoi", async (date) => {
+    const f = await signedIn();
+    const r = await put(f, [
+      { id: "bon1", projet: p("bon1", 10) },
+      { id: "mauvais", projet: p("mauvais", date) },
+      { id: "bon2", projet: p("bon2", 10) },
+    ]);
+    expect(r.status).toBe(200);
+    expect(r.ids).toEqual(["bon1", "bon2"]);
+    expect(r.refus).toEqual([{ id: "mauvais", raison: expect.stringContaining("date") as string }]);
+  });
+
+  it("un caractère NUL dans l'identifiant n'arrête pas le reste de l'envoi", async () => {
+    const f = await signedIn();
+    const r = await put(f, [
+      { id: "bon1", projet: p("bon1", 10) },
+      { id: "a\u0000b", projet: p("x", 10) },
+      { id: "c\u0000d", modifie: 10, supprime: true },
+      { id: "bon2", projet: p("bon2", 10) },
+    ]);
+    expect(r.status).toBe(200);
+    expect(r.ids).toEqual(["bon1", "bon2"]);
+    expect(r.refus.map((x) => x.id)).toEqual(["a\u0000b", "c\u0000d"]);
+  });
+
+  it("retire le caractère NUL d'un nom ou d'une fiche client, et enregistre", async () => {
+    const f = await signedIn();
+    const devis = { ...newDevis(), client: { nom: "Du\u0000pont", adresse: "1 rue\nici\u0000", chantier: "" } };
+    const r = await put(f, [
+      { id: "a", projet: p("a", 10, "Es\u0000calier") },
+      { id: "b", projet: { ...p("b", 10), devis } },
+      { id: "c", projet: p("c", 10, "\u0000") },
+    ]);
+    expect(r.status).toBe(200);
+    expect(r.refus).toEqual([]);
+    const rows = (await (await post(f, "/api/projets/lire", { ids: ["a", "b", "c"] })).json()) as Project[];
+    const byId = Object.fromEntries(rows.map((x) => [x.id, x]));
+    expect(byId.a!.nom).toBe("Escalier");
+    expect(byId.b!.devis!.client).toMatchObject({ nom: "Dupont", adresse: "1 rue\nici" });
+    expect(byId.c!.nom).toBe(NOM_PAR_DEFAUT);
+  });
+
+  it("un nom coupé à 80 caractères au milieu d'un emoji reste rangé", async () => {
+    const f = await signedIn();
+    const r = await put(f, [{ id: "a", projet: p("a", 10, `${"x".repeat(79)}😀`) }]);
+    expect(r.refus).toEqual([]);
+    const [a] = (await (await post(f, "/api/projets/lire", { ids: ["a"] })).json()) as Project[];
+    expect(a!.nom).toBe("x".repeat(79));
+  });
+
+  it("une donnée illisible ailleurs ne rend pas de 500", async () => {
+    const f = await signedIn();
+    expect((await post(browser(s), "/api/code", { email: "a\u0000b@exemple.fr" })).status).toBe(400);
+    expect(
+      (await post(browser(s), "/api/code/verifier", { email: "a\u0000b@exemple.fr", code: "123456" })).status,
+    ).toBe(400);
+    expect((await post(f, "/api/projets/lire", { ids: ["a\u0000"] })).status).toBe(400);
+    expect((await post(f, "/api/devis/numero", { projet: "a\u0000" })).status).toBe(400);
+    expect((await f("/api/passkeys/a%00", { method: "DELETE" })).status).toBe(400);
+  });
+
+  it("borne les dates d'un projet et d'une trace de suppression", async () => {
+    const f = await signedIn();
+    const now = Date.now();
+    const loin = now + 732 * DAY + DAY;
+    const proche = now + 2 * DAY;
+    const r = await put(f, [
+      { id: "proche", projet: p("proche", proche) },
+      { id: "zero", projet: p("zero", 0) },
+      { id: "trace-proche", modifie: proche, supprime: true },
+      { id: "trace-zero", modifie: 0, supprime: true },
+      { id: "loin", projet: p("loin", loin) },
+      { id: "negatif", projet: p("negatif", -1) },
+      { id: "virgule", projet: p("virgule", 1000.5) },
+      { id: "trace-loin", modifie: loin, supprime: true },
+      { id: "trace-negatif", modifie: -1, supprime: true },
+      { id: "trace-virgule", modifie: 1000.5, supprime: true },
+      { id: "trace-texte", modifie: "1000", supprime: true },
+    ]);
+    expect(r.status).toBe(200);
+    expect(r.ids).toEqual(["proche", "trace-proche", "trace-zero", "zero"]);
+    expect(r.refus.map((x) => x.id)).toEqual([
+      "loin",
+      "negatif",
+      "virgule",
+      "trace-loin",
+      "trace-negatif",
+      "trace-virgule",
+      "trace-texte",
+    ]);
+    for (const x of r.refus) expect(x.raison).toContain("date");
+  });
+
+  it("borne la date du profil de l'atelier", async () => {
+    const f = await signedIn();
+    const atelier = (modifie: number) => ({ ...newAtelier(atelierDefauts(DEFAULTS), 1), modifie });
+    const now = Date.now();
+    for (const date of [1e300, 1e19, now + 732 * DAY + DAY, -1, 1000.5]) {
+      const res = await post(f, "/api/atelier", { atelier: atelier(date) }, "PUT");
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { erreur: string }).erreur).toContain("date");
+    }
+    expect(await (await f("/api/atelier")).json()).toBeNull();
+    expect((await post(f, "/api/atelier", { atelier: atelier(0) }, "PUT")).status).toBe(200);
+    expect((await post(f, "/api/atelier", { atelier: atelier(now + 2 * DAY) }, "PUT")).status).toBe(200);
+  });
+
+  it("retire les caractères NUL du profil de l'atelier", async () => {
+    const f = await signedIn();
+    const atelier = {
+      ...newAtelier(atelierDefauts(DEFAULTS), 10),
+      entreprise: { ...ENTREPRISE_VIDE, nom: "Ate\u0000lier" },
+    };
+    const res = await post(f, "/api/atelier", { atelier }, "PUT");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ entreprise: { nom: "Atelier" } });
+  });
+
+  describe("plafond de 2 000 projets", () => {
+    /** Remplit le compte : traces de suppression d'abord, puis projets, jusqu'à `n` lignes. */
+    const fill = async (n: number, traces = 0) => {
+      const rows = await s.db.query<{ id: string }>("select id from comptes");
+      await s.db.query(
+        `insert into projets (compte, id, modifie, supprime, donnees)
+         select $1::uuid, 'rempli' || i, 5, i <= $3::int, null from generate_series(1, $2::int) i`,
+        [rows[0]!.id, n, traces],
+      );
+    };
+    let g: typeof fetch;
+    const count = async () => (await (await g("/api/projets")).json()) as { id: string }[];
+
+    it("refuse les éléments en trop, les autres passent, le reste du compte fonctionne", async () => {
+      g = await signedIn();
+      await fill(1998);
+      const r = await put(g, [
+        { id: "n1", projet: p("n1", 10) },
+        { id: "n2", projet: p("n2", 10) },
+        { id: "n3", projet: p("n3", 10) },
+        { id: "n4", modifie: 10, supprime: true },
+      ]);
+      expect(r.status).toBe(200);
+      expect(r.refus.map((x) => x.id)).toEqual(["n3", "n4"]);
+      expect(r.refus[0]!.raison).toContain("2000");
+      expect(await count()).toHaveLength(2000);
+
+      // Ce qui existe déjà se modifie et se supprime encore.
+      const u = await put(g, [
+        { id: "n1", projet: p("n1", 20, "modifié") },
+        { id: "n2", modifie: 20, supprime: true },
+        { id: "rempli1", projet: p("rempli1", 20) },
+        { id: "n1", projet: p("n1", 15, "plus ancien") },
+      ]);
+      expect(u.refus).toEqual([]);
+      const [n1] = (await (await post(g, "/api/projets/lire", { ids: ["n1"] })).json()) as Project[];
+      expect(n1!.nom).toBe("modifié");
+      expect((await post(g, "/api/atelier", { atelier: newAtelier(atelierDefauts(DEFAULTS), 1) }, "PUT")).status).toBe(
+        200,
+      );
+    });
+
+    it("compte les traces de suppression", async () => {
+      g = await signedIn();
+      await fill(2000, 2000);
+      const r = await put(g, [{ id: "nouveau", projet: p("nouveau", 10) }]);
+      expect(r.refus.map((x) => x.id)).toEqual(["nouveau"]);
+      expect(await count()).toHaveLength(2000);
+    });
+
+    it("sépare les comptes", async () => {
+      g = await signedIn();
+      await fill(2000);
+      const other = browser(s);
+      await login(s, other, "b@exemple.fr");
+      expect((await put(other, [{ id: "nouveau", projet: p("nouveau", 10) }])).refus).toEqual([]);
+    });
+  });
+
+  it.each([
+    ["PUT /projets", (f: typeof fetch) => post(f, "/api/projets", { changements: [] }, "PUT")],
+    [
+      "PUT /atelier",
+      (f: typeof fetch) => post(f, "/api/atelier", { atelier: newAtelier(atelierDefauts(DEFAULTS), 1) }, "PUT"),
+    ],
+    ["POST /projets/lire", (f: typeof fetch) => post(f, "/api/projets/lire", { ids: [] })],
+  ])("limite le débit de %s, par compte", async (_, call) => {
+    const f = await signedIn();
+    for (let i = 0; i < 120; i++) expect((await call(f)).status).toBe(200);
+    const refused = await call(f);
+    expect(refused.status).toBe(429);
+    expect(((await refused.json()) as { erreur: string }).erreur).toContain("Réessayez");
+    const other = browser(s);
+    await login(s, other, "b@exemple.fr");
+    expect((await call(other)).status).toBe(200);
+  });
+
+  it("1 000 éléments passent, 1 001 dans une requête rendent 400", async () => {
+    const f = await signedIn();
+    const list = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, modifie: 10, supprime: true }));
+    expect((await post(f, "/api/projets", { changements: list(1001) }, "PUT")).status).toBe(400);
+    const r = await put(f, list(1000));
+    expect(r.status).toBe(200);
+    expect(r.index).toHaveLength(1000);
+  });
+
+  it("réduit un projet aux textes démesurés à ses bornes", async () => {
+    const f = await signedIn();
+    const devis = { ...newDevis(), client: { nom: "x".repeat(5000), adresse: "y".repeat(5000), chantier: "" } };
+    await put(f, [{ id: "a", projet: { ...p("a", 10, "z".repeat(5000)), devis } }]);
+    const [a] = (await (await post(f, "/api/projets/lire", { ids: ["a"] })).json()) as Project[];
+    expect(a!.nom).toHaveLength(80);
+    expect(a!.devis!.client.nom).toHaveLength(200);
+    expect(a!.devis!.client.adresse).toHaveLength(2000);
+  });
+
+  it("un onglet ouvert d'avant les refus reçoit encore le tableau de l'index", async () => {
+    const f = await signedIn();
+    const res = await post(f, "/api/projets", { changements: [{ id: "a", projet: p("a", 10) }] }, "PUT");
+    expect(await res.json()).toEqual([{ id: "a", modifie: 10, supprime: false }]);
   });
 });
 

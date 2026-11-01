@@ -5,6 +5,7 @@ import {
   edited,
   fileBase,
   newProject,
+  NOM_PAR_DEFAUT,
   parseProjectFile,
   projectFile,
   sanitizeProject,
@@ -19,6 +20,22 @@ const ABIME = "Ce fichier est abîmé : les cotes de l'escalier ne s'y lisent pa
 /** Fichier de projet écrit à la main, version 1 sauf si elle est donnée. */
 const fichier = (champs: object) => JSON.stringify({ format: "limon-projet", version: 1, ...champs }, null, 2);
 
+describe("textes d'un projet relu", () => {
+  it("retire les caractères de contrôle et garde les retours à la ligne", () => {
+    const p = sanitizeProject({
+      id: "a",
+      nom: "\u0000Du\u0007pont\ud83d",
+      devis: { client: { nom: "A\u0000", adresse: "1 rue\n\u001fici\ttoit", chantier: "😀" } },
+    })!;
+    expect(p.nom).toBe("Dupont");
+    expect(p.devis!.client).toEqual({ nom: "A", adresse: "1 rue\nici\ttoit", chantier: "😀" });
+  });
+
+  it("un nom fait seulement de caractères de contrôle prend le nom par défaut", () => {
+    expect(sanitizeProject({ id: "a", nom: "\u0000 \u0001" })!.nom).toBe(NOM_PAR_DEFAUT);
+  });
+});
+
 describe("projets", () => {
   const p = newProject("a1", "  Escalier Dupont ", "guide", 1000, { ...DEFAULTS, forme: "droit", H: 2800 });
 
@@ -27,6 +44,7 @@ describe("projets", () => {
     // L'horloge de cet appareil retarde sur la version reçue.
     expect(stamped(p, 500)).toBe(1001);
     expect(stamped(p, 1000)).toBe(1001);
+    expect(stamped({ modifie: 5000.5 }, 500)).toBe(5001);
     expect(withDevis(p, null, 500).modifie).toBe(1001);
     expect(withEtat(p, "fini", 500)).toMatchObject({ modifie: 1001, finiLe: 500 });
     expect(withEtat(withEtat(p, "fini", 500), "brouillon", 500).modifie).toBe(1002);

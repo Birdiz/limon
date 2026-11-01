@@ -29,8 +29,12 @@ Minimales (e-mail, projets, clés publiques, empreinte des sessions ; pas d'IP c
 
 Le serveur renvoie l'index (`id`, `modifie`, `supprime`) ; la version la plus récente gagne sur `modifie`, projet par projet ; une suppression est une trace datée. État dans `limon-synchro`. `currentId` reste propre à l'appareil. Toute modification du projet (réglages, nom, étape du mode guidé, devis, état) et toute suppression sont datées par `stamped` (`src/core/project.ts`) : toujours après la version remplacée, même si l'horloge de l'appareil retarde sur celle qui l'a écrite.
 
+L'envoi part par lots (500 éléments et 3 Mo au plus). `PUT /projets` range élément par élément : un refus (`{ id, raison }`, en mots pour l'artisan) n'arrête pas les suivants et ne rend jamais de 500. Une date `modifie` doit être entière, entre 0 et l'heure du serveur plus 732 jours, pour un projet, une trace de suppression et le profil de l'atelier ; `sanitizeProject` ne la borne pas, un fichier ouvert garde la sienne. Un compte garde 2 000 lignes, traces comprises (ce qui y est déjà se modifie encore). Limite de débit par compte sur `PUT /projets`, `PUT /atelier` et `POST /projets/lire`. La réponse n'a la forme `{ index, refus }` que si l'envoi porte `detail: true` : un onglet ouvert depuis avant lit un tableau.
+
+Côté page, `SyncState.refuses` garde la version refusée : elle sort de l'attente, ne bloque ni l'échange ni la déconnexion, reste sur l'appareil, et repart si elle change, ou une fois à chaque chargement de la page. `offline` ne dit que le réseau (`TypeError`) ; une réponse d'erreur du serveur, envoi entier ou profil de l'atelier, est dans `erreur`, dite telle quelle à l'écran.
+
 - **Première connexion** : les projets de l'appareil montent dans le compte.
-- **Déconnexion** : tout est envoyé, puis les projets du compte quittent l'appareil (refusée s'il reste des envois).
+- **Déconnexion** : tout est envoyé, puis les projets du compte quittent l'appareil (refusée s'il reste des envois ; un projet refusé n'en est pas un, et reste sur l'appareil).
 - **Session perdue** : les projets restent ; connexion à une autre adresse ensuite : ceux de l'ancien compte quittent l'appareil.
 - **Compte supprimé** : les projets restent sur l'appareil.
 
@@ -42,4 +46,4 @@ Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garde
 
 ## Compte à l'écran
 
-Dans l'en-tête (bouton et état de l'enregistrement) et l'onglet Mon compte de l'accueil (`AccountPanel`, `src/ui/account.ts`), avec la notice de confidentialité (responsable : Thomas Bouzy) et le bloc « Bientôt », qui annonce ce que l'abonnement apportera (nom et logo sur la fiche, devis, état du chantier, lien de visite, versions).
+Dans l'en-tête (bouton et état de l'enregistrement, qui nomme un escalier refusé) et l'onglet Mon compte de l'accueil (`AccountPanel`, `src/ui/account.ts`), avec la liste des refus et leur « Garder une copie », la notice de confidentialité (responsable : Thomas Bouzy) et le bloc « Bientôt », qui annonce ce que l'abonnement apportera (nom et logo sur la fiche, devis, état du chantier, lien de visite, versions).

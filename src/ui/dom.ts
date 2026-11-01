@@ -1,3 +1,5 @@
+import { fileBase, projectFile, type Project } from "../core/project";
+
 /** Élément par identifiant ; une absence est une erreur de gabarit, pas un cas à gérer. */
 export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -43,6 +45,11 @@ export function downloadBytes(data: Uint8Array<ArrayBuffer>, filename: string, t
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Fait télécharger la copie d'un escalier, en fichier .escalier. */
+export function downloadProject(p: Project): void {
+  downloadBytes(new TextEncoder().encode(projectFile(p)), `${fileBase(p.nom)}.escalier`, "application/json");
 }
 
 export const cssVar = (name: string): string =>

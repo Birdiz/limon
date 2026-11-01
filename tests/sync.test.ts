@@ -6,7 +6,7 @@ import { edited, newProject, parseProjectFile, projectFile, withEtat, type Proje
 import { AtelierStore } from "../src/ui/atelier";
 import { Api } from "../src/ui/api";
 import { LocalStore, type KeyValue } from "../src/ui/store";
-import { SyncStore } from "../src/ui/sync";
+import { lots, SyncStore } from "../src/ui/sync";
 import { browser, login, testServer, type TestServer } from "./server";
 
 /** Stockage d'un appareil. */
@@ -22,21 +22,27 @@ beforeAll(async () => {
 beforeEach(() => s.reset());
 
 /** Un appareil : son stockage, son navigateur (cookie), et un réseau qu'on peut couper. */
-function device() {
-  const storage = memory();
+function device(storage = memory()) {
   const f = browser(s);
   const atelier = new AtelierStore(storage);
   const d = {
     online: true,
     requests: 0,
+    /** Réponse d'erreur du serveur, à la place du serveur. */
+    panne: null as number | null,
+    /** Éléments de chaque envoi de projets. */
+    envois: [] as number[],
     storage,
     f,
     atelier,
     store: new SyncStore(
       new LocalStore(storage),
-      new Api(async (input, init) => {
+      new Api(async (input, init): Promise<Response> => {
         d.requests++;
         if (!d.online) throw new TypeError("Failed to fetch");
+        if (d.panne) return new Response("<html>", { status: d.panne });
+        if (init?.method === "PUT" && String(input).endsWith("projets"))
+          d.envois.push((JSON.parse(init.body as string) as { changements: unknown[] }).changements.length);
         return f(input, init);
       }),
       storage,
@@ -366,6 +372,221 @@ describe("synchronisation des projets", () => {
     await a.signIn("jean@exemple.fr");
     await a.store.signOut();
     expect(a.store.known()).toBe(true);
+  });
+});
+
+describe("refus du serveur à l'envoi", () => {
+  /** Compte connecté, avec un projet déjà en ligne et un autre qui attend de descendre. */
+  const connected = async () => {
+    const a = device();
+    const other = device();
+    await other.store.save(project("autre", "Sur l'autre appareil", 5));
+    await other.signIn("jean@exemple.fr");
+    await a.signIn("jean@exemple.fr");
+    return a;
+  };
+  /** Fichier .escalier relu, tel que l'accueil l'ouvre. */
+  const opened = (id: string, nom: string, modifie: number) => {
+    const r = parseProjectFile(projectFile({ ...newProject("x", nom, "complet", 1), modifie }), id);
+    if ("erreur" in r) throw new Error(r.erreur);
+    return r.projet;
+  };
+  const onServer = async () =>
+    (await s.db.query<{ id: string }>("select id from projets where not supprime order by id")).map((r) => r.id);
+
+  it.each([1e300, 1e19])("un fichier à une date de %d n'arrête pas les escaliers sains", async (date) => {
+    const a = await connected();
+    await a.store.save(project("sain", "Sain", 10));
+    await a.store.save(opened("abime", "Abîmé", date));
+    await a.store.save(project("sain2", "Sain 2", 10));
+    // Un second appareil a fait monter un escalier après la dernière descente.
+    const c = device();
+    await c.signIn("jean@exemple.fr");
+    await c.store.save(project("neuf", "Neuf", 11));
+    await c.store.sync();
+    await a.store.sync();
+
+    expect(await onServer()).toEqual(["autre", "neuf", "sain", "sain2"]);
+    expect(await a.names()).toEqual(["Abîmé", "Neuf", "Sain", "Sain 2", "Sur l'autre appareil"]);
+    const st = await a.store.status();
+    expect(st).toMatchObject({ offline: false, erreur: null, pending: 0 });
+    expect(st.refuses).toEqual([{ id: "abime", nom: "Abîmé", raison: expect.stringContaining("date") as string }]);
+
+    // La déconnexion est possible, et l'escalier refusé, qui n'est nulle part ailleurs, reste sur l'appareil.
+    await a.store.signOut();
+    expect(await a.names()).toEqual(["Abîmé"]);
+    expect((await a.store.status()).compte).toBeNull();
+  });
+
+  it("un nom avec un caractère NUL arrive sans lui", async () => {
+    const a = await connected();
+    await a.store.save(opened("nul", "Du\u0000pont", 10));
+    await a.store.sync();
+    expect(await onServer()).toEqual(["autre", "nul"]);
+    expect(await a.store.status()).toMatchObject({ offline: false, pending: 0, refuses: [] });
+    expect((await a.store.get("nul"))!.nom).toBe("Dupont");
+  });
+
+  it("une suppression à identifiant de plus de 100 caractères est nommée, sans attente sans fin", async () => {
+    const a = await connected();
+    const long = "x".repeat(101);
+    await a.store.remove(long);
+    await a.store.sync();
+    const st = await a.store.status();
+    expect(st).toMatchObject({ offline: false, pending: 0 });
+    expect(st.refuses).toEqual([{ id: long, nom: null, raison: expect.stringContaining("identifiant") as string }]);
+    await a.store.signOut();
+    expect((await a.store.status()).compte).toBeNull();
+  });
+
+  it("plus de 1 000 escaliers : tous arrivent, par lots de 500", async () => {
+    const storage = memory();
+    const list = Array.from({ length: 1201 }, (_, i) => project(`p${i}`, `P${i}`, 10));
+    storage.setItem("limon-projets", JSON.stringify(list));
+    const a = device(storage);
+    await a.signIn("jean@exemple.fr");
+    expect(a.envois).toEqual([500, 500, 201]);
+    expect(await onServer()).toHaveLength(1201);
+    expect(await a.store.status()).toMatchObject({ pending: 0, offline: false, refuses: [] });
+  }, 60_000);
+
+  it("les lots tiennent aussi dans ce que le serveur accepte", () => {
+    const gros = (id: string) => ({ id, projet: { ...project(id, "x".repeat(1 << 20), 1) } });
+    const sizes = lots(["a", "b", "c", "d"].map(gros)).map((l) => l.length);
+    expect(sizes).toEqual([2, 2]);
+    expect(lots([])).toEqual([]);
+  });
+
+  it("un escalier trop gros pour le serveur est refusé seul, les autres partent", async () => {
+    const a = await connected();
+    await a.store.save(project("sain", "Sain", 10));
+    await a.store.save(project("gros", "x".repeat(5 << 20), 10));
+    await a.store.save(project("sain2", "Sain 2", 10));
+    await a.store.sync();
+    expect(await onServer()).toEqual(["autre", "sain", "sain2"]);
+    const st = await a.store.status();
+    expect(st).toMatchObject({ offline: false, erreur: null, pending: 0 });
+    expect(st.refuses.map((r) => r.id)).toEqual(["gros"]);
+  });
+
+  it("une vraie coupure reste une coupure, le projet reste à envoyer", async () => {
+    const a = await connected();
+    a.online = false;
+    await a.store.save(project("p", "Dupont", 10));
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ offline: true, erreur: null, pending: 1, refuses: [] });
+    await expect(a.store.signOut()).rejects.toThrow("réseau");
+    a.online = true;
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ offline: false, erreur: null, pending: 0 });
+    expect(await onServer()).toEqual(["autre", "p"]);
+  });
+
+  it("un serveur en panne n'est pas une coupure : l'écran dit ses mots, le projet reste à envoyer", async () => {
+    const a = await connected();
+    a.panne = 503;
+    await a.store.save(project("p", "Dupont", 10));
+    await a.store.sync();
+    const st = await a.store.status();
+    expect(st).toMatchObject({ offline: false, pending: 1 });
+    expect(st.erreur).toContain("Le serveur ne répond pas");
+    await expect(a.store.signOut()).rejects.toThrow("Le serveur ne répond pas");
+    a.panne = null;
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ offline: false, erreur: null, pending: 0 });
+  });
+
+  it("un profil de l'atelier refusé n'arrête pas les escaliers", async () => {
+    const a = await connected();
+    a.atelier.set({ defauts: atelierDefauts(DEFAULTS) }, 1e300);
+    await a.store.save(project("p", "Dupont", 10));
+    await a.store.sync();
+    expect(await onServer()).toEqual(["autre", "p"]);
+    const st = await a.store.status();
+    expect(st).toMatchObject({ offline: false, pending: 0 });
+    expect(st.erreur).toContain("profil de l'atelier");
+    await a.store.signOut();
+  });
+
+  it("une autre version d'un escalier refusé repart", async () => {
+    const a = await connected();
+    const refused = opened("p", "Dupont", 1000.5);
+    await a.store.save(refused);
+    await a.store.sync();
+    expect((await a.store.status()).refuses).toHaveLength(1);
+    // La modification suivante lui donne une date valable.
+    await a.store.save(edited(refused, { ...refused.params, H: refused.params.H + 10 }, Date.now()));
+    expect(await a.store.status()).toMatchObject({ pending: 1, refuses: [] });
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ pending: 0, refuses: [] });
+    expect(await onServer()).toEqual(["autre", "p"]);
+  });
+
+  it("modifié, un escalier trop loin dans le futur reste refusé et nommé", async () => {
+    const a = await connected();
+    const refused = project("p", "Dupont", Date.now() + 800 * 86_400_000);
+    await a.store.save(refused);
+    await a.store.sync();
+    await a.store.save(edited(refused, { ...refused.params, H: refused.params.H + 10 }, Date.now()));
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ pending: 0, offline: false });
+    expect((await a.store.status()).refuses.map((r) => r.nom)).toEqual(["Dupont"]);
+    expect(await onServer()).toEqual(["autre"]);
+  });
+
+  it("un refus ne repart pas à chaque échange, mais une fois au chargement suivant", async () => {
+    const a = await connected();
+    await a.store.save(project("p", "Dupont", Date.now() + 800 * 86_400_000));
+    await a.store.sync();
+    expect(a.envois).toHaveLength(1);
+    await a.store.sync();
+    expect(a.envois).toHaveLength(1);
+
+    // Page rechargée : l'état du refus est encore là, l'envoi repart une fois.
+    let puts = 0;
+    const reloaded = new SyncStore(
+      new LocalStore(a.storage),
+      new Api(async (input, init) => {
+        if (init?.method === "PUT") puts++;
+        return a.f(input, init);
+      }),
+      a.storage,
+    );
+    expect((await reloaded.status()).refuses).toHaveLength(1);
+    await reloaded.sync();
+    expect(puts).toBe(1);
+    await reloaded.sync();
+    expect(puts).toBe(1);
+    expect(await reloaded.status()).toMatchObject({ pending: 0, offline: false });
+    expect((await reloaded.status()).refuses).toHaveLength(1);
+  });
+
+  it("un escalier refusé qu'on supprime ne laisse pas de suppression à envoyer", async () => {
+    const a = await connected();
+    await a.store.save(project("p", "Dupont", 1e300));
+    await a.store.sync();
+    await a.store.remove("p");
+    expect(await a.store.status()).toMatchObject({ pending: 0, refuses: [] });
+    await a.store.sync();
+    expect(await s.db.query("select id from projets where id = 'p'")).toEqual([]);
+  });
+
+  it("le plafond du compte refuse les escaliers en trop, le reste fonctionne", async () => {
+    const a = await connected();
+    const [row] = await s.db.query<{ compte: string }>("select compte from projets");
+    await s.db.query(
+      `insert into projets (compte, id, modifie, supprime, donnees)
+       select $1::uuid, 'plein' || i, 1, true, null from generate_series(1, 1999) i`,
+      [row!.compte],
+    );
+    await a.store.save(project("autre", "Modifié", 50));
+    await a.store.save(project("trop", "De trop", 50));
+    await a.store.sync();
+    const st = await a.store.status();
+    expect(st).toMatchObject({ offline: false, erreur: null, pending: 0 });
+    expect(st.refuses).toEqual([{ id: "trop", nom: "De trop", raison: expect.stringContaining("2000") as string }]);
+    const [autre] = await s.db.query<{ nom: string }>("select donnees->>'nom' as nom from projets where id = 'autre'");
+    expect(autre!.nom).toBe("Modifié");
   });
 });
 

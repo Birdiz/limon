@@ -1,10 +1,10 @@
 import type { Params } from "../core/params";
 import { planShapes, type PlanShape } from "../core/plan-shapes";
-import { fileBase, newProject, parseProjectFile, projectFile, type Mode, type Project } from "../core/project";
+import { newProject, parseProjectFile, type Mode, type Project } from "../core/project";
 import { compute } from "../core/stair";
 import { COTE_LABEL, FORME_LABEL } from "../core/summary";
 import type { Pt } from "../core/vec";
-import { byId, downloadBytes, esc, flash } from "./dom";
+import { byId, downloadProject, esc, flash } from "./dom";
 import { newId, type ProjectStore } from "./store";
 
 const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
@@ -260,7 +260,7 @@ export class Home {
   private exportCurrent(): void {
     const p = this.host.current();
     if (!p) return;
-    downloadBytes(new TextEncoder().encode(projectFile(p)), `${fileBase(p.nom)}.escalier`, "application/json");
+    downloadProject(p);
     flash(this.msg, "Copie enregistrée");
   }
 }
