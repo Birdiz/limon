@@ -1,5 +1,10 @@
 import { V, type Pt } from "./vec";
 
+/** Échappée visée. */
+export const ECHAPPEE = 2000;
+/** Échappée en dessous de laquelle l'escalier est hors norme. */
+export const ECHAPPEE_MIN = 1900;
+
 /** Hauteur libre la plus faible sous le plancher, et où elle se trouve. */
 export interface Headroom {
   /** Hauteur libre. */
