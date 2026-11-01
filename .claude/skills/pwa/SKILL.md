@@ -11,6 +11,7 @@ description: Application installable et hors ligne, service worker (src/sw.js), 
 - **Mises à jour** : silencieuses, sans bandeau, les artisans ne rechargeraient pas. La nouvelle version attend, prend la main quand la page passe en arrière-plan (ou dès le lancement si elle attendait déjà), puis la page se recharge après avoir enregistré la saisie en cours.
 - **Installation** : bouton « Installer » dans Mes escaliers (`beforeinstallprompt`), aide Partager → écran d'accueil sur iPhone.
 - **Portée** : le service worker reste à la racine (`/sw.js`, portée `/`, celle des installations d'avant /app/) et sert `app/index.html` à toute adresse sous `/app/`, `index.html` à `/`. Le manifeste garde son `id` et démarre sur `app/`.
+- **En-têtes en cache** : les pages gardées en cache gardent les en-têtes reçus à l'installation, politique de sécurité comprise. Une politique changée n'arrive sur les appareils qu'avec une nouvelle `VERSION` : le changement du seul serveur (`server/static.ts`) n'en crée pas, modifier aussi `src/sw.js`.
 - **Essai** : service worker enregistré en production seulement, donc `npm run build` puis `npm run start:local`.
 
 ## Anciennes adresses
