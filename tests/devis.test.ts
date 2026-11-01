@@ -98,6 +98,28 @@ describe("devis chiffré", () => {
     expect(d.totalTTC).toBe(Math.round((d.totalHT + d.tva[0]!.montant + d.tva[1]!.montant) * 100) / 100);
   });
 
+  it("tombe juste à la calculatrice, sur une ligne libre comme sur une ligne corrigée", () => {
+    const libre = { designation: "Reprise de plancher", q: 0.19, unite: "m²", pu: 179.5, tva: 20 };
+    const d = devis(Q, T, { ...S, libres: [libre], corrections: { finition: { q: 0.19, pu: 179.5 } } });
+    expect(total(d, "libre-1")).toBe(34.11);
+    expect(total(d, "finition")).toBe(34.11);
+  });
+
+  it("donne des totaux à zéro, jamais NaN, quand toutes les lignes chiffrées sont à 0 € sur deux taux", () => {
+    const libres = [
+      { designation: "Offert", q: 1, unite: "forfait", pu: 0, tva: 20 },
+      { designation: "Offert aussi", q: 1, unite: "forfait", pu: 0, tva: 10 },
+    ];
+    for (const remise of [null, { pct: 10 }, { eur: 50 }]) {
+      const d = devis(Q, TARIFS_VIDES, { ...S, libres, remise, acompte: 30 });
+      expect(d.tva).toEqual([
+        { taux: 20, base: 0, montant: 0 },
+        { taux: 10, base: 0, montant: 0 },
+      ]);
+      expect([d.totalLignes, d.remise, d.totalHT, d.totalTTC, d.acompte]).toEqual([0, 0, 0, 0, 0]);
+    }
+  });
+
   it("laisse à compléter les lignes dont le tarif est vide, sans les compter", () => {
     const d = devis(Q, TARIFS_VIDES, S);
     expect(d.lignes.every((l) => l.total === null)).toBe(true);
