@@ -1,0 +1,65 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Un nouveau push remplace les essais en cours de sa PR ; sur main, chaque commit va au bout.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: npm test
+      # Les fiches PDF de référence manquantes sont réécrites par les tests, qui passent alors sans rien comparer.
+      - name: Références inchangées
+        run: |
+          changed="$(git status --porcelain -- tests/__snapshots__)"
+          if [ -n "$changed" ]; then
+            echo "$changed"
+            echo "::error::Les tests ont créé ou modifié des fichiers de référence : les régénérer et les committer."
+            exit 1
+          fi
+
+  dxf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/requirements.txt
+      - run: python -m venv .venv && .venv/bin/pip install -r tools/requirements.txt
+      - run: npm run check:dxf
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: npm run build
+      # Ce que Railway lance et interroge, avec la base en mémoire, puis les pages du site.
+      - name: Démarrage du serveur
+        run: |
+          node dist-server/main.js --local > "$RUNNER_TEMP/serveur.log" 2>&1 &
+          serveur=$!
+          trap 'kill "$serveur"; cat "$RUNNER_TEMP/serveur.log"' EXIT
+          curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 http://localhost:3000/api/sante
+          echo
+          for page in / /app/ /mentions-legales/ /sw.js; do
+            curl --fail --silent --show-error --output /dev/null --write-out "$page %{http_code}\n" "http://localhost:3000$page"
+          done

@@ -58,7 +58,7 @@ Puis ouvrir http://localhost:5173 (page publique) ou http://localhost:5173/app/ 
 
 | Commande              | Rôle                                                     |
 | --------------------- | -------------------------------------------------------- |
-| `npm run check`       | types, lint, mise en forme et tests (ce que lance la CI) |
+| `npm run check`       | types, lint, mise en forme et tests, avant chaque commit |
 | `npm test`            | tests seuls ; `npm run test:watch` pour les relancer     |
 | `npm run format`      | met en forme avec Prettier                               |
 | `npm run build`       | site dans `dist/`, serveur dans `dist-server/`           |

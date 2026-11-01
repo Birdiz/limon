@@ -1,0 +1,43 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  qualite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - id: setup
+        uses: ./.github/actions/setup
+      # Les trois contrôles vont au bout même si l'un échoue, pour tout voir d'un coup.
+      - name: Types
+        run: npm run typecheck
+      - name: ESLint
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: npm run lint
+      - name: Prettier
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: npm run format:check
+
+  # Pas exigé pour fusionner : une faille publiée ailleurs ne doit pas bloquer une PR sans rapport.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Failles des dépendances en ligne
+        run: npm audit --omit=dev --audit-level=high
