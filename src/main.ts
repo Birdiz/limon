@@ -49,7 +49,8 @@ const leaving = leaveOldHost(store);
 // Lus avant le premier calcul, qui réécrit l'adresse.
 const moved = takeMoved();
 const sharedAtStart = paramsFromHash(moved ? moved.lien : location.hash);
-/** Boutons de la page publique : « Calculer mon escalier » (?nouveau), « Voir un exemple » (?exemple). */
+/** Boutons de la page publique : « Calculer mon escalier » (?nouveau), « Voir un exemple » (?exemple),
+    « Mes escaliers » (?accueil). */
 const asked = new URLSearchParams(location.search);
 if (asked.size) history.replaceState(null, "", location.pathname + location.hash);
 let project: Project | null = null;
@@ -551,6 +552,7 @@ void (async () => {
   if (sharedAtStart) await openShared(sharedAtStart);
   else if (asked.has("exemple")) await example();
   else if (asked.has("nouveau")) await startNew();
+  else if (asked.has("accueil")) await home.show();
   store.start();
 })();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.
