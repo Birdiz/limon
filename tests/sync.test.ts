@@ -200,7 +200,7 @@ describe("synchronisation des projets", () => {
       const a = device();
       await a.signIn("jean@exemple.fr");
       const futur = { ...newProject("x", "Importé", "complet", t), modifie: t + 365 * 24 * HEURE };
-      const importe = parseProjectFile(projectFile(futur), "p") as Project;
+      const importe = (parseProjectFile(projectFile(futur), "p") as { projet: Project }).projet;
       await a.store.save(importe);
       await a.store.sync();
 
