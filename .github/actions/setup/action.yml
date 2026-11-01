@@ -1,0 +1,12 @@
+name: Préparer le projet
+description: Node 24 et dépendances du dépôt (à lancer après actions/checkout).
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        cache: npm
+    - run: npm ci --no-audit --no-fund
+      shell: bash
