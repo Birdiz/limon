@@ -16,7 +16,7 @@ import {
   type Saisie,
 } from "../src/core/devis";
 import { DEFAULTS } from "../src/core/params";
-import { newProject, parseProjectFile, projectFile, withDevis, type Project } from "../src/core/project";
+import { newProject, parseProjectFile, projectFile, withDevis } from "../src/core/project";
 import { compute } from "../src/core/stair";
 import { ENTREPRISE_VIDE, TARIFS_VIDES, type Entreprise, type Tarifs } from "../src/core/tarifs";
 import { TVA_REDUITE, devisPDF, type DevisPdf } from "../src/pdf/devis";
@@ -129,7 +129,7 @@ describe("versions remises", () => {
 
   it("suivent l'escalier dans le fichier et se relisent sans rien garder de faux", () => {
     const p = withDevis(newProject("a", "Escalier Dupont", "complet", 1), d1, 5);
-    expect((parseProjectFile(projectFile(p), "b") as Project).devis).toEqual(d1);
+    expect(parseProjectFile(projectFile(p), "b")).toMatchObject({ projet: { devis: d1 } });
     const bad = sanitizeDevis({
       ...JSON.parse(JSON.stringify(d1)),
       rouvert: "oui",

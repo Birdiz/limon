@@ -14,6 +14,11 @@ import {
 } from "../src/core/project";
 import { compute, type ComputeResult } from "../src/core/stair";
 
+const PAS_UN_PROJET = "Ce fichier n'est pas un projet Quart de tour.";
+const ABIME = "Ce fichier est abîmé : les cotes de l'escalier ne s'y lisent pas.";
+/** Fichier de projet écrit à la main, version 1 sauf si elle est donnée. */
+const fichier = (champs: object) => JSON.stringify({ format: "limon-projet", version: 1, ...champs }, null, 2);
+
 describe("projets", () => {
   const p = newProject("a1", "  Escalier Dupont ", "guide", 1000, { ...DEFAULTS, forme: "droit", H: 2800 });
 
@@ -60,7 +65,7 @@ describe("projets", () => {
     expect(sanitizeProject({ id: "c" })).toMatchObject({ etat: "brouillon", finiLe: 0 });
     expect(sanitizeProject({ id: "c", etat: "posé", finiLe: 9 })).toMatchObject({ etat: "brouillon", finiLe: 0 });
     expect(sanitizeProject({ id: "c", etat: "fini", finiLe: 9 })).toMatchObject({ etat: "fini", finiLe: 9 });
-    expect(parseProjectFile(projectFile(f), "z")).toMatchObject({ etat: "fini", finiLe: 5000 });
+    expect(parseProjectFile(projectFile(f), "z")).toMatchObject({ projet: { etat: "fini", finiLe: 5000 } });
   });
 
   it("ne change rien tant que les réglages sont les mêmes", () => {
@@ -93,17 +98,74 @@ describe("projets", () => {
 
   it("relit son fichier .escalier sous un nouvel identifiant", () => {
     const back = parseProjectFile(projectFile(p), "z9");
-    expect(back).toEqual({ ...p, id: "z9" });
+    expect(back).toEqual({ projet: { ...p, id: "z9" }, ignores: [] });
     expect(projectFile(p)).not.toContain("a1");
   });
 
+  it("relit sans rien signaler un fichier d'avant les derniers réglages", () => {
+    const { J, tournant, mp, ...anciens } = p.params;
+    const back = parseProjectFile(fichier({ projet: { nom: "Ancien", params: anciens } }), "z");
+    expect(back).toMatchObject({ projet: { nom: "Ancien", params: { H: 2800 } }, ignores: [] });
+    expect(back).toMatchObject({ projet: { params: { J, tournant, mp } } });
+  });
+
   it("refuse un fichier qui n'est pas un projet", () => {
-    expect(parseProjectFile("pas du json", "x")).toEqual({ erreur: "Ce fichier n'est pas un projet Quart de tour." });
-    expect(parseProjectFile('{"format":"autre"}', "x")).toEqual({
-      erreur: "Ce fichier n'est pas un projet Quart de tour.",
-    });
+    expect(parseProjectFile("pas du json", "x")).toEqual({ erreur: PAS_UN_PROJET });
+    expect(parseProjectFile('{"format":"autre"}', "x")).toEqual({ erreur: PAS_UN_PROJET });
+    expect(parseProjectFile("null", "x")).toEqual({ erreur: PAS_UN_PROJET });
     expect(parseProjectFile('{"format":"limon-projet","version":9,"projet":{}}', "x")).toEqual({
       erreur: "Ce projet vient d'une version plus récente de Quart de tour.",
+    });
+  });
+
+  it("refuse un fichier tronqué", () => {
+    const text = projectFile(p);
+    expect(parseProjectFile(text.slice(0, text.length / 2), "x")).toEqual({ erreur: PAS_UN_PROJET });
+  });
+
+  it("refuse un fichier sans cotes, au lieu d'ouvrir celles de l'exemple", () => {
+    const sain = { nom: "Dupont", params: p.params };
+    const abimes = [
+      { projet: { nom: "Dupont" } },
+      { projet: { nom: "Dupont", params: null } },
+      { projet: { nom: "Dupont", params: [] } },
+      { projet: { nom: "Dupont", params: "H=2800" } },
+      { projet: { nom: "Dupont", params: {} } },
+      { projet: { nom: "Dupont", params: { H: "2800", W: null } } },
+      { projet: null },
+      { projet: [] },
+      { projet: [sain] },
+      { projet: "Dupont" },
+      { projet: sain, version: -1 },
+      { projet: sain, version: 0 },
+      { projet: sain, version: 0.5 },
+      { projet: sain, version: "1" },
+      { projet: sain, version: null },
+    ];
+    for (const a of abimes) expect(parseProjectFile(fichier(a), "x"), JSON.stringify(a)).toEqual({ erreur: ABIME });
+    expect(parseProjectFile(`{"format":"limon-projet","projet":${JSON.stringify(sain)}}`, "x")).toEqual({
+      erreur: ABIME,
+    });
+  });
+
+  it("nomme les cotes illisibles au lieu de les remplacer sans mot", () => {
+    const back = parseProjectFile(fichier({ projet: { nom: "Dupont", params: { ...p.params, H: "2800" } } }), "z");
+    expect(back).toMatchObject({ projet: { params: { H: DEFAULTS.H, W: p.params.W } }, ignores: ["H"] });
+    // null : ce que JSON écrit pour un nombre perdu ; 1e999 : un nombre qui ne tient plus ; une clé déformée.
+    const q = { ...p.params, W: null, forme: "spirale", cm: "oui", el: Infinity, Hh: 2800 };
+    expect(
+      parseProjectFile(fichier({ projet: { params: q } }).replace('"el": null', '"el": 1e999'), "z"),
+    ).toMatchObject({
+      ignores: ["forme", "W", "cm", "el", "Hh"],
+    });
+  });
+
+  it("repasse en brouillon un escalier terminé dont une cote est illisible", () => {
+    const f = withEtat(p, "fini", 5000);
+    const projet = { ...JSON.parse(projectFile(f)).projet, params: { ...p.params, H: "2800" } };
+    expect(parseProjectFile(fichier({ projet }), "z")).toMatchObject({
+      projet: { etat: "brouillon", finiLe: 0 },
+      ignores: ["H"],
     });
   });
 

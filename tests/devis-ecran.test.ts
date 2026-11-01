@@ -96,7 +96,7 @@ describe("devis enregistré avec l'escalier", () => {
     const p = withDevis(newProject("a", "Escalier Dupont", "complet", 1), d, 5);
     expect(p.modifie).toBe(5);
     expect(sanitizeProject(JSON.parse(JSON.stringify(p)))!.devis).toEqual(d);
-    expect((parseProjectFile(projectFile(p), "b") as Project).devis).toEqual(d);
+    expect(parseProjectFile(projectFile(p), "b")).toMatchObject({ projet: { devis: d } });
     expect(sanitizeProject({ id: "x" })!.devis).toBeNull();
   });
 });

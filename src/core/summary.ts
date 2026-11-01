@@ -27,6 +27,56 @@ export const GC_LABEL: Record<GardeCorps, string> = {
 };
 export const POSE_LABEL: Record<Pose, string> = { chant: "dans le chant", anglaise: "à l'anglaise" };
 
+/** Nom d'un réglage pour l'artisan, comme à l'écran ; la trémie change de côté selon la forme. */
+export const COTE_LABEL: Record<keyof Params, string> = {
+  forme: "Forme",
+  H: "Hauteur à monter",
+  L: "Reculement",
+  A: "Longueur côté départ",
+  B: "Longueur côté arrivée",
+  C: "Longueur côté fond",
+  J: "Jour",
+  W: "Emmarchement",
+  fAuto: "Ligne de foulée automatique",
+  f: "Ligne de foulée",
+  nAuto: "Nombre de hauteurs automatique",
+  n: "Nombre de hauteurs",
+  mb: "Marches balancées",
+  prog: "Progressivité",
+  tournant: "Passage du tournant",
+  ess: "Essence",
+  et: "Épaisseur de marche",
+  deb: "Débord de nez",
+  rn: "Rayon du nez",
+  cm: "Contremarches",
+  ecm: "Épaisseur de contremarche",
+  el: "Épaisseur de limon",
+  hl: "Hauteur de limon",
+  hljAuto: "Hauteur du limon de jour automatique",
+  hlj: "Hauteur du limon de jour",
+  tAuto: "Trémie à calculer",
+  ps: "Section du poteau",
+  gc: "Côté jour",
+  gcPose: "Pose sur le limon",
+  mcL: "Largeur de main courante",
+  mcH: "Hauteur de main courante",
+  bs: "Section des balustres",
+  tL: "Longueur de trémie",
+  tX: "Trémie côté arrivée ou fond",
+  tY: "Trémie côté départ ou arrivée",
+  tForme: "Forme de la trémie",
+  tbD: "Branche de trémie côté départ",
+  tbA: "Branche de trémie côté arrivée",
+  mp: "Marche palière",
+  mpP: "Profondeur de marche palière",
+  mpE: "Épaisseur de marche palière",
+  ep: "Épaisseur du plancher",
+  enc: "Encastrement",
+  jeu: "Jeu d'assemblage",
+  pL: "Longueur des plateaux",
+  pW: "Largeur des plateaux",
+};
+
 /** Sections de réglage, dans l'ordre du pas à pas. */
 export const SECTIONS = ["forme", "dimensions", "tremie", "marches", "bois", "gardecorps"] as const;
 export type Section = (typeof SECTIONS)[number];

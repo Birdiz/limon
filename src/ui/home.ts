@@ -2,7 +2,7 @@ import type { Params } from "../core/params";
 import { planShapes, type PlanShape } from "../core/plan-shapes";
 import { fileBase, newProject, parseProjectFile, projectFile, type Mode, type Project } from "../core/project";
 import { compute } from "../core/stair";
-import { FORME_LABEL } from "../core/summary";
+import { COTE_LABEL, FORME_LABEL } from "../core/summary";
 import type { Pt } from "../core/vec";
 import { byId, downloadBytes, esc, flash } from "./dom";
 import { newId, type ProjectStore } from "./store";
@@ -31,6 +31,14 @@ export interface HomeHost {
   known(): boolean;
   /** L'onglet Compte s'affiche. */
   account(): void;
+}
+
+/** Ce que l'artisan doit reprendre sur un escalier importé dont des cotes ne se lisent pas. Une clé inconnue reste telle
+    qu'elle est écrite dans le fichier. */
+function ignoresMsg(nom: string, ignores: string[]): string {
+  const noms = ignores.map((k) => (Object.hasOwn(COTE_LABEL, k) ? COTE_LABEL[k as keyof Params] : k)).join(", ");
+  const [debut, suite] = ignores.length > 1 ? ["Cotes illisibles", "Remises"] : ["Cote illisible", "Remise"];
+  return `${debut} dans « ${nom} » : ${noms}. ${suite} à l'exemple : à reprendre avant de couper.`;
 }
 
 /** Vignette du plan : limons, marches et ligne de foulée, sans les cotes. */
@@ -237,8 +245,16 @@ export class Home {
       flash(this.msg, r.erreur, true);
       return;
     }
-    await this.store.save(r);
-    this.openProject(r);
+    await this.store.save(r.projet);
+    if (!r.ignores.length) {
+      this.openProject(r.projet);
+      return;
+    }
+    // L'accueil reste affiché : ouvrir l'escalier cacherait le message.
+    await this.refresh();
+    flash(this.msg, ignoresMsg(r.projet.nom, r.ignores), true, 60000);
+    // La carte ajoutée le pousse vers le bas, parfois hors de l'écran.
+    this.msg.scrollIntoView({ block: "center" });
   }
 
   private exportCurrent(): void {

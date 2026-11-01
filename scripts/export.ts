@@ -33,7 +33,12 @@ function readParams(file: string): unknown {
     console.error(`${file} : ${p.erreur}`);
     process.exit(1);
   }
-  return p.params;
+  // Des pièces pour la machine : rien ne se taille sur une cote remplacée par celle de l'exemple.
+  if (p.ignores.length) {
+    console.error(`${file} : cotes illisibles : ${p.ignores.join(", ")}.`);
+    process.exit(1);
+  }
+  return p.projet.params;
 }
 
 const base = values.params ? readParams(values.params) : {};

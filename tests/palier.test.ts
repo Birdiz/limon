@@ -274,7 +274,7 @@ describe("nouveaux réglages", () => {
 
   it("passent par le fichier .escalier", () => {
     const pj = newProject("a", "Palier", "complet", 1, p);
-    expect(parseProjectFile(projectFile(pj), "b")).toEqual({ ...pj, id: "b" });
+    expect(parseProjectFile(projectFile(pj), "b")).toEqual({ projet: { ...pj, id: "b" }, ignores: [] });
     expect(fileBase(pj.nom)).toBe("Palier");
   });
 

@@ -72,20 +72,36 @@ export function projectFile(p: Project): string {
   );
 }
 
-/** Relit un fichier .escalier ou .limon ; le projet reçoit l'identifiant donné (un import est toujours un nouveau projet). */
-export function parseProjectFile(text: string, id: string): Project | { erreur: string } {
+const PAS_UN_PROJET = "Ce fichier n'est pas un projet Quart de tour.";
+const ABIME = "Ce fichier est abîmé : les cotes de l'escalier ne s'y lisent pas.";
+
+const isObjet = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
+/** Relit un fichier .escalier ou .limon ; le projet reçoit l'identifiant donné (un import est toujours un nouveau projet).
+    `ignores` : les clés du fichier que `sanitizeParams` n'a pas reprises, remplacées par l'exemple. Une clé absente
+    n'y figure pas : les fichiers d'avant un réglage ne l'ont pas. Sans aucune cote reprise, le fichier est refusé. */
+export function parseProjectFile(
+  text: string,
+  id: string,
+): { projet: Project; ignores: string[] } | { erreur: string } {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    return { erreur: "Ce fichier n'est pas un projet Quart de tour." };
+    return { erreur: PAS_UN_PROJET };
   }
   const r = raw as Record<string, unknown> | null;
-  if (!r || r.format !== FORMAT || typeof r.projet !== "object")
-    return { erreur: "Ce fichier n'est pas un projet Quart de tour." };
-  if (typeof r.version !== "number" || r.version > VERSION)
+  if (!r || r.format !== FORMAT) return { erreur: PAS_UN_PROJET };
+  if (!Number.isInteger(r.version) || (r.version as number) < 1) return { erreur: ABIME };
+  if ((r.version as number) > VERSION)
     return { erreur: "Ce projet vient d'une version plus récente de Quart de tour." };
-  return sanitizeProject({ ...(r.projet as object), id })!;
+  if (!isObjet(r.projet) || !isObjet(r.projet.params)) return { erreur: ABIME };
+  const lus = r.projet.params;
+  const p = sanitizeProject({ ...r.projet, id })!;
+  const ignores = Object.keys(lus).filter((k) => p.params[k as keyof Params] !== lus[k]);
+  if (ignores.length === Object.keys(lus).length) return { erreur: ABIME };
+  // Une cote remplacée : la fiche ne peut plus passer pour celle qui a été validée.
+  return { projet: ignores.length ? { ...p, etat: "brouillon", finiLe: 0 } : p, ignores };
 }
 
 /** Nom de fichier sans caractères interdits sous Windows ou macOS. */
