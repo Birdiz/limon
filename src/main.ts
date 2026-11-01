@@ -24,7 +24,7 @@ import {
   withEtat,
   type Project,
 } from "./core/project";
-import { linkOpensNew, paramsFromHash, paramsToHash } from "./core/share";
+import { linkOpensNew, paramsFromHash, paramsToHash, sameLink } from "./core/share";
 import { treadsCSV } from "./core/sheet";
 import { fichePDF } from "./pdf/fiche";
 import { compute, turnLengths, type ComputeResult, type Stair } from "./core/stair";
@@ -46,7 +46,7 @@ import { Api } from "./ui/api";
 import { startPWA } from "./ui/pwa";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
-import { leaveOldHost, storeMoved, takeMoved } from "./ui/move";
+import { leaveOldHost } from "./ui/move";
 import { LocalStore, browserStorage, newId } from "./ui/store";
 import { SyncStore } from "./ui/sync";
 import { Tabs } from "./ui/tabs";
@@ -55,15 +55,16 @@ import { Undo } from "./ui/undo";
 const api = new Api();
 const atelier = new AtelierStore();
 const store = new SyncStore(new LocalStore(), api, browserStorage(), atelier);
-const leaving = leaveOldHost(store);
-// Lus avant le premier calcul, qui réécrit l'adresse.
-const moved = takeMoved();
-const sharedAtStart = paramsFromHash(moved ? moved.lien : location.hash);
+const leaving = leaveOldHost();
+// Lu avant le premier calcul, qui réécrit l'adresse.
+const sharedAtStart = paramsFromHash(location.hash);
 /** Boutons de la page publique : « Calculer mon escalier » (?nouveau), « Voir un exemple » (?exemple),
     « Mes escaliers » (?accueil). */
 const asked = new URLSearchParams(location.search);
 if (asked.size) history.replaceState(null, "", location.pathname + location.hash);
 let project: Project | null = null;
+/** Identifiant de l'escalier reçu par lien, à l'écran mais ni enregistré ni envoyé au compte tant que l'artisan n'y a pas touché. */
+let received: string | null = null;
 let params: Params = { ...DEFAULTS };
 let current: ComputeResult | null = null;
 let cnc: CNC | null = null;
@@ -79,7 +80,7 @@ const devisView = new DevisView({
   saved: (d) => {
     if (!project) return;
     project = withDevis(project, d, Date.now());
-    void store.save(project);
+    saveProject();
     devisView.refresh();
   },
   openTarifs: () => void home.show("atelier"),
@@ -96,6 +97,20 @@ const devisView = new DevisView({
   },
   download: (data, filename) => downloadBytes(data, filename, "application/pdf"),
 });
+
+/** Enregistre l'escalier ouvert après un geste de l'artisan ; le premier garde l'escalier reçu par lien. */
+function saveProject(): void {
+  if (!project) return;
+  if (project.id === received) {
+    received = null;
+    byId("recu").hidden = true;
+    void store.setCurrent(project.id);
+  }
+  void store.save(project);
+}
+const keepReceived = () => {
+  if (project?.id === received) saveProject();
+};
 
 function render(result: ComputeResult): void {
   const errHTML = (e: string) => `<div class="errbox">${e}</div>`;
@@ -154,7 +169,8 @@ function update(): void {
       if (changed.etat !== project.etat)
         flash(byId("etatMsg"), "Modifié : l'escalier repasse en brouillon", false, 6000);
       project = changed;
-      void store.save(project);
+      // Sans geste de l'artisan, un écart de relecture des champs n'enregistre pas un escalier reçu par lien.
+      if (project.id !== received) void store.save(project);
       showEtat();
     }
   }
@@ -185,6 +201,7 @@ function schedule(): void {
 
 /** Réglages changés d'un coup (correction d'une note, retour à l'exemple, annuler) : la saisie en attente passe avant. */
 function setParams(p: Params): void {
+  keepReceived();
   if (queued) update();
   undo.touched(null);
   params = p;
@@ -237,7 +254,7 @@ byId("etatBtn").addEventListener("click", () => {
   )
     return;
   project = withEtat(project, fini ? "brouillon" : "fini", Date.now());
-  void store.save(project);
+  saveProject();
   showEtat();
   flash(byId("etatMsg"), fini ? "Repassé en brouillon" : "Terminé : la fiche ne porte plus la mention brouillon");
 });
@@ -247,6 +264,7 @@ function showProject(p: Project | null): void {
   // Le bouton « Reprendre » de Mon atelier suit la présence d'un escalier ; recharger ce panneau effacerait sa saisie.
   const reprendre = !p !== !project;
   project = p;
+  byId("recu").hidden = !p || p.id !== received;
   params = p ? { ...p.params } : { ...DEFAULTS };
   byId<HTMLInputElement>("pjName").value = p?.nom ?? "";
   writeInputs(params);
@@ -271,7 +289,7 @@ function openProject(p: Project | null): void {
 const steps = new Steps((mode, etape) => {
   if (!project) return;
   project = { ...project, mode, etape, modifie: stamped(project, Date.now()) };
-  void store.save(project);
+  saveProject();
 });
 
 /** Ouvre ou replie l'export CNC. */
@@ -433,7 +451,7 @@ byId<HTMLInputElement>("pjName").addEventListener("change", (e) => {
   if (!project) return;
   project = { ...project, nom: el.value.trim() || NOM_PAR_DEFAUT, modifie: stamped(project, Date.now()) };
   el.value = project.nom;
-  void store.save(project);
+  saveProject();
 });
 // Avant un rechargement silencieux : la saisie en cours (nom du projet, réglage) est enregistrée.
 startPWA(() => {
@@ -443,6 +461,7 @@ startPWA(() => {
 
 /* ---------- Événements ---------- */
 const onEdit = (e: Event) => {
+  keepReceived();
   undo.touched(e.target);
   schedule();
 };
@@ -470,9 +489,20 @@ byId("notes").addEventListener("click", (ev) => {
   if (!fix) return;
   setParams({ ...params, ...fix.set });
 });
+/** Un lien montre son escalier sans rien écrire. Déjà gardé, il le rouvre plutôt que d'en préparer une copie. */
 async function openShared(p: Params): Promise<void> {
-  if (linkOpensNew(p, project?.params ?? null)) await startNew("Escalier reçu par lien", "complet", p);
+  if (!linkOpensNew(p, project?.params ?? null)) return;
+  const kept = (await store.list()).find((q) => sameLink(q.params, p));
+  if (kept) {
+    openProject(kept);
+    void store.setCurrent(kept.id);
+    return;
+  }
+  const q = newProject(newId(), "Escalier reçu par lien", "complet", Date.now(), p);
+  received = q.id;
+  openProject(q);
 }
+byId("recuGarde").addEventListener("click", keepReceived);
 const example = () => startNew("Exemple", "complet", { ...DEFAULTS });
 window.addEventListener("hashchange", () => {
   const p = paramsFromHash(location.hash);
@@ -570,10 +600,10 @@ writeInputs(params);
 update();
 void (async () => {
   if (leaving) return;
-  if (moved) await storeMoved(store, moved);
   const id = await store.currentId();
   const start = (id && (await store.get(id))) || (await store.list())[0] || null;
-  openProject(start);
+  // Sur un appareil vide, l'accueil ne passe pas avant l'escalier du lien.
+  if (start || !sharedAtStart) openProject(start);
   if (start) void store.setCurrent(start.id);
   if (sharedAtStart) await openShared(sharedAtStart);
   else if (asked.has("exemple")) await example();

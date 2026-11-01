@@ -113,6 +113,23 @@ body {
 .saved:empty {
   display: none;
 }
+/* Escalier reçu par lien, pas encore gardé : une ligne à part, à la place de « Enregistré », à toutes les largeurs. */
+.top:has(.recu:not([hidden])) {
+  flex-wrap: wrap;
+}
+.top:has(.recu:not([hidden])) .saved:not(.fail) {
+  display: none;
+}
+.recu:not([hidden]) {
+  order: 1;
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
 /* Annuler, rétablir : deux flèches discrètes à côté de l'enregistrement */
 .undo {
   display: inline-flex;
@@ -515,6 +532,7 @@ body.home-on .work,
 body.home-on .tabbar,
 body.home-on .proj,
 body.home-on .saved:not(.fail),
+body.home-on .recu,
 body.home-on .undo,
 body.home-on #pjNew {
   display: none !important;

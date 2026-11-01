@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import fs from "node:fs";
 import path from "node:path";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { newDevis } from "../src/core/devis";
 import { DEFAULTS } from "../src/core/params";
 import { newProject, withDevis, withEtat, type Project } from "../src/core/project";
@@ -204,15 +204,156 @@ describe("actualiser la page", () => {
     expect(saved().nom).toBe("Exemple");
   });
 
-  it("ouvre toujours un vrai lien reçu comme un nouvel escalier", async () => {
-    const id = openId();
-    type("H", "3000");
-    history.replaceState(null, "", "#H=3100&W=900");
+  it("crée l'escalier demandé par ?nouveau, sans le copier ensuite", async () => {
+    history.replaceState(null, "", "/?nouveau");
     await reload();
     expect(projects()).toHaveLength(2);
-    expect(openId()).not.toBe(id);
-    expect(saved()).toMatchObject({ nom: "Escalier reçu par lien", etat: "brouillon" });
+    const id = openId();
+    expect(saved().mode).toBe("guide");
+    await reload();
+    expect(projects()).toHaveLength(2);
+    expect(openId()).toBe(id);
+  });
+});
+
+describe("escalier reçu par lien", () => {
+  const LIEN = "#H=3100&W=900";
+  const recu = () => document.getElementById("recu")!;
+  /** Ce que l'appareil garde des escaliers : rien ne doit y bouger avant un geste. */
+  const device = () => [localStorage.getItem("limon-projets"), localStorage.getItem("limon-courant")];
+
+  async function open(hash = LIEN): Promise<void> {
+    history.replaceState(null, "", hash);
+    await reload();
+  }
+
+  it("s'ouvre et se calcule sans rien écrire sur l'appareil", async () => {
+    const before = device();
+    await open();
+    expect(field("H").value).toBe("3100");
+    expect(field("W").value).toBe("900");
+    expect(field("pjName").value).toBe("Escalier reçu par lien");
+    expect(document.getElementById("tiles")!.innerHTML).not.toBe("");
+    expect(recu().hidden).toBe(false);
+    expect(location.hash).toBe(LIEN);
+    expect(device()).toEqual(before);
+  });
+
+  it("s'ouvre aussi sur un appareil vide, sans accueil par-dessus", async () => {
+    localStorage.clear();
+    await open();
+    await settle();
+    expect(field("H").value).toBe("3100");
+    expect(document.getElementById("home")!.hidden).toBe(true);
+    expect(recu().hidden).toBe(false);
+    expect(device()).toEqual([null, null]);
+  });
+
+  it("ne compte pas comme un geste : actualiser, ouvrir les fichiers pour la machine", async () => {
+    const before = device();
+    await open();
+    click(button("cncOpen"));
+    await reload();
+    expect(field("H").value).toBe("3100");
+    expect(device()).toEqual(before);
+  });
+
+  it("ne laisse rien une fois fermé sans geste", async () => {
+    const id = openId();
+    const before = device();
+    await open();
+    history.replaceState(null, "", "/");
+    await reload();
+    expect(device()).toEqual(before);
+    expect(openId()).toBe(id);
+    expect(recu().hidden).toBe(true);
+    expect(field("H").value).toBe(String(DEFAULTS.H));
+  });
+
+  it.each([
+    ["une cote", () => type("L", "2500")],
+    ["le nom", () => name("Chantier Martin")],
+    ["l'état", () => click(button("etatBtn"))],
+    ["le bouton", () => click(button("recuGarde"))],
+    ["le retour à l'exemple", () => click(button("reset"))],
+  ])("est enregistré au premier geste : %s", async (_quoi, geste) => {
+    const first = openId();
+    await open();
+    geste();
+    await settle();
+    expect(projects()).toHaveLength(2);
+    expect(openId()).not.toBe(first);
+    expect(recu().hidden).toBe(true);
+    await reload();
+    expect(projects()).toHaveLength(2);
+  });
+
+  it("garde ses réglages et rouvre le même escalier ensuite", async () => {
+    await open();
+    click(button("recuGarde"));
+    const id = openId();
+    expect(saved()).toMatchObject({ id, nom: "Escalier reçu par lien", etat: "brouillon" });
     expect(saved().params).toMatchObject({ H: 3100, W: 900 });
+    await reload();
+    expect(openId()).toBe(id);
+    expect(recu().hidden).toBe(true);
+  });
+
+  it("n'ajoute pas de copie quand on rouvre le lien, même avec un autre escalier ouvert", async () => {
+    await open();
+    click(button("recuGarde"));
+    const id = openId();
+    await newStair();
+    const before = projects().length;
+    expect(openId()).not.toBe(id);
+    await open();
+    expect(openId()).toBe(id);
+    expect(recu().hidden).toBe(true);
+    type("L", "2500");
+    expect(projects()).toHaveLength(before);
+  });
+
+  it("n'écrit rien pour une adresse d'ancien transfert, ni après relance", async () => {
+    const before = device();
+    const moved = { projets: [newProject("venu", "Venu d'ailleurs", "complet", now)], courant: "venu", lien: LIEN };
+    await open("#transfert=" + encodeURIComponent(JSON.stringify(moved)));
+    expect(device()).toEqual(before);
+    expect(recu().hidden).toBe(true);
+    expect(location.hash).not.toContain("transfert");
+    await reload();
+    expect(device()).toEqual(before);
+  });
+
+  describe("connecté", () => {
+    const envois: string[] = [];
+    const exchange = async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      await settle();
+    };
+
+    beforeEach(() => {
+      envois.length = 0;
+      localStorage.clear();
+      const compte = { id: "c", email: "a@exemple.fr", statut: "essai" };
+      localStorage.setItem("limon-synchro", JSON.stringify({ compte, dernier: compte.email, connu: true }));
+      vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+        if (url === "/api/projets" && init.method === "PUT") envois.push(String(init.body));
+        const body = url === "/api/projets" && init.method === "PUT" ? { index: [], refus: [] } : [];
+        return Promise.resolve(Response.json(url === "/api/atelier" ? null : body));
+      });
+    });
+    afterEach(() => {
+      vi.stubGlobal("fetch", () => Promise.resolve(new Response(null, { status: 401 })));
+    });
+
+    it("n'envoie rien au compte avant un geste, puis l'envoie", async () => {
+      await open();
+      await exchange();
+      expect(envois).toEqual([]);
+      click(button("recuGarde"));
+      await exchange();
+      expect(envois.join()).toContain('"H":3100');
+    });
   });
 });
 
