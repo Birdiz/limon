@@ -98,10 +98,10 @@ export function fileBase(nom: string): string {
   return s || "escalier";
 }
 
-/** Date d'une modification de cet escalier : toujours après la version qu'elle remplace, même reçue d'un appareil
-    à l'horloge en avance. Sinon l'échange avec le compte reprendrait l'ancienne version. */
-export function stamped(p: Project, now: number): number {
-  return Math.max(now, p.modifie + 1);
+/** Date d'une modification (escalier ou profil de l'atelier) : toujours après la version qu'elle remplace, même
+    reçue d'un appareil à l'horloge en avance. Sinon l'échange avec le compte reprendrait l'ancienne version. */
+export function stamped(remplacee: { modifie: number }, now: number): number {
+  return Math.max(now, remplacee.modifie + 1);
 }
 
 /** Escalier avec son devis changé ; la date de modification avance, pour l'échange avec le compte. */
