@@ -2,6 +2,8 @@
 
 ## Trémie
 
+`tremie(ctx)`, `src/core/tremie.ts`, avec le plancher haut et l'échappée.
+
 - **À calculer** (`tAuto`) : la plus courte qui donne 2 000 mm d'échappée ; en quart tournant, tout le côté arrivée (`tX = B + el`) et le côté départ minimal. Les cotes retenues sont dans `stair.treDims`.
 - **Contour** en polygone (`tremieContour`, `stair.trePoly` ; `stair.tre` en est la boîte englobante), échappée calculée sur ce contour.
 - **En L** (`tForme`, quart tournant seulement) : le coin au-dessus du jour reste plancher, branches `tbD` et `tbA` ; à calculer, branches à la largeur de l'escalier (limons, poteau, garde-corps). Le U est laissé au demi-tournant.

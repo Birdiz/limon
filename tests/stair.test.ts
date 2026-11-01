@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULTS, sanitizeParams, type Params } from "../src/core/params";
-import { ECHAPPEE, comfortableRun, compute, pickN, turnLengths, turnRange, type Stair } from "../src/core/stair";
+import { ECHAPPEE, compute, pickN, turnLengths, turnRange, type Stair } from "../src/core/stair";
+import { comfortableRun } from "../src/core/stair-notes";
 import { stairOf } from "./cases";
 
 describe("nombre de hauteurs", () => {
