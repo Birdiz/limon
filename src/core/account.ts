@@ -35,9 +35,21 @@ export interface Entree {
 /** Version d'un projet envoyée au serveur : le projet entier, ou la trace de sa suppression. */
 export type Changement = { id: string; modifie: number; supprime: true } | { id: string; projet: Project };
 
+/** Élément d'un envoi que le serveur n'a pas rangé, et pourquoi, en mots pour l'artisan. */
+export interface Refus {
+  id: string;
+  raison: string;
+}
+
+/** Réponse à un envoi : l'index à jour et les refus. */
+export interface Envoi {
+  index: Entree[];
+  refus: Refus[];
+}
+
 /** Adresse e-mail nettoyée ; null si elle n'en a pas la forme. */
 export function cleanEmail(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const e = raw.trim().toLowerCase();
-  return e.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : null;
+  return e.length <= 254 && /^[^\s@\p{Cc}]+@[^\s@\p{Cc}]+\.[^\s@\p{Cc}]+$/u.test(e) ? e : null;
 }

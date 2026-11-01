@@ -1,6 +1,6 @@
-import type { Changement, Compte, Entree } from "../core/account";
+import type { Changement, Compte, Entree, Refus } from "../core/account";
 import { sanitizeProject, stamped, type Project } from "../core/project";
-import { NotSignedIn, type Api } from "./api";
+import { ApiError, NotSignedIn, type Api } from "./api";
 import type { AtelierStore } from "./atelier";
 import { browserStorage, read, write, type KeyValue, type LocalStore, type ProjectStore } from "./store";
 
@@ -9,6 +9,10 @@ const SYNC_KEY = "limon-synchro";
 const DEBOUNCE = 3000;
 /** Le navigateur refuse un envoi `keepalive` de plus de 64 ko. */
 const KEEPALIVE_MAX = 60_000;
+/** Éléments par envoi, comme la lecture. */
+const LOT_MAX = 500;
+/** Octets par envoi : le serveur en accepte 4 Mo, et un projet plein de devis pèse près de 60 ko. */
+const LOT_OCTETS = 3 << 20;
 
 interface SyncState {
   /** Compte connecté sur cet appareil. */
@@ -24,16 +28,46 @@ interface SyncState {
   serveur: Record<string, number>;
   /** Suppressions pas encore envoyées, avec leur date. */
   supprimes: Record<string, number>;
+  /** Versions refusées par le serveur : elles ne comptent plus comme à envoyer, une autre version repart. */
+  refuses: Record<string, { modifie: number; raison: string }>;
 }
 
-const EMPTY: SyncState = { compte: null, dernier: null, connu: false, serveur: {}, supprimes: {} };
+const EMPTY: SyncState = { compte: null, dernier: null, connu: false, serveur: {}, supprimes: {}, refuses: {} };
+
+/** Découpe un envoi : 500 éléments au plus, et de quoi tenir dans ce que le serveur accepte. */
+export function lots(changes: Changement[]): Changement[][] {
+  const out: Changement[][] = [];
+  let lot: Changement[] = [];
+  let octets = 0;
+  for (const ch of changes) {
+    const n = new TextEncoder().encode(JSON.stringify(ch)).length;
+    if (lot.length && (lot.length >= LOT_MAX || octets + n > LOT_OCTETS)) {
+      out.push(lot);
+      lot = [];
+      octets = 0;
+    }
+    lot.push(ch);
+    octets += n;
+  }
+  if (lot.length) out.push(lot);
+  return out;
+}
+
+/** Escalier ou suppression refusé par le serveur ; `nom` est null pour une suppression, l'escalier n'est plus là. */
+export interface RefusVu extends Refus {
+  nom: string | null;
+}
 
 export interface SyncStatus {
   compte: Compte | null;
   /** Projets modifiés ou supprimés ici, pas encore envoyés. */
   pending: number;
-  /** Le dernier échange a échoué faute de réseau ou de serveur. */
+  /** Le dernier échange a échoué faute de réseau. */
   offline: boolean;
+  /** Le serveur a répondu non au dernier échange, en entier ou pour le profil de l'atelier : ses mots. */
+  erreur: string | null;
+  /** Ce que le serveur a refusé élément par élément. */
+  refuses: RefusVu[];
   /** Le stockage de l'appareil accepte les projets. */
   stored: boolean;
 }
@@ -50,6 +84,9 @@ export class SyncStore implements ProjectStore {
   private again = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private offline = false;
+  private erreur: string | null = null;
+  /** Les refus sont retentés une fois par chargement de la page : l'heure a pu avancer, le compte a pu changer. */
+  private retry = true;
   private changeListeners: ((ids: string[]) => void)[] = [];
   private statusListeners: (() => void)[] = [];
 
@@ -102,6 +139,12 @@ export class SyncStore implements ProjectStore {
   async remove(id: string): Promise<void> {
     const p = await this.local.get(id);
     await this.local.remove(id);
+    if (id in this.state.refuses) {
+      this.state.refuses = Object.fromEntries(Object.entries(this.state.refuses).filter(([k]) => k !== id));
+      this.persist();
+      // Refusé et jamais arrivé : le serveur n'a rien à supprimer.
+      if (!(id in this.state.serveur)) return this.emitStatus();
+    }
     if (!this.state.compte && !(id in this.state.serveur)) return;
     this.state.supprimes[id] = p ? stamped(p, Date.now()) : Date.now();
     this.persist();
@@ -144,8 +187,21 @@ export class SyncStore implements ProjectStore {
       compte: this.state.compte,
       pending: this.state.compte ? (await this.pending()).length : 0,
       offline: this.offline,
+      erreur: this.erreur,
+      refuses: this.state.compte ? await this.refused() : [],
       stored: this.local.stored(),
     };
+  }
+
+  /** Refus qui valent encore : la version refusée est toujours celle de l'appareil. */
+  private async refused(): Promise<RefusVu[]> {
+    const out: RefusVu[] = [];
+    for (const [id, r] of Object.entries(this.state.refuses)) {
+      const p = await this.local.get(id);
+      if (p?.modifie === r.modifie) out.push({ id, nom: p.nom, raison: r.raison });
+      else if (this.state.supprimes[id] === r.modifie) out.push({ id, nom: null, raison: r.raison });
+    }
+    return out;
   }
 
   /** Connexion réussie : les projets de l'appareil montent dans le compte, ceux du compte descendent. */
@@ -157,6 +213,7 @@ export class SyncStore implements ProjectStore {
       this.atelier?.clear();
       this.state.serveur = {};
       this.state.supprimes = {};
+      this.state.refuses = {};
     }
     this.state.compte = compte;
     this.state.dernier = compte.email;
@@ -168,13 +225,15 @@ export class SyncStore implements ProjectStore {
 
   /**
    * Déconnexion : tout est envoyé, puis les projets du compte quittent l'appareil. Refusée s'il reste
-   * des modifications à envoyer (hors ligne).
+   * des modifications à envoyer (hors ligne, ou serveur qui répond non). Un projet refusé ne bloque pas : il reste ici.
    */
   async signOut(): Promise<void> {
     await this.sync();
     if (this.state.compte && (await this.pending()).length)
       throw new Error(
-        "Des modifications n'ont pas encore pu être envoyées : retrouvez du réseau avant de vous déconnecter.",
+        this.erreur
+          ? `Des modifications n'ont pas encore pu être envoyées. ${this.erreur}`
+          : "Des modifications n'ont pas encore pu être envoyées : retrouvez du réseau avant de vous déconnecter.",
       );
     try {
       await this.api.logout();
@@ -235,30 +294,61 @@ export class SyncStore implements ProjectStore {
     this.emitStatus();
   }
 
-  /** Versions plus récentes ici que sur le serveur, et suppressions à envoyer. */
-  private async pending(): Promise<Changement[]> {
-    const { serveur, supprimes } = this.state;
+  /** Versions plus récentes ici que sur le serveur, et suppressions à envoyer ; les refusées seulement à la demande. */
+  private async pending(withRefused = false): Promise<Changement[]> {
+    const { serveur, supprimes, refuses } = this.state;
+    const skip = (id: string, modifie: number) => !withRefused && refuses[id]?.modifie === modifie;
     const changes: Changement[] = (await this.local.list())
-      .filter((p) => !(p.id in serveur) || p.modifie > serveur[p.id]!)
+      .filter((p) => (!(p.id in serveur) || p.modifie > serveur[p.id]!) && !skip(p.id, p.modifie))
       .map((p) => ({ id: p.id, projet: p }));
-    for (const [id, modifie] of Object.entries(supprimes)) changes.push({ id, modifie, supprime: true });
+    for (const [id, modifie] of Object.entries(supprimes))
+      if (!skip(id, modifie)) changes.push({ id, modifie, supprime: true });
     return changes;
+  }
+
+  /** Envoie par lots et note les refus ; renvoie l'index à jour. */
+  private async send(changes: Changement[], keepalive: boolean): Promise<Entree[]> {
+    const refuses = new Map(Object.entries(this.state.refuses));
+    const versions = new Map(changes.map((ch) => [ch.id, "projet" in ch ? ch.projet.modifie : ch.modifie]));
+    let index: Entree[] | null = null;
+    for (const lot of lots(changes)) {
+      for (const ch of lot) refuses.delete(ch.id);
+      let refus: Refus[];
+      try {
+        const small = JSON.stringify(lot).length < KEEPALIVE_MAX;
+        ({ index, refus } = await this.api.push(lot, keepalive && small));
+      } catch (e) {
+        // Un seul élément, trop gros pour le serveur : il est refusé, les autres lots partent.
+        if (!(e instanceof ApiError && e.status === 413 && lot.length === 1)) throw e;
+        index = null;
+        refus = [{ id: lot[0]!.id, raison: "Cet escalier est trop gros pour être envoyé." }];
+      }
+      for (const { id, raison } of refus) {
+        const modifie = versions.get(id);
+        if (modifie !== undefined) refuses.set(id, { modifie, raison });
+      }
+    }
+    this.state.refuses = Object.fromEntries(refuses);
+    return index ?? (await this.api.index());
   }
 
   private async exchange(keepalive: boolean): Promise<void> {
     if (!this.state.compte) return;
     try {
-      const changes = await this.pending();
-      const small = JSON.stringify(changes).length < KEEPALIVE_MAX;
-      const index = changes.length ? await this.api.push(changes, keepalive && small) : await this.api.index();
+      const changes = await this.pending(this.retry);
+      const index = changes.length ? await this.send(changes, keepalive) : await this.api.index();
       await this.apply(index);
+      this.retry = false;
       await this.exchangeAtelier();
       this.offline = false;
+      this.erreur = null;
       // Un projet absent de l'index n'a jamais atteint ce compte (ou le compte a été recréé) : il part au tour suivant.
       if (!changes.length && (await this.pending()).length) this.again = true;
     } catch (e) {
       if (e instanceof NotSignedIn) this.state.compte = null;
-      else this.offline = true;
+      // Le serveur a répondu : ce n'est pas le réseau.
+      else if (e instanceof ApiError) [this.offline, this.erreur] = [false, e.message];
+      else [this.offline, this.erreur] = [true, null];
       this.persist();
     }
     this.emitStatus();
@@ -318,8 +408,9 @@ export class SyncStore implements ProjectStore {
 
   private reset(connu: boolean): void {
     clearTimeout(this.timer);
-    this.state = { ...EMPTY, connu, serveur: {}, supprimes: {} };
+    this.state = { ...EMPTY, connu, serveur: {}, supprimes: {}, refuses: {} };
     this.offline = false;
+    this.erreur = null;
     this.persist();
     this.emitStatus();
   }

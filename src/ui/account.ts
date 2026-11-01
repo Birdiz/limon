@@ -1,7 +1,7 @@
 import type { Compte, CompteDetail } from "../core/account";
 import { ApiError, NotSignedIn, type Api } from "./api";
-import { byId, esc, flash } from "./dom";
-import type { SyncStore } from "./sync";
+import { byId, downloadProject, esc, flash } from "./dom";
+import type { RefusVu, SyncStore } from "./sync";
 
 const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
 const webauthn = () => import("@simplewebauthn/browser");
@@ -31,6 +31,19 @@ function problem(e: unknown): string | null {
 
 /** Le stockage refuse : rien ne survivrait au rechargement de la page. */
 const NOT_STORED = "Escalier pas gardé sur cet appareil : gardez-en une copie en fichier";
+
+/** En-tête : les escaliers que le serveur a refusés, par leur nom s'il n'y en a qu'un. */
+const refusedLine = (refused: RefusVu[]) =>
+  refused.length > 1
+    ? `${refused.length} escaliers n'ont pas pu rejoindre votre compte`
+    : `« ${refused[0]!.nom} » n'a pas pu rejoindre votre compte`;
+
+/** Mon compte : le refus, sa raison et la copie à garder ; une suppression n'a plus d'escalier à copier. */
+const refusedItem = (r: RefusVu) =>
+  r.nom === null
+    ? `<li><div><b>Un escalier supprimé (${esc(r.id.slice(0, 12))}…)</b><small>${esc(r.raison)} La suppression n'a pas rejoint votre compte.</small></div></li>`
+    : `<li><div><b>${esc(r.nom)}</b><small>${esc(r.raison)} Il reste sur cet appareil.</small></div>` +
+      `<button class="btn" type="button" data-copie="${esc(r.id)}">Garder une copie</button></li>`;
 
 type View = "login" | "offer" | "account";
 
@@ -63,6 +76,10 @@ export class AccountPanel {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-key]");
       if (b) void this.run(() => this.removePasskey(b.dataset.key!));
     });
+    byId("acRefus").addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-copie]");
+      if (b) void this.run(() => this.keepCopy(b.dataset.copie!));
+    });
     byId("acLogout").addEventListener("click", () => void this.run(() => this.logout()));
     byId("acDelete").addEventListener("click", () => void this.run(() => this.deleteAccount()));
     store.onStatus(() => void this.refreshLine());
@@ -75,7 +92,8 @@ export class AccountPanel {
     const btn = byId("acOpen");
     const saved = byId("saved");
     saved.classList.toggle("wait", !!st.compte && st.pending > 0);
-    saved.classList.toggle("fail", !st.stored);
+    const refused = st.refuses.filter((r) => r.nom !== null);
+    saved.classList.toggle("fail", !st.stored || (!!st.compte && (refused.length > 0 || !!st.erreur)));
     if (!st.compte) {
       saved.textContent = st.stored ? "Enregistré sur cet appareil" : NOT_STORED;
       btn.className = "btn hbtn acbtn guest";
@@ -86,17 +104,30 @@ export class AccountPanel {
     const s = st.pending > 1 ? "s" : "";
     const state = !st.stored
       ? NOT_STORED
-      : !st.pending
-        ? "escaliers enregistrés sur tous vos appareils"
-        : st.offline
-          ? `${st.pending} escalier${s} à envoyer dès que le réseau revient`
-          : `${st.pending} escalier${s} en cours d'envoi`;
-    saved.textContent =
-      st.pending || !st.stored ? `${state[0]!.toUpperCase()}${state.slice(1)}` : "Enregistré sur tous vos appareils";
+      : st.pending && st.offline
+        ? `${st.pending} escalier${s} à envoyer dès que le réseau revient`
+        : st.erreur
+          ? st.pending
+            ? `${st.pending} escalier${s} pas encore envoyé${s}. ${st.erreur}`
+            : st.erreur
+          : refused.length
+            ? refusedLine(refused)
+            : st.pending
+              ? `${st.pending} escalier${s} en cours d'envoi`
+              : "escaliers enregistrés sur tous vos appareils";
+    const allSaved = st.stored && !st.pending && !st.erreur && !refused.length;
+    const toSee = refused.length && state === refusedLine(refused) ? " : voir Mon compte" : "";
+    saved.textContent = allSaved
+      ? "Enregistré sur tous vos appareils"
+      : `${state[0]!.toUpperCase()}${state.slice(1)}${toSee}`;
     btn.className = "btn hbtn acbtn member";
     btn.innerHTML = `<span class="lbl">Mon compte</span><span class="avatar" aria-hidden="true">${esc(st.compte.email[0]!.toUpperCase())}</span>`;
     btn.setAttribute("aria-label", "Mon compte");
-    if (!byId("acAccount").hidden) byId("acState").textContent = `${state[0]!.toUpperCase()}${state.slice(1)}.`;
+    if (byId("acAccount").hidden) return;
+    byId("acState").textContent = `${state[0]!.toUpperCase()}${state.slice(1)}`.replace(/\.?$/, ".");
+    const list = byId("acRefus");
+    list.hidden = !st.refuses.length;
+    list.innerHTML = st.refuses.map(refusedItem).join("");
   }
 
   /** L'onglet s'affiche : connexion, ou le compte. */
@@ -222,10 +253,19 @@ export class AccountPanel {
     byId("acAddKey").hidden = !hasWebAuthn();
   }
 
+  private async keepCopy(id: string): Promise<void> {
+    const p = await this.store.get(id);
+    if (!p) return;
+    downloadProject(p);
+    flash(this.msg, "Copie enregistrée");
+  }
+
   private async logout(): Promise<void> {
+    const refused = (await this.store.status()).refuses.some((r) => r.nom !== null);
     if (
       !confirm(
-        "Se déconnecter ? Vos escaliers restent dans votre compte et quittent cet appareil : vous les retrouverez en vous reconnectant.",
+        "Se déconnecter ? Vos escaliers restent dans votre compte et quittent cet appareil : vous les retrouverez en vous reconnectant." +
+          (refused ? " Ceux qui n'ont pas pu rejoindre votre compte restent sur cet appareil." : ""),
       )
     )
       return;

@@ -7,6 +7,7 @@ import {
   type Entreprise,
   type Tarifs,
 } from "./tarifs";
+import { textesPropres } from "./texte";
 
 /**
  * Profil de l'atelier : les réglages qui tiennent à l'habitude de l'artisan, repris par chaque nouvel
@@ -81,8 +82,8 @@ export function sanitizeAtelier(raw: unknown): Atelier | null {
   if (typeof r.modifie !== "number" || !Number.isFinite(r.modifie)) return null;
   return {
     defauts: atelierDefauts(sanitizeParams(r.defauts)),
-    tarifs: sanitizeTarifs(r.tarifs),
-    entreprise: sanitizeEntreprise(r.entreprise),
+    tarifs: textesPropres(sanitizeTarifs(r.tarifs)),
+    entreprise: textesPropres(sanitizeEntreprise(r.entreprise)),
     modifie: Math.round(r.modifie),
   };
 }

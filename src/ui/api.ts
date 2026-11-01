@@ -1,4 +1,4 @@
-import type { Changement, Compte, CompteDetail, Entree } from "../core/account";
+import type { Changement, Compte, CompteDetail, Entree, Envoi } from "../core/account";
 import type { Atelier } from "../core/atelier";
 import type { Project } from "../core/project";
 
@@ -6,7 +6,14 @@ import type { Project } from "../core/project";
 export class NotSignedIn extends Error {}
 
 /** Refus du serveur, avec son message en français ; une coupure de réseau lève une TypeError. */
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 
 /** Le serveur de Quart de tour, sur la même adresse que la page. */
 export class Api {
@@ -21,7 +28,7 @@ export class Api {
     if (res.status === 401) throw new NotSignedIn();
     if (!res.ok) {
       const r = (await res.json().catch(() => null)) as { erreur?: string } | null;
-      throw new ApiError(r?.erreur ?? "Le serveur ne répond pas. Réessayez dans un instant.");
+      throw new ApiError(r?.erreur ?? "Le serveur ne répond pas. Réessayez dans un instant.", res.status);
     }
     return (res.status === 204 ? undefined : await res.json()) as T;
   }
@@ -44,7 +51,7 @@ export class Api {
   index = () => this.call<Entree[]>("GET", "projets");
   /** `keepalive` : l'envoi se termine même si la page se ferme. */
   push = (changements: Changement[], keepalive = false) =>
-    this.call<Entree[]>("PUT", "projets", { changements }, keepalive);
+    this.call<Envoi>("PUT", "projets", { changements, detail: true }, keepalive);
   fetchProjects = (ids: string[]) => this.call<Project[]>("POST", "projets/lire", { ids });
   /** Numéro du devis de l'escalier, donné par le serveur à sa première remise, le même ensuite. */
   devisNumero = async (projet: string) =>

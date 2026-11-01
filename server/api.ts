@@ -12,10 +12,11 @@ import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { cleanEmail, type Compte, type CompteDetail, type Entree, type Passkey } from "../src/core/account";
+import { cleanEmail, type Compte, type CompteDetail, type Entree, type Passkey, type Refus } from "../src/core/account";
 import { sanitizeAtelier, type Atelier, type AtelierDefauts } from "../src/core/atelier";
 import type { Entreprise, Tarifs } from "../src/core/tarifs";
 import { isProjectId, sanitizeProject, type Project } from "../src/core/project";
+import { sansControles } from "../src/core/texte";
 import type { Db } from "./db";
 import type { SendCode } from "./mail";
 
@@ -35,6 +36,16 @@ const CODE_TRIES = 5;
 const HOUR = 3_600_000;
 /** Projets ou identifiants par requête. */
 const MAX_BATCH = 1000;
+/** Lignes par compte, traces de suppression comprises. */
+const MAX_PROJETS = 2000;
+/** Avance tolérée sur l'heure du serveur pour une date de modification : une horloge d'appareil peut se tromper. */
+const MAX_AVANCE = 732 * 24 * HOUR;
+/** Envois ou lectures par minute, par compte et par route : largement au-dessus d'un échange toutes les 3 s. */
+const MAX_ENVOIS = 120;
+
+const DATE_REFUSEE = "Sa date de modification est impossible.";
+const ILLISIBLE = "Cet escalier ne peut pas être relu.";
+const COMPTE_PLEIN = `Votre compte garde au plus ${MAX_PROJETS} escaliers, supprimés compris : celui-ci n'y entre plus.`;
 
 /** Compteur d'essais en mémoire : un seul serveur tourne, et rien n'est conservé. */
 class Limiter {
@@ -54,6 +65,10 @@ class Limiter {
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const ms = (d: unknown) => (d ? new Date(d as string).getTime() : null);
 const err = (c: Context, status: ContentfulStatusCode, erreur: string) => c.json({ erreur }, status);
+/** Erreur de Postgres qui tient à la donnée reçue, pas à la base (classe 22). */
+const isDataError = (e: unknown) => /^22/.test(String((e as { code?: unknown } | null)?.code));
+const validDate = (m: unknown): m is number =>
+  Number.isInteger(m) && (m as number) >= 0 && (m as number) <= Date.now() + MAX_AVANCE;
 const body = async (c: Context): Promise<Record<string, unknown>> => {
   const b: unknown = await c.req.json().catch(() => null);
   return b && typeof b === "object" ? (b as Record<string, unknown>) : {};
@@ -90,6 +105,11 @@ export function api(cfg: ApiConfig): Hono<Env> {
     c.header("Cache-Control", "no-store");
   });
   app.use(bodyLimit({ maxSize: 4 << 20, onError: (c) => err(c, 413, "Envoi trop gros.") }));
+  app.onError((e, c) => {
+    if (isDataError(e)) return err(c, 400, "Demande mal formée.");
+    console.error(e);
+    return err(c, 500, "Le serveur ne répond pas. Réessayez dans un instant.");
+  });
 
   async function startSession(c: Context, compte: string): Promise<void> {
     const token = randomBytes(32).toString("base64url");
@@ -130,6 +150,13 @@ export function api(cfg: ApiConfig): Hono<Env> {
       setSessionCookie(c, token!);
     }
     c.set("compte", s.compte);
+    await next();
+  });
+
+  /** Limite de débit par compte, après `auth`. */
+  const debit = createMiddleware<Env>(async (c, next) => {
+    if (!limiter.hit(`${c.req.path}:${c.get("compte")}`, MAX_ENVOIS, 60_000))
+      return err(c, 429, "Trop d'envois en peu de temps. Réessayez dans une minute.");
     await next();
   });
 
@@ -358,34 +385,65 @@ export function api(cfg: ApiConfig): Hono<Env> {
 
   app.get("/projets", auth, async (c) => c.json(await index(c.get("compte"))));
 
-  /** Range les versions reçues : chacune ne remplace que plus ancienne qu'elle. Renvoie l'index à jour. */
-  app.put("/projets", auth, async (c) => {
-    const list = (await body(c)).changements;
-    if (!Array.isArray(list) || list.length > MAX_BATCH) return err(c, 400, "Envoi mal formé.");
-    const compte = c.get("compte");
-    for (const raw of list as unknown[]) {
-      const ch = (raw ?? {}) as Record<string, unknown>;
-      const id = ch.id;
-      if (!isProjectId(id)) continue;
-      let modifie: number, supprime: boolean, donnees: string | null;
-      if (ch.supprime === true) {
-        if (typeof ch.modifie !== "number" || !Number.isFinite(ch.modifie)) continue;
-        [modifie, supprime, donnees] = [ch.modifie, true, null];
-      } else {
-        const p = sanitizeProject({ ...(ch.projet as object), id });
-        if (!p) continue;
-        p.nom = p.nom.slice(0, 80);
-        [modifie, supprime, donnees] = [p.modifie, false, JSON.stringify(p)];
-      }
-      await db.query(
-        `insert into projets (compte, id, modifie, supprime, donnees) values ($1, $2, $3, $4, $5::jsonb)
+  /** Range une version ; renvoie la raison de son refus, ou null. */
+  async function rangeProjet(compte: string, raw: unknown): Promise<string | null> {
+    const ch = (raw ?? {}) as Record<string, unknown>;
+    const id = ch.id;
+    if (!isProjectId(id)) return "Cet escalier a un identifiant que le compte ne peut pas garder.";
+    let modifie: number, supprime: boolean, donnees: string | null;
+    if (ch.supprime === true) {
+      if (!validDate(ch.modifie)) return DATE_REFUSEE;
+      [modifie, supprime, donnees] = [ch.modifie, true, null];
+    } else {
+      const p = ch.projet && typeof ch.projet === "object" ? sanitizeProject({ ...ch.projet, id }) : null;
+      if (!p) return ILLISIBLE;
+      if (!validDate(p.modifie)) return DATE_REFUSEE;
+      p.nom = sansControles(p.nom.slice(0, 80));
+      [modifie, supprime, donnees] = [p.modifie, false, JSON.stringify(p)];
+    }
+    try {
+      // Le plafond est relu à chaque ligne : deux envois en même temps ne le dépassent que de quelques lignes.
+      const rows = await db.query(
+        `insert into projets (compte, id, modifie, supprime, donnees)
+         select $1::uuid, $2, $3::bigint, $4::boolean, $5::jsonb
+         where exists (select 1 from projets where compte = $1::uuid and id = $2)
+           or (select count(*) from projets where compte = $1::uuid) < ${MAX_PROJETS}
          on conflict (compte, id) do update
            set modifie = excluded.modifie, supprime = excluded.supprime, donnees = excluded.donnees
-           where projets.modifie < excluded.modifie`,
-        [compte, id, Math.round(modifie), supprime, donnees],
+           where projets.modifie < excluded.modifie
+         returning id`,
+        [compte, id, modifie, supprime, donnees],
       );
+      if (rows.length) return null;
+      // Rien de rangé : une version plus récente est déjà là, ou le compte est plein.
+      const [there] = await db.query("select 1 from projets where compte = $1 and id = $2", [compte, id]);
+      return there ? null : COMPTE_PLEIN;
+    } catch (e) {
+      if (!isDataError(e)) throw e;
+      return ILLISIBLE;
     }
-    return c.json(await index(compte));
+  }
+
+  /**
+   * Range les versions reçues, une par une : chacune ne remplace que plus ancienne qu'elle, et un refus n'arrête pas
+   * les suivantes. Renvoie l'index à jour, avec les refus si l'envoi les demande par `detail`. Un onglet ouvert depuis
+   * avant les refus lit encore un tableau.
+   */
+  app.put("/projets", auth, debit, async (c) => {
+    const b = await body(c);
+    const list = b.changements;
+    if (!Array.isArray(list) || list.length > MAX_BATCH) return err(c, 400, "Envoi mal formé.");
+    const compte = c.get("compte");
+    const refus: Refus[] = [];
+    for (const raw of list as unknown[]) {
+      const raison = await rangeProjet(compte, raw);
+      if (raison) {
+        const id = (raw as { id?: unknown } | null)?.id;
+        refus.push({ id: typeof id === "string" ? id : "", raison });
+      }
+    }
+    const idx = await index(compte);
+    return c.json(b.detail === true ? { index: idx, refus } : idx);
   });
 
   /* ---------- Atelier ---------- */
@@ -406,10 +464,16 @@ export function api(cfg: ApiConfig): Hono<Env> {
   app.get("/atelier", auth, async (c) => c.json(await atelierOf(c.get("compte"))));
 
   /** Le profil reçu ne remplace que plus ancien que lui ; renvoie celui qui l'emporte. */
-  app.put("/atelier", auth, async (c) => {
+  app.put("/atelier", auth, debit, async (c) => {
     const raw = (await body(c)).atelier;
     const a = sanitizeAtelier(raw);
     if (!a) return err(c, 400, "Envoi mal formé.");
+    if (!validDate((raw as { modifie: unknown }).modifie))
+      return err(
+        c,
+        400,
+        "Votre profil de l'atelier n'a pas rejoint votre compte : sa date de modification est impossible.",
+      );
     // Une version de l'outil d'avant les devis envoie son profil sans tarifs ni fiche : on garde ceux du compte.
     const has = (k: string) => typeof raw === "object" && raw !== null && k in raw;
     const compte = c.get("compte");
@@ -458,7 +522,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     return err(c, 503, "Le numéro n'a pas pu être donné. Réessayez dans un instant.");
   });
 
-  app.post("/projets/lire", auth, async (c) => {
+  app.post("/projets/lire", auth, debit, async (c) => {
     const ids = (await body(c)).ids;
     if (!Array.isArray(ids) || ids.length > MAX_BATCH || ids.some((i) => typeof i !== "string"))
       return err(c, 400, "Demande mal formée.");

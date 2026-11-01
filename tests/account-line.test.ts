@@ -85,4 +85,90 @@ describe("état de l'enregistrement dans l'en-tête", () => {
     expect(line().textContent).toContain("pas gardé sur cet appareil");
     expect(line().classList.contains("fail")).toBe(true);
   });
+
+  describe("envoi au compte", () => {
+    /** Panneau sur un serveur simulé : `reponse` donne ce que répond un envoi de projets. */
+    function connected(reponse: () => Response | Promise<Response>) {
+      const m = new Map<string, string>();
+      const storage: KeyValue = {
+        getItem: (k) => m.get(k) ?? null,
+        setItem: (k, v) => void m.set(k, v),
+        removeItem: (k) => void m.delete(k),
+      };
+      const api = new Api(async (input, init) => {
+        if (init?.method === "PUT") return reponse();
+        const body = String(input).endsWith("compte") ? { ...COMPTE, passkeys: [] } : [];
+        return new Response(JSON.stringify(body), { status: 200 });
+      });
+      const store = new SyncStore(new LocalStore(storage), api, storage);
+      return { store, panel: new AccountPanel(store, api) };
+    }
+    const refus = (id: string, raison: string) =>
+      new Response(JSON.stringify({ index: [], refus: [{ id, raison }] }), { status: 200 });
+
+    it("nomme l'escalier refusé et sa raison, sans parler de réseau, et en donne une copie", async () => {
+      const { store, panel } = connected(() => refus("a", "Sa date de modification est impossible."));
+      await store.signIn(COMPTE);
+      await store.save(newProject("a", 'Du<pont & "fils"', "complet", 1));
+      await store.sync();
+      await panel.show();
+      await settled();
+
+      expect(line().textContent).toContain('« Du<pont & "fils" »');
+      expect(line().classList.contains("fail")).toBe(true);
+      const state = document.querySelector("#acState")!.textContent;
+      for (const text of [line().textContent, state]) {
+        expect(text).not.toContain("réseau");
+        expect(text).not.toContain("en cours d'envoi");
+      }
+      const item = document.querySelector<HTMLElement>("#acRefus")!;
+      expect(item.hidden).toBe(false);
+      expect(item.querySelector("b")!.textContent).toBe('Du<pont & "fils"');
+      expect(item.textContent).toContain("Sa date de modification est impossible.");
+
+      const files: { name: string; blob: Blob }[] = [];
+      let lastBlob: Blob;
+      URL.createObjectURL = (b) => {
+        lastBlob = b as Blob;
+        return "blob:x";
+      };
+      URL.revokeObjectURL = () => {};
+      const click = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function () {
+        files.push({ name: this.download, blob: lastBlob });
+      };
+      try {
+        item.querySelector<HTMLButtonElement>("button[data-copie]")!.click();
+        await settled();
+      } finally {
+        HTMLAnchorElement.prototype.click = click;
+      }
+      expect(files.map((f) => f.name)).toEqual(["Du pont & fils.escalier"]);
+      const copie = JSON.parse(await files[0]!.blob.text()) as { format: string; projet: { nom: string } };
+      expect(copie).toMatchObject({ format: "limon-projet", projet: { nom: 'Du<pont & "fils"' } });
+    });
+
+    it("un serveur qui refuse tout l'envoi est dit dans ses mots", async () => {
+      const { store } = connected(
+        () => new Response(JSON.stringify({ erreur: "Trop d'envois en peu de temps." }), { status: 429 }),
+      );
+      await store.signIn(COMPTE);
+      await store.save(newProject("a", "A", "complet", 1));
+      await store.sync();
+      await settled();
+      expect(line().textContent).toContain("Trop d'envois en peu de temps.");
+      expect(line().textContent).toContain("1 escalier pas encore envoyé");
+      expect(line().textContent).not.toContain("réseau");
+    });
+
+    it("une vraie coupure reste annoncée comme une coupure", async () => {
+      const { store } = connected(() => Promise.reject(new TypeError("Failed to fetch")));
+      await store.signIn(COMPTE);
+      await store.save(newProject("a", "A", "complet", 1));
+      await store.sync();
+      await settled();
+      expect(line().textContent).toBe("1 escalier à envoyer dès que le réseau revient");
+      expect(line().classList.contains("fail")).toBe(false);
+    });
+  });
 });

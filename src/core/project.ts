@@ -1,6 +1,7 @@
 import { sanitizeDevis, type DevisProjet } from "./devis";
 import { DEFAULTS, sanitizeParams, type Params } from "./params";
 import type { ComputeResult } from "./stair";
+import { sansControles, textesPropres } from "./texte";
 
 /** Guidé : réglage étape par étape ; complet : toutes les sections. */
 export type Mode = "guide" | "complet";
@@ -48,9 +49,10 @@ export function sanitizeProject(raw: unknown): Project | null {
   const etape = typeof r.etape === "number" && Number.isFinite(r.etape) ? Math.max(0, Math.round(r.etape)) : 0;
   // Les escaliers d'avant l'état sont des brouillons.
   const fini = r.etat === "fini";
+  const nom = typeof r.nom === "string" ? sansControles(r.nom).trim() : "";
   return {
     id: r.id,
-    nom: typeof r.nom === "string" && r.nom.trim() ? r.nom.trim() : NOM_PAR_DEFAUT,
+    nom: nom || NOM_PAR_DEFAUT,
     cree: date(r.cree),
     modifie: date(r.modifie),
     mode: r.mode === "guide" ? "guide" : "complet",
@@ -58,7 +60,7 @@ export function sanitizeProject(raw: unknown): Project | null {
     etat: fini ? "fini" : "brouillon",
     finiLe: fini ? date(r.finiLe) : 0,
     params: sanitizeParams(r.params),
-    devis: sanitizeDevis(r.devis),
+    devis: textesPropres(sanitizeDevis(r.devis)),
   };
 }
 
@@ -115,9 +117,10 @@ export function fileBase(nom: string): string {
 }
 
 /** Date d'une modification (escalier ou profil de l'atelier) : toujours après la version qu'elle remplace, même
-    reçue d'un appareil à l'horloge en avance. Sinon l'échange avec le compte reprendrait l'ancienne version. */
+    reçue d'un appareil à l'horloge en avance. Sinon l'échange avec le compte reprendrait l'ancienne version.
+    Entière : le serveur refuse une date à virgule, venue d'un fichier. */
 export function stamped(remplacee: { modifie: number }, now: number): number {
-  return Math.max(now, remplacee.modifie + 1);
+  return Math.max(now, Math.floor(remplacee.modifie) + 1);
 }
 
 /** Escalier avec son devis changé ; la date de modification avance, pour l'échange avec le compte. */
