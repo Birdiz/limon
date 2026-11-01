@@ -163,6 +163,25 @@ describe("passkeys", () => {
 describe("projets", () => {
   const p = (id: string, modifie: number, nom = id) => ({ ...newProject(id, nom, "complet", 1), modifie });
 
+  it("refuse un identifiant hors format et garde le reste de l'envoi", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const res = await post(
+      f,
+      "/api/projets",
+      {
+        changements: [
+          { id: 'a"b', projet: p('a"b', 10) },
+          { id: "c d", modifie: 10, supprime: true },
+          { id: "bon", projet: p("bon", 10) },
+        ],
+      },
+      "PUT",
+    );
+    expect(res.status).toBe(200);
+    expect(await (await f("/api/projets")).json()).toEqual([{ id: "bon", modifie: 10, supprime: false }]);
+  });
+
   it("garde la version modifiée en dernier", async () => {
     const f = browser(s);
     await login(s, f, "a@exemple.fr");

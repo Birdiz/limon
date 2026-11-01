@@ -15,7 +15,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { cleanEmail, type Compte, type CompteDetail, type Entree, type Passkey } from "../src/core/account";
 import { sanitizeAtelier, type Atelier, type AtelierDefauts } from "../src/core/atelier";
 import type { Entreprise, Tarifs } from "../src/core/tarifs";
-import { sanitizeProject, type Project } from "../src/core/project";
+import { isProjectId, sanitizeProject, type Project } from "../src/core/project";
 import type { Db } from "./db";
 import type { SendCode } from "./mail";
 
@@ -365,8 +365,8 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const compte = c.get("compte");
     for (const raw of list as unknown[]) {
       const ch = (raw ?? {}) as Record<string, unknown>;
-      const id = typeof ch.id === "string" && ch.id.length <= 100 ? ch.id : null;
-      if (!id) continue;
+      const id = ch.id;
+      if (!isProjectId(id)) continue;
       let modifie: number, supprime: boolean, donnees: string | null;
       if (ch.supprime === true) {
         if (typeof ch.modifie !== "number" || !Number.isFinite(ch.modifie)) continue;
