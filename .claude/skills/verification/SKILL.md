@@ -1,6 +1,6 @@
 ---
 name: verification
-description: Vérification, fichiers de référence (tests/__snapshots__, DXF, CSV, notices, fiches PDF), écart de snapshot, check:dxf, essai dans le navigateur avec window.limon, capture et aspect de la 3D.
+description: Vérification, CI GitHub Actions (jobs, contrôles exigés), fichiers de référence (tests/__snapshots__, DXF, CSV, notices, fiches PDF), écart de snapshot, check:dxf, essai dans le navigateur avec window.limon, capture et aspect de la 3D.
 ---
 
 # Vérification
@@ -15,3 +15,10 @@ description: Vérification, fichiers de référence (tests/__snapshots__, DXF, C
 - Dans l'outil en développement (`/app/`), `window.limon` donne `compute`, `buildCNC`, `toDXF`, `exportZip`, `update`, `current()` et `scene()`.
 - requestAnimationFrame ne tourne pas dans le panneau navigateur masqué : appeler `limon.update()` plutôt que de compter sur les événements.
 - Pour la 3D en capture d'écran, le renderer utilise `preserveDrawingBuffer: true`. Le rendu reproduit celui de Three.js r147 (gestion des couleurs désactivée, lumières × π) : vérifier l'aspect à l'œil après une mise à jour de Three.js.
+
+## CI
+
+GitHub Actions, deux pipelines : `Tests` (`tests.yml` : jobs `vitest`, `dxf`, `build` avec démarrage du serveur) et `Code Quality` (`code-quality.yml` : `qualite` pour types, ESLint et Prettier ; `audit`, sans bloquer). Préparation commune dans `.github/actions/setup`.
+
+- La règle « Protection de main » exige `vitest`, `dxf`, `build`, `qualite` par leur nom : renommer un job demande de la mettre à jour.
+- Pas de filtre de chemins sur ces pipelines : un contrôle exigé qui ne se lance pas bloquerait la PR.
