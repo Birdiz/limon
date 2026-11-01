@@ -33,11 +33,16 @@ export function newProject(id: string, nom: string, mode: Mode, now: number, par
   return { ...base, etat: "brouillon", finiLe: 0, params: { ...params }, devis: null };
 }
 
-/** Projet relu (stockage ou fichier, non fiable) ; null s'il n'a pas d'identifiant. */
+/** Le format de `newId` : un identifiant venu d'ailleurs finit dans des attributs HTML et en base. */
+export function isProjectId(id: unknown): id is string {
+  return typeof id === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(id);
+}
+
+/** Projet relu (stockage ou fichier, non fiable) ; null si son identifiant manque ou sort du format. */
 export function sanitizeProject(raw: unknown): Project | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  if (typeof r.id !== "string" || !r.id) return null;
+  if (!isProjectId(r.id)) return null;
   const date = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
   const etape = typeof r.etape === "number" && Number.isFinite(r.etape) ? Math.max(0, Math.round(r.etape)) : 0;
   // Les escaliers d'avant l'état sont des brouillons.

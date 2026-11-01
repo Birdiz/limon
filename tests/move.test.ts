@@ -19,6 +19,13 @@ describe("déménagement depuis l'ancienne adresse", () => {
     expect(location.hash).toBe("");
   });
 
+  it("écarte un projet dont l'identifiant est hors format", () => {
+    const good = newProject("a", "Dupont", "guide", 5);
+    const data = { projets: [good, { ...good, id: 'b"c' }], courant: "a", lien: "" };
+    history.replaceState(null, "", "/#transfert=" + encodeURIComponent(JSON.stringify(data)));
+    expect(takeMoved()?.projets).toEqual([good]);
+  });
+
   it("ignore une ancre sans transfert ou illisible", () => {
     history.replaceState(null, "", "/#H=3100");
     expect(takeMoved()).toBeNull();
