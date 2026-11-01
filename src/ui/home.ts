@@ -179,12 +179,12 @@ export class Home {
         : `<span class="etat">${p.mode === "guide" ? "Pas à pas en cours" : "Brouillon"}</span>`;
     return (
       `<li${isCur ? ' class="cur"' : ""}>` +
-      `<button class="cardopen" type="button" data-act="open" data-id="${p.id}">` +
+      `<button class="cardopen" type="button" data-act="open" data-id="${esc(p.id)}">` +
       `<span class="thumb">${this.thumb(p)}</span>` +
       `<span class="ctxt"><b>${esc(p.nom)}</b><small>${FORME_LABEL[p.params.forme]} · modifié le ${day(p.modifie)}</small>${state}</span>` +
       `${isCur ? '<span class="pjcur">ouvert</span>' : ""}</button>` +
-      `<div class="pjbtns"><button class="btn" type="button" data-act="dup" data-id="${p.id}">Dupliquer</button>` +
-      `<button class="btn danger" type="button" data-act="del" data-id="${p.id}">Supprimer</button></div></li>`
+      `<div class="pjbtns"><button class="btn" type="button" data-act="dup" data-id="${esc(p.id)}">Dupliquer</button>` +
+      `<button class="btn danger" type="button" data-act="del" data-id="${esc(p.id)}">Supprimer</button></div></li>`
     );
   }
 

@@ -7,6 +7,18 @@ import { LocalStore } from "../src/ui/store";
 describe("projets dans le navigateur", () => {
   beforeEach(() => localStorage.clear());
 
+  it("laisse tomber à la lecture un projet déjà enregistré hors format", async () => {
+    const bad = newProject('a"b', "Hors format", "complet", 1);
+    localStorage.setItem("limon-projets", JSON.stringify([bad, newProject("bon", "Bon", "complet", 1)]));
+    localStorage.setItem("limon-courant", bad.id);
+    const s = new LocalStore();
+    expect((await s.list()).map((p) => p.id)).toEqual(["bon"]);
+    expect(await s.get(bad.id)).toBeNull();
+    // L'écriture suivante ne le remet pas, et la relance ne le retrouve pas.
+    await s.save(newProject("autre", "Autre", "complet", 2));
+    expect((await new LocalStore().list()).map((p) => p.id).sort()).toEqual(["autre", "bon"]);
+  });
+
   it("reprend les réglages de l'ancienne version comme premier projet", async () => {
     localStorage.setItem("limon-v2", JSON.stringify({ ...DEFAULTS, forme: "droit", H: 2850 }));
     const s = new LocalStore();

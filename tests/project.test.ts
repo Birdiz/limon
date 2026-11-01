@@ -21,6 +21,13 @@ describe("projets", () => {
     expect(newProject("a2", " ", "complet", 0).nom).toBe("Mon escalier");
   });
 
+  it("refuse un identifiant hors format : il finit dans des attributs HTML", () => {
+    for (const id of ['a"b', "a b", "<b>", "é", "x".repeat(101), ""]) expect(sanitizeProject({ id })).toBeNull();
+    // randomUUID, le secours de newId, la plus longue permise.
+    for (const id of ["3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b", "lr5k2x0abc123def", "x".repeat(100)])
+      expect(sanitizeProject({ id })?.id).toBe(id);
+  });
+
   it("nettoie un projet enregistré", () => {
     expect(sanitizeProject(null)).toBeNull();
     expect(sanitizeProject({ nom: "sans identifiant" })).toBeNull();
