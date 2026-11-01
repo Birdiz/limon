@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULTS } from "../src/core/params";
-import { fileBase, newProject, parseProjectFile, projectFile, sanitizeProject, withEtat } from "../src/core/project";
+import {
+  canFinish,
+  edited,
+  fileBase,
+  newProject,
+  parseProjectFile,
+  projectFile,
+  sanitizeProject,
+  withEtat,
+} from "../src/core/project";
+import { compute, type ComputeResult } from "../src/core/stair";
 
 describe("projets", () => {
   const p = newProject("a1", "  Escalier Dupont ", "guide", 1000, { ...DEFAULTS, forme: "droit", H: 2800 });
@@ -30,6 +40,34 @@ describe("projets", () => {
     expect(sanitizeProject({ id: "c", etat: "posé", finiLe: 9 })).toMatchObject({ etat: "brouillon", finiLe: 0 });
     expect(sanitizeProject({ id: "c", etat: "fini", finiLe: 9 })).toMatchObject({ etat: "fini", finiLe: 9 });
     expect(parseProjectFile(projectFile(f), "z")).toMatchObject({ etat: "fini", finiLe: 5000 });
+  });
+
+  it("ne change rien tant que les réglages sont les mêmes", () => {
+    expect(edited(p, { ...p.params }, 9000)).toBe(p);
+    const f = withEtat(p, "fini", 5000);
+    expect(edited(f, { ...f.params }, 9000)).toBe(f);
+  });
+
+  it("enregistre un réglage changé, et repasse un escalier terminé en brouillon", () => {
+    const params = { ...p.params, H: 2900 };
+    expect(edited(p, params, 9000)).toEqual({ ...p, params, modifie: 9000 });
+    const f = withEtat(p, "fini", 5000);
+    expect(edited(f, params, 9000)).toEqual({ ...f, params, etat: "brouillon", finiLe: 0, modifie: 9000 });
+  });
+
+  it("dit si un escalier peut être terminé", () => {
+    const ok = compute(DEFAULTS);
+    expect(canFinish(ok)).toBe("oui");
+    expect(canFinish(compute({ ...DEFAULTS, H: 120 }))).toBe("non");
+    expect(canFinish(null)).toBe("non");
+    if (!ok.ok) throw new Error("calcul attendu en réussite");
+    const bad: ComputeResult = { ok: true, stair: { ...ok.stair, notes: [["warn", "à voir"]] } };
+    expect(canFinish(bad)).toBe("oui");
+    bad.stair.notes = [
+      ["warn", "à voir"],
+      ["bad", "non respecté"],
+    ];
+    expect(canFinish(bad)).toBe("confirmer");
   });
 
   it("relit son fichier .escalier sous un nouvel identifiant", () => {

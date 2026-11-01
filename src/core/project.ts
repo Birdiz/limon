@@ -1,5 +1,6 @@
 import { sanitizeDevis, type DevisProjet } from "./devis";
 import { DEFAULTS, sanitizeParams, type Params } from "./params";
+import type { ComputeResult } from "./stair";
 
 /** Guidé : réglage étape par étape ; complet : toutes les sections. */
 export type Mode = "guide" | "complet";
@@ -100,4 +101,17 @@ export function withDevis(p: Project, devis: DevisProjet | null, now: number): P
 /** Escalier passé à l'état donné ; la date de modification avance, pour l'échange avec le compte. */
 export function withEtat(p: Project, etat: Etat, now: number): Project {
   return { ...p, etat, finiLe: etat === "fini" ? now : 0, modifie: now };
+}
+
+/** Escalier avec ces réglages ; le même objet s'ils n'ont pas changé. Un escalier terminé qu'on modifie redevient
+    un brouillon : sa fiche n'est plus celle qui a été validée. */
+export function edited(p: Project, params: Params, now: number): Project {
+  if (JSON.stringify(params) === JSON.stringify(p.params)) return p;
+  return { ...(p.etat === "fini" ? withEtat(p, "brouillon", now) : p), params, modifie: now };
+}
+
+/** Passage à « fini » : impossible tant que le calcul échoue, à confirmer si un contrôle n'est pas respecté. */
+export function canFinish(result: ComputeResult | null): "oui" | "confirmer" | "non" {
+  if (!result?.ok) return "non";
+  return result.stair.notes.some(([st]) => st === "bad") ? "confirmer" : "oui";
 }

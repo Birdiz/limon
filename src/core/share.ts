@@ -14,6 +14,12 @@ export function paramsToHash(p: Params): string {
   return q.toString();
 }
 
+/** Mêmes réglages une fois écrits dans un lien : les valeurs recalculées n'y comptent pas. */
+export const sameLink = (a: Params, b: Params): boolean => paramsToHash(a) === paramsToHash(b);
+
+/** Un lien devient un nouvel escalier, sauf s'il redonne les réglages de l'escalier ouvert (l'adresse les suit). */
+export const linkOpensNew = (link: Params, open: Params | null): boolean => !open || !sameLink(link, open);
+
 /** Réglages lus dans un lien ; null si le lien n'en porte aucun. Les valeurs passent par sanitizeParams. */
 export function paramsFromHash(hash: string): Params | null {
   const q = new URLSearchParams(hash.replace(/^#/, ""));

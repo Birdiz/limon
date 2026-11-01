@@ -22,6 +22,13 @@ const input = (id: string) => byId<HTMLInputElement>(id);
 /** Cotes de la trémie, calculées quand elle est « à calculer ». */
 const TRE_KEYS = ["tL", "tX", "tY", "tbD", "tbA"] as const;
 
+/** Champ qui affiche le calcul tant que son automatique est actif : ce chiffre n'est pas un réglage. */
+const computed = (p: Params, k: NumericKey) =>
+  (k === "n" && p.nAuto) ||
+  (k === "f" && p.fAuto) ||
+  (k === "hlj" && p.hljAuto) ||
+  (p.tAuto && (TRE_KEYS as readonly NumericKey[]).includes(k));
+
 export function writeInputs(p: Params): void {
   // La forme se choisit sans son sens (« quart »), le sens à part (« d ») ; l'escalier droit garde le sens précédent.
   const [base, sens] = p.forme.split("-");
@@ -39,19 +46,21 @@ export function writeInputs(p: Params): void {
   byId<HTMLSelectElement>("tournant").value = p.tournant;
 }
 
-/** Réglages lus dans le formulaire ; un champ vide ou invalide garde sa valeur précédente et figure dans missing. */
+/** Réglages lus dans le formulaire ; un champ vide ou invalide garde sa valeur précédente et figure dans missing.
+    Un champ calculé garde aussi sa valeur précédente, et repart du chiffre affiché au passage en manuel. */
 export function readInputs(prev: Params): { params: Params; missing: NumericKey[] } {
   const p = { ...prev };
   const missing: NumericKey[] = [];
   const base = document.querySelector<HTMLInputElement>('input[name="forme"]:checked')?.value ?? "droit";
   const sens = document.querySelector<HTMLInputElement>('input[name="sens"]:checked')?.value ?? "d";
   p.forme = (base === "droit" ? base : `${base}-${sens}`) as Forme;
+  BOOLEAN_KEYS.forEach((k) => (p[k] = input(k).checked));
   NUMERIC_KEYS.forEach((k) => {
+    if (computed(p, k)) return;
     const v = parseFloat(input(k).value);
     if (!Number.isNaN(v)) p[k] = v;
     else missing.push(k);
   });
-  BOOLEAN_KEYS.forEach((k) => (p[k] = input(k).checked));
   p.ess = byId<HTMLSelectElement>("ess").value as Essence;
   p.gc = byId<HTMLSelectElement>("gc").value as GardeCorps;
   p.gcPose = byId<HTMLSelectElement>("gcPose").value as Pose;

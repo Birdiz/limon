@@ -13,7 +13,7 @@ Pas de framework d'interface.
 
 - **localStorage** : `limon-projets` (liste), `limon-courant` (dernier ouvert), `limon-sections` (sections ouvertes en mode complet), `limon-atelier` (profil de l'atelier). L'ancienne clé `limon-v2` est reprise une fois comme « Mon escalier », sans être effacée.
 - **Fichier** `.escalier` (les `.limon` d'avant le renommage se lisent aussi) : JSON `{ format: "limon-projet", version, projet }`.
-- **Lien de projet** (`#H=3200&…`, `src/core/share.ts`) : ouvert dans la page, il devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert. L'adresse suit les réglages du projet ouvert.
+- **Lien de projet** (`#H=3200&…`, `src/core/share.ts`) : ouvert dans la page, il devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert (`sameLink`, comparaison comme le lien est écrit : `n`, `f` et `hlj` automatiques n'y comptent pas). L'adresse suit les réglages du projet ouvert : actualiser ou une mise à jour silencieuse relit donc l'ancre comme un lien, sans rien copier.
 
 ## En-tête et accueil
 
@@ -23,7 +23,7 @@ Pas de framework d'interface.
 
 ## État de l'escalier
 
-`etat` et `finiLe` du `Project`, `withEtat`. Brouillon à la création, à la copie et pour les escaliers d'avant l'état ; « Escalier terminé » dans le bandeau au-dessus de la fiche (masqué en pas à pas). Un réglage changé sur un escalier terminé le repasse en brouillon.
+`etat` et `finiLe` du `Project`, `withEtat`. Brouillon à la création, à la copie et pour les escaliers d'avant l'état ; « Escalier terminé » dans le bandeau au-dessus de la fiche (masqué en pas à pas). Un réglage changé sur un escalier terminé le repasse en brouillon (`edited`) ; `canFinish` décide du passage à terminé.
 
 ## Réglages avancés
 
@@ -35,6 +35,7 @@ Préférence de l'appareil (`limon-avance`), interrupteur dans l'onglet Mon comp
 
 ## Réglages et pas à pas
 
+- **Champs calculés** : `n`, `f`, `hlj` et les cotes de trémie affichent le calcul tant que leur automatique est actif. `readInputs` ne les relit pas (les réglages gardent la valeur précédente), sauf au passage en manuel, qui part du chiffre affiché.
 - **Sections** : six `<details>` (Forme, Dimensions, Trémie, Marches, Bois, Garde-corps ; ordre et titres dans `SECTIONS`, `src/core/summary.ts`), avec un résumé quand ils sont repliés.
 - **Mode guidé** (`Steps`, `src/ui/steps.ts`) : une section à la fois, `mode` et `etape` enregistrés dans le projet, fiche et CNC masquées jusqu'à « Voir mon escalier », croquis de la cote en cours (`src/ui/sketch.ts`).
 
