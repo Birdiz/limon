@@ -111,6 +111,26 @@ describe("synchronisation des projets", () => {
     expect(await b.names()).toEqual(["Dupont"]);
   });
 
+  it("un identifiant hors format ne monte pas et ne descend pas", async () => {
+    const a = device();
+    await a.store.save(newProject("bon", "Bon", "complet", 1));
+    await a.signIn("a@exemple.fr");
+    // Une ligne d'avant le contrôle, déjà dans le compte : un appareil neuf ne la prend pas.
+    const bad = newProject('a"b', "Hors format", "complet", 2);
+    await s.db.query(
+      "insert into projets (compte, id, modifie, supprime, donnees) select compte, $1, 2, false, $2 from projets limit 1",
+      [bad.id, JSON.stringify(bad)],
+    );
+    const b = device();
+    await b.signIn("a@exemple.fr");
+    expect((await b.store.list()).map((p) => p.id)).toEqual(["bon"]);
+
+    // Déjà sur un appareil : il tombe à la lecture, avant tout envoi.
+    const storage = memory();
+    storage.setItem("limon-projets", JSON.stringify([bad]));
+    expect(await new LocalStore(storage).list()).toEqual([]);
+  });
+
   it("une suppression ne revient pas, sauf modification plus récente ailleurs", async () => {
     const a = device();
     const b = device();
