@@ -29,6 +29,9 @@ function problem(e: unknown): string | null {
   return e instanceof Error ? e.message : "Quelque chose n'a pas marché.";
 }
 
+/** Le stockage refuse : rien ne survivrait au rechargement de la page. */
+const NOT_STORED = "Escalier pas gardé sur cet appareil : gardez-en une copie en fichier";
+
 type View = "login" | "offer" | "account";
 
 /**
@@ -72,22 +75,24 @@ export class AccountPanel {
     const btn = byId("acOpen");
     const saved = byId("saved");
     saved.classList.toggle("wait", !!st.compte && st.pending > 0);
+    saved.classList.toggle("fail", !st.stored);
     if (!st.compte) {
-      saved.textContent = "Enregistré sur cet appareil";
+      saved.textContent = st.stored ? "Enregistré sur cet appareil" : NOT_STORED;
       btn.className = "btn hbtn acbtn guest";
       btn.innerHTML = `${PERSON}<span class="lbl-long">Ouvrir l'outil</span><span class="lbl-short">Compte</span>`;
       btn.removeAttribute("aria-label");
       return;
     }
     const s = st.pending > 1 ? "s" : "";
-    const state = !st.pending
-      ? "escaliers enregistrés sur tous vos appareils"
-      : st.offline
-        ? `${st.pending} escalier${s} à envoyer dès que le réseau revient`
-        : `${st.pending} escalier${s} en cours d'envoi`;
-    saved.textContent = st.pending
-      ? `${state[0]!.toUpperCase()}${state.slice(1)}`
-      : "Enregistré sur tous vos appareils";
+    const state = !st.stored
+      ? NOT_STORED
+      : !st.pending
+        ? "escaliers enregistrés sur tous vos appareils"
+        : st.offline
+          ? `${st.pending} escalier${s} à envoyer dès que le réseau revient`
+          : `${st.pending} escalier${s} en cours d'envoi`;
+    saved.textContent =
+      st.pending || !st.stored ? `${state[0]!.toUpperCase()}${state.slice(1)}` : "Enregistré sur tous vos appareils";
     btn.className = "btn hbtn acbtn member";
     btn.innerHTML = `<span class="lbl">Mon compte</span><span class="avatar" aria-hidden="true">${esc(st.compte.email[0]!.toUpperCase())}</span>`;
     btn.setAttribute("aria-label", "Mon compte");

@@ -1,7 +1,7 @@
 import { sanitizeParams } from "../core/params";
 import { NOM_PAR_DEFAUT, newProject, sanitizeProject, type Project } from "../core/project";
 
-/** Projets de l'utilisateur. Asynchrone pour qu'un espace en ligne remplace un jour le stockage du navigateur. */
+/** Interface commune au stockage de l'appareil et à sa recopie dans le compte. */
 export interface ProjectStore {
   /** Projets, le plus récemment modifié en premier. */
   list(): Promise<Project[]>;
@@ -45,36 +45,55 @@ export function read(store: KeyValue | null, key: string): string | null {
   }
 }
 
-export function write(store: KeyValue | null, key: string, value: string | null): void {
+/** Vrai si l'écriture a eu lieu. */
+export function write(store: KeyValue | null, key: string, value: string | null): boolean {
+  if (!store) return false;
   try {
-    if (value === null) store?.removeItem(key);
-    else store?.setItem(key, value);
+    if (value === null) store.removeItem(key);
+    else store.setItem(key, value);
+    return true;
   } catch {
-    // Stockage indisponible (navigation privée) : les projets ne survivent pas au rechargement.
+    // Stockage indisponible ou plein : à l'appelant de le dire, la mémoire ne survit pas au rechargement.
+    return false;
   }
 }
 
-/** Projets dans le localStorage de ce navigateur. */
+/**
+ * Projets dans le localStorage de ce navigateur, que les autres onglets écrivent aussi : chaque écriture relit le
+ * stockage et n'y porte que les changements faits ici, le plus récent gagnant, projet par projet.
+ */
 export class LocalStore implements ProjectStore {
   /** Copie en mémoire, qui sert aussi quand le stockage est indisponible. */
   private projects: Project[];
   private current: string | null;
+  /** Changements faits ici et pas encore écrits, null pour une suppression. Il n'en reste que si le stockage refuse. */
+  private unwritten = new Map<string, Project | null>();
+  private written: boolean;
+  private changeListeners: ((ids: string[]) => void)[] = [];
+  private storedListeners: (() => void)[] = [];
 
   constructor(private storage: KeyValue | null = browserStorage()) {
+    this.written = storage !== null;
+    const stored = this.readProjects();
+    this.projects = stored ?? this.migrate();
+    this.current = read(storage, CURRENT_KEY);
+    if (!stored && this.projects.length) {
+      this.current = this.projects[0]!.id;
+      for (const p of this.projects) this.unwritten.set(p.id, p);
+      this.flush();
+      write(storage, CURRENT_KEY, this.current);
+    }
+  }
+
+  /** Projets du stockage ; null s'il n'en dit rien : indisponible, vide ou abîmé. */
+  private readProjects(): Project[] | null {
     let raw: unknown;
     try {
-      raw = JSON.parse(read(storage, PROJECTS_KEY) ?? "null");
+      raw = JSON.parse(read(this.storage, PROJECTS_KEY) ?? "null");
     } catch {
       raw = null;
     }
-    this.projects = Array.isArray(raw)
-      ? raw.map(sanitizeProject).filter((p): p is Project => p !== null)
-      : this.migrate();
-    this.current = read(storage, CURRENT_KEY);
-    if (!Array.isArray(raw) && this.projects.length) {
-      this.current = this.projects[0]!.id;
-      this.flush();
-    }
+    return Array.isArray(raw) ? raw.map(sanitizeProject).filter((p): p is Project => p !== null) : null;
   }
 
   private migrate(): Project[] {
@@ -89,9 +108,65 @@ export class LocalStore implements ProjectStore {
     return [newProject(newId(), NOM_PAR_DEFAUT, "complet", Date.now(), params)];
   }
 
+  /** Recale la copie en mémoire sur le stockage et renvoie les projets que d'autres onglets ont changés. */
+  private reload(): string[] {
+    const stored = this.readProjects();
+    if (!stored) return [];
+    const merged = new Map(stored.map((p) => [p.id, p]));
+    for (const [id, mine] of this.unwritten) {
+      const theirs = merged.get(id);
+      if (!mine) merged.delete(id);
+      else if (!theirs || mine.modifie >= theirs.modifie) merged.set(id, mine);
+    }
+    const before = new Map(this.projects.map((p) => [p.id, p.modifie]));
+    this.projects = [...merged.values()];
+    return [...new Set([...before.keys(), ...merged.keys()])].filter(
+      (id) => before.get(id) !== merged.get(id)?.modifie,
+    );
+  }
+
+  /**
+   * Écrit les projets. Seule cette écriture décide de `stored` : le projet ouvert, écrit à côté, est une petite valeur
+   * qui passe encore quand le stockage est plein.
+   */
   private flush(): void {
-    write(this.storage, PROJECTS_KEY, JSON.stringify(this.projects));
-    write(this.storage, CURRENT_KEY, this.current);
+    const changed = this.reload();
+    const written = write(this.storage, PROJECTS_KEY, JSON.stringify(this.projects));
+    if (written) this.unwritten.clear();
+    if (written !== this.written) {
+      this.written = written;
+      for (const cb of this.storedListeners) cb();
+    }
+    this.emit(changed);
+  }
+
+  private emit(ids: string[]): void {
+    if (ids.length) for (const cb of this.changeListeners) cb(ids);
+  }
+
+  /** Écoute les écritures des autres onglets ; le navigateur ne prévient pas celui qui écrit. */
+  watch(): void {
+    window.addEventListener("storage", (e) => {
+      if (e.key !== PROJECTS_KEY) return;
+      // Des changements attendent : l'autre onglet a peut-être libéré de la place.
+      if (this.unwritten.size) this.flush();
+      else this.emit(this.reload());
+    });
+  }
+
+  /** Projets changés par un autre onglet. */
+  onChange(cb: (ids: string[]) => void): void {
+    this.changeListeners.push(cb);
+  }
+
+  /** La réponse de `stored` change. */
+  onStored(cb: () => void): void {
+    this.storedListeners.push(cb);
+  }
+
+  /** Faux tant que le stockage refuse d'écrire les projets : ils ne survivraient pas au rechargement. */
+  stored(): boolean {
+    return this.written;
   }
 
   list(): Promise<Project[]> {
@@ -106,13 +181,15 @@ export class LocalStore implements ProjectStore {
     const i = this.projects.findIndex((q) => q.id === p.id);
     if (i < 0) this.projects.push(p);
     else this.projects[i] = p;
+    this.unwritten.set(p.id, p);
     this.flush();
     return Promise.resolve();
   }
 
   remove(id: string): Promise<void> {
     this.projects = this.projects.filter((p) => p.id !== id);
-    if (this.current === id) this.current = null;
+    this.unwritten.set(id, null);
+    if (this.current === id) void this.setCurrent(null);
     this.flush();
     return Promise.resolve();
   }
@@ -123,7 +200,7 @@ export class LocalStore implements ProjectStore {
 
   setCurrent(id: string | null): Promise<void> {
     this.current = id;
-    this.flush();
+    write(this.storage, CURRENT_KEY, id);
     return Promise.resolve();
   }
 }

@@ -29,6 +29,7 @@ function device() {
   const d = {
     online: true,
     requests: 0,
+    storage,
     f,
     atelier,
     store: new SyncStore(
@@ -63,7 +64,7 @@ describe("synchronisation des projets", () => {
     await a.store.remove("p");
     await a.store.sync();
     expect(a.requests).toBe(0);
-    expect(await a.store.status()).toEqual({ compte: null, pending: 0, offline: false });
+    expect(await a.store.status()).toMatchObject({ compte: null, pending: 0, offline: false });
   });
 
   it("à la première connexion, les projets de l'appareil montent dans le compte", async () => {
@@ -195,7 +196,7 @@ describe("synchronisation des projets", () => {
     a.online = true;
     await a.store.signOut();
     expect(await a.names()).toEqual([]);
-    expect(await a.store.status()).toEqual({ compte: null, pending: 0, offline: false });
+    expect(await a.store.status()).toMatchObject({ compte: null, pending: 0, offline: false });
     expect((await a.f("/api/compte")).status).toBe(401);
     const b = device();
     await b.signIn("jean@exemple.fr");
@@ -307,5 +308,37 @@ describe("synchronisation du profil de l'atelier", () => {
     await a.signIn("jean@exemple.fr");
     await a.signIn("marie@exemple.fr");
     expect(a.atelier.get()).toBeNull();
+  });
+
+  it("l'état dit si l'appareil garde les escaliers, et prévient quand cela change", async () => {
+    const d = device();
+    let notes = 0;
+    d.store.onStatus(() => notes++);
+    expect((await d.store.status()).stored).toBe(true);
+    const full = () => {
+      throw new DOMException("plein", "QuotaExceededError");
+    };
+    const setItem = d.storage.setItem;
+    d.storage.setItem = full;
+    await d.store.save(project("a", "A", 1));
+    expect((await d.store.status()).stored).toBe(false);
+    expect(notes).toBe(1);
+    d.storage.setItem = setItem;
+    await d.store.save(project("a", "A", 2));
+    expect((await d.store.status()).stored).toBe(true);
+    expect(notes).toBe(2);
+  });
+
+  it("ce qu'un autre onglet a changé arrive à la page et à l'état", async () => {
+    const d = device();
+    const seen: string[][] = [];
+    let notes = 0;
+    d.store.onChange((ids) => seen.push(ids));
+    d.store.onStatus(() => notes++);
+    await new LocalStore(d.storage).save(project("b", "Dans l'autre onglet", 1));
+    await d.store.save(project("a", "Ici", 2));
+    expect(seen).toEqual([["b"]]);
+    expect(notes).toBe(1);
+    expect(await d.names()).toEqual(["Dans l'autre onglet", "Ici"]);
   });
 });

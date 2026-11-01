@@ -97,6 +97,19 @@ body {
 .saved.wait::before {
   background: var(--warn);
 }
+/* Stockage refusé : une ligne à part sous l'en-tête, à toutes les largeurs, pour ne pas passer inaperçue. */
+.top:has(.saved.fail) {
+  flex-wrap: wrap;
+}
+.saved.fail {
+  order: 1;
+  flex: 1 0 100%;
+  color: var(--bad);
+}
+.saved.fail::before {
+  background: var(--bad);
+  flex: none;
+}
 .saved:empty {
   display: none;
 }
@@ -501,7 +514,7 @@ body {
 body.home-on .work,
 body.home-on .tabbar,
 body.home-on .proj,
-body.home-on .saved,
+body.home-on .saved:not(.fail),
 body.home-on .undo,
 body.home-on #pjNew {
   display: none !important;
@@ -2309,7 +2322,7 @@ body.avance .auto {
   display: none;
 }
 @media (max-width: 1100px) {
-  .saved {
+  .saved:not(.fail) {
     display: none;
   }
 }
