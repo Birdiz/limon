@@ -1,5 +1,5 @@
 import type { Changement, Compte, Entree, Refus } from "../core/account";
-import { sanitizeProject, stamped, type Project } from "../core/project";
+import { fromNewerVersion, sanitizeProject, stamped, type Project } from "../core/project";
 import { ApiError, NotSignedIn, type Api } from "./api";
 import type { AtelierStore } from "./atelier";
 import { browserStorage, read, write, type KeyValue, type LocalStore, type ProjectStore } from "./store";
@@ -68,6 +68,8 @@ export interface SyncStatus {
   erreur: string | null;
   /** Ce que le serveur a refusé élément par élément. */
   refuses: RefusVu[];
+  /** Projets du compte écrits par une version plus récente de l'outil : ils attendent ici sa mise à jour. */
+  plusRecents: number;
   /** Le stockage de l'appareil accepte les projets. */
   stored: boolean;
 }
@@ -85,6 +87,7 @@ export class SyncStore implements ProjectStore {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private offline = false;
   private erreur: string | null = null;
+  private plusRecents = 0;
   /** Les refus sont retentés une fois par chargement de la page : l'heure a pu avancer, le compte a pu changer. */
   private retry = true;
   private changeListeners: ((ids: string[]) => void)[] = [];
@@ -189,6 +192,7 @@ export class SyncStore implements ProjectStore {
       offline: this.offline,
       erreur: this.erreur,
       refuses: this.state.compte ? await this.refused() : [],
+      plusRecents: this.state.compte ? this.plusRecents : 0,
       stored: this.local.stored(),
     };
   }
@@ -370,6 +374,7 @@ export class SyncStore implements ProjectStore {
     const serveur: Record<string, number> = {};
     const wanted: string[] = [];
     const changed: string[] = [];
+    let plusRecents = 0;
     for (const e of index) {
       const p = await this.local.get(e.id);
       const deleted = supprimes[e.id];
@@ -392,6 +397,11 @@ export class SyncStore implements ProjectStore {
     }
     for (let i = 0; i < wanted.length; i += 500)
       for (const raw of await this.api.fetchProjects(wanted.slice(i, i + 500))) {
+        // Le ranger lui ferait perdre ce que cette version ne connaît pas ; il reste en ligne, sans rien bloquer.
+        if (fromNewerVersion(raw)) {
+          plusRecents++;
+          continue;
+        }
         const q = sanitizeProject(raw);
         if (!q) continue;
         // Une modification faite ici pendant l'échange reste la plus récente.
@@ -400,6 +410,7 @@ export class SyncStore implements ProjectStore {
         await this.local.save(q);
         changed.push(q.id);
       }
+    this.plusRecents = plusRecents;
     this.state.serveur = serveur;
     this.state.supprimes = Object.fromEntries(Object.entries(supprimes).filter(([id]) => !settled.has(id)));
     this.persist();
@@ -409,6 +420,7 @@ export class SyncStore implements ProjectStore {
   private reset(connu: boolean): void {
     clearTimeout(this.timer);
     this.state = { ...EMPTY, connu, serveur: {}, supprimes: {}, refuses: {} };
+    this.plusRecents = 0;
     this.offline = false;
     this.erreur = null;
     this.persist();

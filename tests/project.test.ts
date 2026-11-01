@@ -4,12 +4,15 @@ import {
   canFinish,
   edited,
   fileBase,
+  fromNewerVersion,
   newProject,
   NOM_PAR_DEFAUT,
   parseProjectFile,
   projectFile,
   sanitizeProject,
+  SCHEMA,
   stamped,
+  touched,
   withDevis,
   withEtat,
 } from "../src/core/project";
@@ -19,6 +22,42 @@ const PAS_UN_PROJET = "Ce fichier n'est pas un projet Quart de tour.";
 const ABIME = "Ce fichier est abîmé : les cotes de l'escalier ne s'y lisent pas.";
 /** Fichier de projet écrit à la main, version 1 sauf si elle est donnée. */
 const fichier = (champs: object) => JSON.stringify({ format: "limon-projet", version: 1, ...champs }, null, 2);
+
+describe("numéro de schéma", () => {
+  const p = newProject("id", "A", "complet", 1000);
+
+  it("un nouvel escalier porte le numéro de cette version", () => {
+    expect(p.schema).toBe(SCHEMA);
+  });
+
+  it("relire n'élève pas le numéro : absent ou mal formé il reste 0, plus haut il revient à ce qu'on a relu", () => {
+    expect(sanitizeProject({ ...p, schema: undefined })!.schema).toBe(0);
+    for (const schema of ["1", 1.5, -1, null, 1e300]) expect(sanitizeProject({ ...p, schema })!.schema).toBe(0);
+    expect(sanitizeProject(p)!.schema).toBe(SCHEMA);
+    expect(sanitizeProject({ ...p, schema: SCHEMA + 1 })!.schema).toBe(SCHEMA);
+  });
+
+  it("reconnaît un projet d'une version plus récente", () => {
+    expect(fromNewerVersion({ ...p, schema: SCHEMA + 1 })).toBe(true);
+    expect(fromNewerVersion(p)).toBe(false);
+    expect(fromNewerVersion({ id: "id" })).toBe(false);
+    expect(fromNewerVersion(null)).toBe(false);
+  });
+
+  it("toute modification porte le numéro de cette version, pas la simple relecture", () => {
+    const ancien = { ...p, schema: 0 };
+    expect(touched(ancien, 2000)).toEqual({ modifie: 2000, schema: SCHEMA });
+    expect(withDevis(ancien, null, 2000).schema).toBe(SCHEMA);
+    expect(withEtat(ancien, "fini", 2000).schema).toBe(SCHEMA);
+    expect(edited(ancien, { ...p.params, H: 2900 }, 2000).schema).toBe(SCHEMA);
+    expect(edited(ancien, ancien.params, 2000)).toBe(ancien);
+  });
+
+  it("un fichier ouvert est un nouvel escalier, au numéro de cette version", () => {
+    const r = parseProjectFile(projectFile(p), "autre");
+    expect("projet" in r && r.projet.schema).toBe(SCHEMA);
+  });
+});
 
 describe("textes d'un projet relu", () => {
   it("retire les caractères de contrôle et garde les retours à la ligne", () => {
