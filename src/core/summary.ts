@@ -51,9 +51,6 @@ export interface TurnSpan {
 export const turnSpans = (R: Stair): TurnSpan[] =>
   R.bals.map(({ a, b }) => ({ from: a + 1, to: b, z0: (a + 1) * R.h, z1: b * R.h }));
 
-/** Premier tournant ; null pour un escalier droit. */
-export const turnSpan = (R: Stair): TurnSpan | null => turnSpans(R)[0] ?? null;
-
 /** Résumé d'une ligne de chaque section, lisible quand elle est repliée. */
 export function sectionSummaries(p: Params, R: Stair | null): Record<Section, string> {
   const tours = TOURS[p.forme],

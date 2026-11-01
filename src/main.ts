@@ -389,7 +389,7 @@ for (const [id, plan] of [
   });
 }
 
-/** Projets changés sur un autre appareil : le projet ouvert se recharge, ou laisse la place s'il a été supprimé. */
+/** Projets changés sur un autre appareil ou dans un autre onglet : le projet ouvert se recharge, ou laisse la place s'il a été supprimé. */
 store.onChange(async (ids) => {
   if (project && ids.includes(project.id)) {
     const p = await store.get(project.id);

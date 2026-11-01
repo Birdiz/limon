@@ -34,6 +34,8 @@ export interface SyncStatus {
   pending: number;
   /** Le dernier échange a échoué faute de réseau ou de serveur. */
   offline: boolean;
+  /** Le stockage de l'appareil accepte les projets. */
+  stored: boolean;
 }
 
 /**
@@ -66,10 +68,16 @@ export class SyncStore implements ProjectStore {
     this.state = { ...EMPTY, ...raw };
     // État enregistré avant `connu`.
     this.state.connu ||= !!this.state.dernier;
+    local.onChange((ids) => {
+      this.emit(ids);
+      this.emitStatus();
+    });
+    local.onStored(() => this.emitStatus());
   }
 
   /** Échanges au démarrage, au retour du réseau, au retour sur la page et toutes les 5 minutes. */
   start(): void {
+    this.local.watch();
     window.addEventListener("online", () => void this.sync());
     document.addEventListener("visibilitychange", () => void this.sync(document.hidden));
     setInterval(() => {
@@ -112,7 +120,7 @@ export class SyncStore implements ProjectStore {
     if (this.state.compte) this.schedule();
   }
 
-  /** Projets ajoutés, changés ou supprimés par un échange avec le serveur. */
+  /** Projets ajoutés, changés ou supprimés par un échange avec le serveur ou par un autre onglet. */
   onChange(cb: (ids: string[]) => void): void {
     this.changeListeners.push(cb);
   }
@@ -135,6 +143,7 @@ export class SyncStore implements ProjectStore {
       compte: this.state.compte,
       pending: this.state.compte ? (await this.pending()).length : 0,
       offline: this.offline,
+      stored: this.local.stored(),
     };
   }
 
