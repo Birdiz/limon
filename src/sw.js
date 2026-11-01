@@ -3,7 +3,9 @@
    Écrit en JavaScript : il n'est pas mis en paquet avec la page. Au build, le greffon `pwa` de
    vite.config.ts remplace VERSION et FICHIERS par l'empreinte du build et la liste de ses fichiers.
    Une nouvelle version s'installe en arrière-plan puis attend ; la page lui dit de prendre la main
-   (message « activer ») au moment où l'artisan ne la regarde pas (src/ui/pwa.ts). */
+   (message « activer ») au moment où l'artisan ne la regarde pas (src/ui/pwa.ts).
+   Les pages en cache gardent les en-têtes reçus à l'installation, politique de sécurité comprise :
+   une politique changée n'atteint les appareils qu'avec une nouvelle version de ce fichier ou du build. */
 const VERSION = "__VERSION__";
 const FICHIERS = ["__FICHIERS__"];
 const CACHE = `limon-${VERSION}`;

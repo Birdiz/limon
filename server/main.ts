@@ -28,7 +28,7 @@ app.use(async (c, next) => {
   await next();
   c.header("X-Content-Type-Options", "nosniff");
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
-  if (origin.startsWith("https:")) c.header("Strict-Transport-Security", "max-age=31536000");
+  if (origin.startsWith("https:")) c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
 });
 app.route("/", api({ db, origin, sendCode: key && !local ? brevo(key) : consoleMail }));
 app.use(await staticFiles(path.resolve(import.meta.dirname, "../dist")));

@@ -11,6 +11,7 @@ description: Serveur et /api (server/), base et migrations, compte, passkeys, se
 - **Base** : Postgres en ligne (`pg`), PGlite en développement (`.pglite/`, greffon `api` de `vite.config.ts`), avec `--local` et dans les tests. Migrations numérotées dans `server/db.ts` : en ajouter une, ne jamais modifier une migration en ligne.
 - **Types** partagés avec la page dans `src/core/account.ts`.
 - **Build** : `npm run build` → `dist/` (site, chemins relatifs) et `dist-server/` (serveur, `vite build --ssr`). Railway lance `npm start` d'après `railway.json`.
+- **En-têtes** : `Strict-Transport-Security` avec `includeSubDomains` (`server/main.ts`) : tout sous-domaine de quart-de-tour.fr doit servir en https, `webmail` (403 de Gandi, sans certificat à ce nom) ne servant déjà rien. `Content-Security-Policy` sur les pages seulement (`pagePolicy`, `server/static.ts`) : le site seul, styles en ligne permis, pas de cadrage. Les scripts en ligne d'une page sont reconnus à leur empreinte, calculée au démarrage : rien à recalculer à la main. Une nouvelle origine ou un script en ligne ajouté par autre chose que le HTML se règlent là ; à essayer dans le build (`pwa`), le serveur de développement n'envoie pas la politique.
 
 ## Connexion
 

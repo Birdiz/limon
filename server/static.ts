@@ -28,6 +28,7 @@ interface File {
   type: string;
   etag: string;
   cache: string;
+  policy?: string;
   raw: Uint8Array<ArrayBuffer>;
   br?: Uint8Array<ArrayBuffer>;
   gzip?: Uint8Array<ArrayBuffer>;
@@ -36,6 +37,31 @@ interface File {
 const brotli = promisify(zlib.brotliCompress);
 const gzip = promisify(zlib.gzip);
 const bytes = (b: Buffer) => new Uint8Array(b);
+
+/**
+ * La politique de sécurité d'une page (Content-Security-Policy) : rien ne vient d'ailleurs, aucun script
+ * en ligne hormis ceux de la page elle-même, reconnus à leur empreinte (le renvoi du <head> de
+ * index.html), et personne ne la met dans un cadre. Les styles en ligne restent permis : l'interface en écrit.
+ */
+export function pagePolicy(html: string): string {
+  const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(
+    (m) => `'sha256-${createHash("sha256").update(m[1]!).digest("base64")}'`,
+  );
+  return [
+    "default-src 'self'",
+    `script-src ${["'self'", ...scripts].join(" ")}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "worker-src 'self'",
+    "manifest-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
 
 /**
  * Le site construit (`dist/`), lu et compressé une fois au démarrage : il pèse quelques mégaoctets.
@@ -57,6 +83,7 @@ export async function staticFiles(dir: string): Promise<MiddlewareHandler> {
       cache: url.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
       raw: bytes(raw),
     };
+    if (ext === ".html") f.policy = pagePolicy(raw.toString("utf8"));
     if (COMPRESS.has(ext) && raw.length > 1024) {
       f.br = bytes(await brotli(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 10 } }));
       f.gzip = bytes(await gzip(raw, { level: 9 }));
@@ -76,6 +103,7 @@ export async function staticFiles(dir: string): Promise<MiddlewareHandler> {
     c.header("Content-Type", f.type);
     c.header("Cache-Control", f.cache);
     c.header("ETag", f.etag);
+    if (f.policy) c.header("Content-Security-Policy", f.policy);
     if (c.req.header("if-none-match") === f.etag) return c.body(null, 304);
     let data = f.raw;
     if (f.br || f.gzip) {
