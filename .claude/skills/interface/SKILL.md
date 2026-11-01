@@ -12,7 +12,7 @@ Pas de framework d'interface.
 `Project` dans `src/core/project.ts`, derrière l'interface `ProjectStore` (`src/ui/store.ts`), commune au stockage de l'appareil (`LocalStore`) et à sa recopie dans le compte (`SyncStore`).
 
 - **localStorage** : `limon-projets` (liste), `limon-courant` (dernier ouvert), `limon-sections` (sections ouvertes en mode complet), `limon-atelier` (profil de l'atelier). L'ancienne clé `limon-v2` est reprise une fois comme « Mon escalier », sans être effacée.
-- **Plusieurs onglets** : `limon-projets` est partagé. Chaque écriture de `LocalStore` relit le stockage et n'y porte que ses propres changements, le plus récent `modifie` gagnant, une suppression demandée ici l'emportant ; un écouteur `storage` recharge la liste et prévient la page par `onChange`. `setCurrent` n'écrit que `limon-courant`.
+- **Plusieurs onglets** : `limon-projets` est partagé. Chaque écriture de `LocalStore` relit le stockage et n'y porte que ses propres changements, le plus récent `modifie` gagnant, une suppression demandée ici l'emportant ; un écouteur `storage` recharge la liste et prévient la page par `onChange`. Une version reçue d'ailleurs (autre onglet ou compte) met l'escalier ouvert à jour sans quitter l'écran en cours : `showProject`, sans fermer l'accueil ni replier l'export, contrairement à `openProject`. `setCurrent` n'écrit que `limon-courant`.
 - **Écriture refusée** (stockage plein ou interdit) : les changements restent en mémoire et repartent à l'écriture suivante ; `stored()` est faux tant que `limon-projets` n'est pas écrit, et l'en-tête le dit à la place de « Enregistré », à toutes les largeurs et sur l'accueil.
 - **Fichier** `.escalier` (les `.limon` d'avant le renommage se lisent aussi) : JSON `{ format: "limon-projet", version, projet }`.
 - **Lien de projet** (`#H=3200&…`, `src/core/share.ts`) : ouvert dans la page, il devient un nouveau projet, sauf s'il redonne les réglages du projet ouvert (`sameLink`, comparaison comme le lien est écrit : `n`, `f` et `hlj` automatiques n'y comptent pas). L'adresse suit les réglages du projet ouvert : actualiser ou une mise à jour silencieuse relit donc l'ancre comme un lien, sans rien copier.
@@ -43,7 +43,7 @@ Préférence de l'appareil (`limon-avance`), interrupteur dans l'onglet Mon comp
 
 ## Annuler, rétablir
 
-`History`, `src/core/history.ts` ; `Undo`, `src/ui/undo.ts`. Copies complètes des réglages. Une frappe continue dans un même champ (nombre ou curseur) = une étape, une correction d'un clic ou « Revenir à l'exemple » = une étape. En mémoire seulement, vidé à l'ouverture d'un escalier.
+`History`, `src/core/history.ts` ; `Undo`, `src/ui/undo.ts`. Copies complètes des réglages. Une frappe continue dans un même champ (nombre ou curseur) = une étape, une correction d'un clic ou « Revenir à l'exemple » = une étape. En mémoire seulement, vidé à l'ouverture d'un escalier et quand une version reçue d'ailleurs le remplace.
 
 Flèches à côté de l'état de l'enregistrement (sur téléphone, pastille au-dessus des onglets dès le premier changement), Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y ; le texte libre (nom de l'escalier) et l'accueil gardent leur Ctrl+Z. `src/main.ts` passe par `setParams` pour tout réglage changé d'un coup.
 

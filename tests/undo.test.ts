@@ -41,6 +41,29 @@ function saved(): Project {
   return all.find((p) => p.id === localStorage.getItem("limon-courant"))!;
 }
 const pause = () => (now += 5000);
+const homeOn = () => document.body.classList.contains("home-on");
+/** Les escaliers de l'appareil remplacés comme par un autre onglet, seule source d'échange sans serveur. */
+function received(change: (all: Project[]) => Project[]): void {
+  const all = JSON.parse(localStorage.getItem("limon-projets")!) as Project[];
+  localStorage.setItem("limon-projets", JSON.stringify(change(all)));
+  window.dispatchEvent(new StorageEvent("storage", { key: "limon-projets" }));
+}
+/** Une version plus récente de l'escalier ouvert arrive, avec une hauteur de 2800 mm. */
+async function newerVersion(): Promise<void> {
+  const id = saved().id;
+  pause();
+  received((all) => all.map((p) => (p.id === id ? { ...p, params: { ...p.params, H: 2800 }, modifie: now } : p)));
+  await vi.waitFor(() => expect(field("H").value).toBe("2800"));
+}
+/** Ouvre l'accueil sur un onglet, avec un réglage à annuler sur l'escalier ouvert. */
+async function homeOnTab(tab: string): Promise<void> {
+  type("W", "900");
+  expect(button("undo").disabled).toBe(false);
+  button("pjOpen").click();
+  await vi.waitFor(() => expect(homeOn()).toBe(true));
+  button(tab).click();
+  await vi.waitFor(() => expect(button(tab).getAttribute("aria-selected")).toBe("true"));
+}
 
 beforeAll(async () => {
   document.body.innerHTML = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
@@ -208,5 +231,84 @@ describe("annuler et rétablir", () => {
     type("W", "900");
     expect(Object.keys(localStorage).sort()).toEqual(keys);
     expect(Object.keys(saved()).sort()).toEqual(Object.keys(newProject("x", "", "guide", 0, DEFAULTS)).sort());
+  });
+});
+
+describe("échange avec un autre appareil ou un autre onglet", () => {
+  it("laisse l'accueil ouvert et met l'escalier à jour derrière", async () => {
+    await homeOnTab("dtAt");
+    const typing = field("at-et");
+    typing.value = "31";
+
+    await newerVersion();
+    expect(homeOn()).toBe(true);
+    expect(document.getElementById("dpAt")!.hidden).toBe(false);
+    // La saisie en cours dans Mon atelier reste.
+    expect(typing.value).toBe("31");
+
+    button("homeBack").click();
+    expect(homeOn()).toBe(false);
+    expect(field("H").value).toBe("2800");
+    expect(saved().params.H).toBe(2800);
+  });
+
+  it("n'ajoute pas d'étape : l'historique ne propose plus les anciennes copies", async () => {
+    await homeOnTab("dtEsc");
+    await newerVersion();
+    button("homeBack").click();
+    expect(button("undo").disabled).toBe(true);
+    expect(button("redo").disabled).toBe(true);
+    key("z");
+    expect(field("H").value).toBe("2800");
+    expect(field("W").value).toBe("900");
+  });
+
+  it("laisse ouverts les fichiers pour la machine", async () => {
+    button("cncOpen").click();
+    expect(field("cncBody").hidden).toBe(false);
+    await newerVersion();
+    expect(field("cncBody").hidden).toBe(false);
+    expect(button("cncOpen").hidden).toBe(true);
+  });
+
+  it("garde l'accueil quand l'escalier ouvert est supprimé ailleurs, et passe au suivant", async () => {
+    await newerVersion();
+    const gone = saved().id;
+    button("cncOpen").click();
+    await homeOnTab("dtAt");
+    received((all) => all.filter((p) => p.id !== gone));
+    await vi.waitFor(() => expect(localStorage.getItem("limon-courant")).not.toBe(gone));
+
+    expect(homeOn()).toBe(true);
+    expect(document.getElementById("dpAt")!.hidden).toBe(false);
+    expect(document.getElementById("homeBack")!.hidden).toBe(false);
+    // Un autre escalier : les fichiers de celui d'avant se replient, son historique disparaît.
+    expect(field("cncBody").hidden).toBe(true);
+    button("homeBack").click();
+    expect(button("undo").disabled).toBe(true);
+  });
+
+  it("reste sur l'onglet quand il ne reste plus aucun escalier", async () => {
+    await homeOnTab("dtAt");
+    expect(button("atTake").disabled).toBe(false);
+    received(() => []);
+    await vi.waitFor(() => expect(button("atTake").disabled).toBe(true));
+    expect(homeOn()).toBe(true);
+    expect(document.getElementById("dpAt")!.hidden).toBe(false);
+    await vi.waitFor(() => expect(document.getElementById("homeBack")!.hidden).toBe(true));
+  });
+
+  it("n'empêche pas une carte de fermer l'accueil et de replier les fichiers", async () => {
+    await startNew();
+    button("cncOpen").click();
+    await homeOnTab("dtEsc");
+    await newerVersion();
+    expect(field("cncBody").hidden).toBe(false);
+
+    const card = document.querySelector<HTMLElement>('#homeDraft button[data-act="open"]')!;
+    card.click();
+    await vi.waitFor(() => expect(homeOn()).toBe(false));
+    expect(field("cncBody").hidden).toBe(true);
+    expect(button("cncOpen").hidden).toBe(false);
   });
 });
