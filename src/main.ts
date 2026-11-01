@@ -57,7 +57,7 @@ let params: Params = { ...DEFAULTS };
 let current: ComputeResult | null = null;
 let cnc: CNC | null = null;
 let scene: Scene3D | null = null;
-/** Vue du panneau Plan : de dessus, ou de côté (développé sur la ligne de foulée). */
+/** Vue du plan : de dessus, ou de côté (développé sur la ligne de foulée). */
 let planCote = false;
 /** Onglet Devis de l'escalier ouvert ; recalculé seulement quand il est à l'écran. */
 const devisView = new DevisView({
@@ -352,6 +352,42 @@ byId<HTMLInputElement>("advToggle").addEventListener("change", (e) => {
     // Stockage indisponible : l'option vaut pour cette visite.
   }
 });
+
+/** Une seule vue à l'écran, le plan ou la 3D, chacune avec ses deux points de vue. */
+function showVue(plan: boolean): void {
+  byId("vuePlan").setAttribute("aria-pressed", String(plan));
+  byId("vue3d").setAttribute("aria-pressed", String(!plan));
+  byId("vue").dataset.vue = plan ? "plan" : "3d";
+}
+byId("vuePlan").addEventListener("click", () => showVue(true));
+byId("vue3d").addEventListener("click", () => showVue(false));
+
+/** Vue à l'ouverture : une préférence de l'appareil, réglée dans l'onglet Mon compte. */
+const VUE_KEY = "limon-vue";
+function setFavori(plan: boolean): void {
+  byId("favoriPlan").setAttribute("aria-pressed", String(plan));
+  byId("favori3d").setAttribute("aria-pressed", String(!plan));
+  showVue(plan);
+}
+try {
+  setFavori(localStorage.getItem(VUE_KEY) === "plan");
+} catch {
+  setFavori(false);
+}
+for (const [id, plan] of [
+  ["favoriPlan", true],
+  ["favori3d", false],
+] as const) {
+  byId(id).addEventListener("click", () => {
+    setFavori(plan);
+    try {
+      localStorage.setItem(VUE_KEY, plan ? "plan" : "3d");
+    } catch {
+      // Stockage indisponible : le choix vaut pour cette visite.
+    }
+  });
+}
+
 /** Projets changés sur un autre appareil : le projet ouvert se recharge, ou laisse la place s'il a été supprimé. */
 store.onChange(async (ids) => {
   if (project && ids.includes(project.id)) {
@@ -442,7 +478,7 @@ function viewPlan(cote: boolean): void {
   planCote = cote;
   byId("pdessus").setAttribute("aria-pressed", String(!cote));
   byId("pcote").setAttribute("aria-pressed", String(cote));
-  byId("viewPlan").dataset.vue = cote ? "cote" : "dessus";
+  byId("vue").dataset.plan = cote ? "cote" : "dessus";
   if (current?.ok) drawPlan(current.stair);
 }
 byId("pdessus").addEventListener("click", () => viewPlan(false));

@@ -149,6 +149,8 @@ export class Scene3D {
   private box: { c: THREE.Vector3; ext: number; mirrored: boolean } | null = null;
   private last: Stair | null = null;
   private lastForme: string | null = null;
+  /** Faux tant que la vue n'a jamais eu de taille à l'écran (masquée au démarrage). */
+  private shown = false;
 
   constructor(
     private readonly host: HTMLElement,
@@ -224,7 +226,10 @@ export class Scene3D {
       h = this.host.clientHeight;
     if (!w || !h) return;
     this.setViewSize(w, h);
-    this.render();
+    // Dessinée masquée : le recul se recalcule à la première taille connue.
+    if (!this.shown && this.box) this.viewPerspective();
+    else this.render();
+    this.shown = true;
   }
 
   private setViewSize(w: number, h: number): void {

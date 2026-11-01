@@ -1,8 +1,8 @@
-/** Téléphone : un seul panneau à l'écran (réglages, 3D, plan, fiche ou devis), choisi dans la barre du bas. Le devis
+/** Téléphone : un seul panneau à l'écran (réglages, vue, fiche ou devis), choisi dans la barre du bas. Le devis
     est aussi un onglet sur grand écran, ouvert par le bouton de l'en-tête. */
 export class Tabs {
   private readonly buttons: HTMLButtonElement[];
-  /** Les vues 3D et plan prennent la hauteur laissée par l'en-tête, qui change avec le nom du projet. */
+  /** La vue prend la hauteur laissée par l'en-tête, qui change avec le nom du projet. */
   private readonly measure: () => void;
 
   constructor(

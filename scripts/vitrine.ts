@@ -192,7 +192,7 @@ async function main(): Promise<void> {
       await page.theme(dark);
       await page.go(`${site}app/?exemple`);
       await page.until(READY);
-      await page.click(`[data-tab="vue3d"]`);
+      await page.click(`[data-tab="vue"]`);
       await sleep(800);
       await page.shot(`telephone-3d-${dark ? "sombre" : "clair"}.webp`);
     }

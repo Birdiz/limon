@@ -229,6 +229,16 @@
             ></span
           ><input type="checkbox" role="switch" id="advToggle"
         /></label>
+        <div class="adv pref">
+          <span
+            ><b>Vue à l'ouverture</b
+            ><small>Celle que vous voyez en ouvrant l'outil. L'autre reste à un bouton.</small></span
+          >
+          <div class="seg" role="group" aria-label="Vue à l'ouverture">
+            <button id="favoriPlan" type="button" aria-pressed="false">Plan</button
+            ><button id="favori3d" type="button" aria-pressed="true">3D</button>
+          </div>
+        </div>
         <div class="soon">
           <h3>Bientôt</h3>
           <ul>
@@ -644,32 +654,30 @@
 
       <main class="main">
         <section class="views">
-          <div class="view" id="view3d">
+          <div class="view" id="vue" data-vue="3d" data-plan="dessus">
             <div class="vhead">
-              <h2>Vue 3D</h2>
-              <div class="seg" role="group" aria-label="Point de vue">
+              <div class="seg vueseg" role="group" aria-label="Vue">
+                <button id="vuePlan" type="button" aria-pressed="false">Plan</button
+                ><button id="vue3d" type="button" aria-pressed="true">3D</button>
+              </div>
+              <div class="legend" data-vue="plan">
+                <span><i></i><b data-plan="dessus">ligne de foulée</b><b data-plan="cote">ligne des nez</b></span
+                ><span data-show="quart"
+                  ><i class="bal"></i><b data-bal>marches balancées</b><b data-pal>palier</b></span
+                ><span data-plan="dessus"><i class="tre"></i>trémie</span
+                ><span data-plan="cote"><i class="dalle"></i>plancher</span>
+              </div>
+              <div class="seg" role="group" aria-label="Vue du plan" data-vue="plan">
+                <button id="pdessus" type="button" aria-pressed="true">Dessus</button
+                ><button id="pcote" type="button" aria-pressed="false">Côté</button>
+              </div>
+              <div class="seg" role="group" aria-label="Point de vue de la 3D" data-vue="3d">
                 <button id="v3d" type="button" aria-pressed="true">Perspective</button
                 ><button id="vtop" type="button" aria-pressed="false">Dessus</button>
               </div>
             </div>
-            <div class="canvas" id="scene"><div class="errbox" id="err3d" hidden></div></div>
-          </div>
-          <div class="view" id="viewPlan" data-vue="dessus">
-            <div class="vhead">
-              <h2>Plan</h2>
-              <div class="legend">
-                <span><i></i><b data-vue="dessus">ligne de foulée</b><b data-vue="cote">ligne des nez</b></span
-                ><span data-show="quart"
-                  ><i class="bal"></i><b data-bal>marches balancées</b><b data-pal>palier</b></span
-                ><span data-vue="dessus"><i class="tre"></i>trémie</span
-                ><span data-vue="cote"><i class="dalle"></i>plancher</span>
-              </div>
-              <div class="seg" role="group" aria-label="Vue du plan">
-                <button id="pdessus" type="button" aria-pressed="true">Dessus</button
-                ><button id="pcote" type="button" aria-pressed="false">Côté</button>
-              </div>
-            </div>
-            <div class="canvas" id="plan"></div>
+            <div class="canvas" id="plan" data-vue="plan"></div>
+            <div class="canvas" id="scene" data-vue="3d"><div class="errbox" id="err3d" hidden></div></div>
           </div>
         </section>
 
@@ -958,18 +966,11 @@
             <circle cx="18" cy="18" r="2" /></svg></span
         >Réglages
       </button>
-      <button type="button" data-tab="vue3d">
+      <button type="button" data-tab="vue">
         <span class="pill"
           ><svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5" /></svg></span
-        >3D
-      </button>
-      <button type="button" data-tab="plan">
-        <span class="pill"
-          ><svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="7" y="3" width="10" height="18" />
-            <path d="M7 7.5h10M7 12h10M7 16.5h10" /></svg></span
-        >Plan
+        >Vue
       </button>
       <button type="button" data-tab="fiche" id="tabFiche">
         <span class="pill"
