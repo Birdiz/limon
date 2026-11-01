@@ -98,21 +98,27 @@ export function fileBase(nom: string): string {
   return s || "escalier";
 }
 
+/** Date d'une modification (escalier ou profil de l'atelier) : toujours après la version qu'elle remplace, même
+    reçue d'un appareil à l'horloge en avance. Sinon l'échange avec le compte reprendrait l'ancienne version. */
+export function stamped(remplacee: { modifie: number }, now: number): number {
+  return Math.max(now, remplacee.modifie + 1);
+}
+
 /** Escalier avec son devis changé ; la date de modification avance, pour l'échange avec le compte. */
 export function withDevis(p: Project, devis: DevisProjet | null, now: number): Project {
-  return { ...p, devis, modifie: now };
+  return { ...p, devis, modifie: stamped(p, now) };
 }
 
 /** Escalier passé à l'état donné ; la date de modification avance, pour l'échange avec le compte. */
 export function withEtat(p: Project, etat: Etat, now: number): Project {
-  return { ...p, etat, finiLe: etat === "fini" ? now : 0, modifie: now };
+  return { ...p, etat, finiLe: etat === "fini" ? now : 0, modifie: stamped(p, now) };
 }
 
 /** Escalier avec ces réglages ; le même objet s'ils n'ont pas changé. Un escalier terminé qu'on modifie redevient
     un brouillon : sa fiche n'est plus celle qui a été validée. */
 export function edited(p: Project, params: Params, now: number): Project {
   if (JSON.stringify(params) === JSON.stringify(p.params)) return p;
-  return { ...(p.etat === "fini" ? withEtat(p, "brouillon", now) : p), params, modifie: now };
+  return { ...(p.etat === "fini" ? withEtat(p, "brouillon", now) : p), params, modifie: stamped(p, now) };
 }
 
 /** Passage à « fini » : impossible tant que le calcul échoue, à confirmer si un contrôle n'est pas respecté. */

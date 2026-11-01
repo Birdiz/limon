@@ -86,6 +86,7 @@ beforeAll(() => {
     },
   );
   vi.stubGlobal("scrollTo", () => {});
+  Element.prototype.scrollIntoView = () => {};
   vi.stubGlobal("confirm", () => true);
   vi.stubGlobal("fetch", () => Promise.resolve(new Response(null, { status: 401 })));
   // Calcul immédiat : la page attend sinon l'image suivante.
@@ -99,6 +100,29 @@ beforeEach(async () => {
   history.replaceState(null, "", "/");
   await reload();
   await newStair();
+});
+
+describe("horloge en retard sur l'escalier ouvert", () => {
+  const avance = 3_600_000;
+  beforeEach(async () => {
+    storeProject(newProject("futur", "Reçu", "guide", now + avance));
+    await reload();
+  });
+
+  it("le nom, l'étape, les cotes et l'état avancent quand même la date", () => {
+    const steps: [string, () => void][] = [
+      ["nom", () => name("Renommé")],
+      ["étape", () => click(button("stNext"))],
+      ["cote", () => type("H", "3100")],
+      ["état", () => click(button("etatBtn"))],
+    ];
+    for (const [quoi, geste] of steps) {
+      const avant = saved().modifie;
+      geste();
+      expect(saved().modifie, quoi).toBe(avant + 1);
+    }
+    expect(saved()).toMatchObject({ nom: "Renommé", etape: 1, etat: "fini", params: { H: 3100 } });
+  });
 });
 
 describe("actualiser la page", () => {
@@ -156,11 +180,12 @@ describe("actualiser la page", () => {
 
   it("garde un projet enregistré avant la correction, ses valeurs relues comprises", async () => {
     const p = newProject("ancien", "Ancien", "complet", now, { ...DEFAULTS, H: 3000, n: 16, f: 400, hlj: 380 });
-    storeProject(withEtat(p, "fini", now));
+    const fini = withEtat(p, "fini", now);
+    storeProject(fini);
     history.replaceState(null, "", "#H=3000");
     await reload();
     expect(projects().map((q) => q.id)).toEqual(["ancien"]);
-    expect(saved()).toMatchObject({ nom: "Ancien", etat: "fini", modifie: now });
+    expect(saved()).toMatchObject({ nom: "Ancien", etat: "fini", modifie: fini.modifie });
   });
 
   it("ne copie rien en rouvrant sans ancre, ni l'exemple intact", async () => {

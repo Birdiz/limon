@@ -1,5 +1,5 @@
 import type { Changement, Compte, Entree } from "../core/account";
-import { sanitizeProject, type Project } from "../core/project";
+import { sanitizeProject, stamped, type Project } from "../core/project";
 import { NotSignedIn, type Api } from "./api";
 import type { AtelierStore } from "./atelier";
 import { browserStorage, read, write, type KeyValue, type LocalStore, type ProjectStore } from "./store";
@@ -100,9 +100,10 @@ export class SyncStore implements ProjectStore {
   }
 
   async remove(id: string): Promise<void> {
+    const p = await this.local.get(id);
     await this.local.remove(id);
     if (!this.state.compte && !(id in this.state.serveur)) return;
-    this.state.supprimes[id] = Date.now();
+    this.state.supprimes[id] = p ? stamped(p, Date.now()) : Date.now();
     this.persist();
     if (this.state.compte) this.schedule();
   }
