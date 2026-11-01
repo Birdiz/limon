@@ -488,7 +488,7 @@ phone.addEventListener("change", () => {
   if (planCote && current?.ok) drawPlan(current.stair);
 });
 
-byId("ficheDl").addEventListener("click", () => {
+byId("ficheDl").addEventListener("click", async () => {
   if (!current?.ok) return;
   const base = fileBase(project?.nom ?? NOM_PAR_DEFAUT);
   const kind = byId<HTMLSelectElement>("ficheFmt").value;
@@ -497,6 +497,9 @@ byId("ficheDl").addEventListener("click", () => {
   if (kind === "csv") csv(treadsCSV(current.stair), "marches");
   else if (kind === "debit") csv(cutListCSV(cnc ?? buildCNC(current.stair), current.stair), "liste de débit");
   else {
+    // La fiche porte toujours la 3D : si elle se charge encore, on l'attend.
+    await sceneReady;
+    if (!current?.ok) return;
     const vue3d = scene?.snapshot() ?? undefined;
     const date = new Date().toLocaleDateString("fr-FR");
     const nom = project?.nom ?? NOM_PAR_DEFAUT;
@@ -557,7 +560,7 @@ void (async () => {
 })();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.
 // Le cadrage initial attend les polices, qui changent la largeur de la colonne de réglages.
-Promise.all([import("./ui/scene3d"), document.fonts.ready])
+const sceneReady = Promise.all([import("./ui/scene3d"), document.fonts.ready])
   .then(([{ Scene3D }]) => {
     scene = new Scene3D(byId("scene"), byId("err3d"));
     if (current) render(current);

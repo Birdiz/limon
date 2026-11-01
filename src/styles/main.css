@@ -2474,6 +2474,8 @@ body.avance .auto {
   .main > :not(.views) {
     animation: fondu 0.2s ease-out;
   }
+  /* Le devis a son onglet : pas de bouton dans l'en-tête. */
+  #devisBtn,
   body:not([data-tab="reglages"]) .side,
   body[data-tab="reglages"] .main,
   body[data-tab="fiche"] .views,
