@@ -928,16 +928,6 @@ input[type="range"] {
   gap: 18px;
   min-width: 0;
 }
-.views {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  gap: 14px;
-}
-@media (max-width: 1180px) {
-  .views {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 .view {
   border: 1px solid var(--rule);
   border-radius: 10px;
@@ -1029,9 +1019,15 @@ input[type="range"] {
   font-weight: 500;
   box-shadow: 0 1px 2px rgba(10, 14, 20, 0.15);
 }
+/* Le choix de la vue, au-dessus de ses deux points de vue. */
+.vueseg button[aria-pressed="true"] {
+  background: var(--chalk-soft);
+  color: var(--chalk);
+  font-weight: 600;
+}
 .canvas {
   position: relative;
-  height: clamp(340px, 56vh, 620px);
+  height: clamp(400px, 68vh, 760px);
   min-width: 0;
 }
 #scene {
@@ -1083,9 +1079,11 @@ input[type="range"] {
   border-block: 1px solid var(--ink);
   background: var(--rule);
 }
-/* Légende du plan selon la vue choisie, de dessus ou de côté. */
-#viewPlan[data-vue="dessus"] [data-vue="cote"],
-#viewPlan[data-vue="cote"] [data-vue="dessus"] {
+/* Une seule vue à l'écran, ses boutons et sa légende ; légende du plan selon le point de vue. */
+#vue[data-vue="3d"] [data-vue="plan"],
+#vue[data-vue="plan"] [data-vue="3d"],
+#vue[data-plan="dessus"] [data-plan="cote"],
+#vue[data-plan="cote"] [data-plan="dessus"] {
   display: none;
 }
 .errbox {
@@ -1564,6 +1562,12 @@ td.low {
   border-radius: 10px;
   background: var(--panel);
   cursor: pointer;
+}
+.adv.pref {
+  cursor: default;
+}
+.adv .seg {
+  flex: none;
 }
 .adv > span {
   display: flex;
@@ -2466,28 +2470,29 @@ body.avance .auto {
 
   /* Le panneau choisi dans la barre d'onglets paraît en fondu. */
   .side,
-  #view3d,
-  #viewPlan,
+  #vue,
   .main > :not(.views) {
     animation: fondu 0.2s ease-out;
   }
   body:not([data-tab="reglages"]) .side,
   body[data-tab="reglages"] .main,
-  body:not([data-tab="vue3d"]) #view3d,
-  body:not([data-tab="plan"]) #viewPlan,
   body[data-tab="fiche"] .views,
-  body:is([data-tab="vue3d"], [data-tab="plan"]) .main > :not(.views) {
+  body[data-tab="vue"] .main > :not(.views) {
     display: none;
   }
-  /* 3D et plan occupent tout l'écran : l'orbite au doigt ne se dispute plus le défilement. */
-  body:is([data-tab="vue3d"], [data-tab="plan"]) {
+  /* La vue occupe tout l'écran : l'orbite au doigt ne se dispute plus le défilement. */
+  body[data-tab="vue"] {
     padding-bottom: 0;
   }
-  body:is([data-tab="vue3d"], [data-tab="plan"]) .view {
+  /* Les boutons sur une ligne, la légende dessous. */
+  #vue .legend {
+    order: 1;
+  }
+  body[data-tab="vue"] .view {
     height: calc(100dvh - var(--hdr, 110px) - var(--below) - 12px);
     min-height: 320px;
   }
-  body:is([data-tab="vue3d"], [data-tab="plan"]) .canvas {
+  body[data-tab="vue"] .canvas {
     flex: 1;
     height: auto;
   }
