@@ -26,7 +26,7 @@ Minimales (e-mail, projets, clés publiques, empreinte des sessions ; pas d'IP c
 
 `SyncStore` (`src/ui/sync.ts`) implémente `ProjectStore` au-dessus de `LocalStore` : écriture locale immédiate, échange en arrière-plan (démarrage, retour du réseau, retour sur la page, 3 s après une modification, toutes les 5 min).
 
-Le serveur renvoie l'index (`id`, `modifie`, `supprime`) ; la version la plus récente gagne sur `modifie`, projet par projet ; une suppression est une trace datée. État dans `limon-synchro`. `currentId` reste propre à l'appareil. Toute modification du projet (réglages, nom, étape du mode guidé) avance `modifie`.
+Le serveur renvoie l'index (`id`, `modifie`, `supprime`) ; la version la plus récente gagne sur `modifie`, projet par projet ; une suppression est une trace datée. État dans `limon-synchro`. `currentId` reste propre à l'appareil. Toute modification du projet (réglages, nom, étape du mode guidé, devis, état) et toute suppression sont datées par `stamped` (`src/core/project.ts`) : toujours après la version remplacée, même si l'horloge de l'appareil retarde sur celle qui l'a écrite.
 
 - **Première connexion** : les projets de l'appareil montent dans le compte.
 - **Déconnexion** : tout est envoyé, puis les projets du compte quittent l'appareil (refusée s'il reste des envois).
