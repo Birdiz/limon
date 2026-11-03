@@ -17,6 +17,8 @@ Selon le sujet, lire aussi :
 
 `compute` renvoie `{ ok: true, stair }` ou `{ ok: false, errors }` (chaque erreur désigne si possible le champ fautif). `stair.params` garde les réglages utilisés. Les notes s'écrivent dans `stairNotes` (`src/core/stair-notes.ts`). Une note peut porter une correction (`Fix`, appliquée d'un clic) ; `compute(p, false)` saute leur recherche.
 
+`validate` refuse d'abord, sur son champ, toute cote lue au-delà de `H_MAX` (hauteur) ou de `COTE_MAX` (les autres), en valeur absolue : le calcul reste assez court pour ne pas figer la page. `sanitizeParams` garde la valeur, pour la montrer à corriger. `pickN` et `palierLayout` ne dépassent pas `H_MAX / 120` hauteurs. Une boucle nouvelle qui dépend d'un réglage se teste aux bornes (`tests/stair.test.ts`).
+
 ## Formes
 
 `Forme`, `TOURS`, `isLeft` dans `src/core/params.ts` : droit, quart tournant, double quart tournant (deux quarts de même sens, en U, cotes A, C, B ; `stair.tours` = 2), demi-tournant (`isDemi` : le même U saisi par A, B et le jour `J`, `stair.C` = 2 W + J). Choix de métier du point 7 : mémoire du projet et https://claude.ai/artifact/MAYQLrWm62HwfFxy7AdZC2.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULTS } from "../src/core/params";
 import { linkOpensNew, paramsFromHash, paramsToHash, projectUrl, sameLink } from "../src/core/share";
+import { compute } from "../src/core/stair";
 
 describe("lien de projet", () => {
   it("ne garde que les réglages qui diffèrent de l'exemple", () => {
@@ -33,6 +34,13 @@ describe("lien de projet", () => {
     expect(paramsFromHash("")).toBeNull();
     expect(paramsFromHash("#autre=1")).toBeNull();
     expect(paramsFromHash("#H=abc&forme=spirale&cm=oui&W=900")).toEqual({ ...DEFAULTS, W: 900 });
+  });
+
+  it("garde une cote hors bornes pour la signaler sur son champ", () => {
+    const p = paramsFromHash("#H=1e15")!;
+    expect(p.H).toBe(1e15);
+    const r = compute(p);
+    expect(r.ok ? [] : r.errors.map((e) => e.key)).toEqual(["H"]);
   });
 
   it("donne l'adresse qui rouvre l'escalier, forme comprise", () => {

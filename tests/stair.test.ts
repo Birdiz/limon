@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULTS, sanitizeParams, type Params } from "../src/core/params";
-import { ECHAPPEE, compute, pickN, turnLengths, turnRange, type Stair } from "../src/core/stair";
+import {
+  COTE_MAX,
+  DEFAULTS,
+  EXEMPLE_DEMI,
+  EXEMPLE_U,
+  H_MAX,
+  NUMERIC_KEYS,
+  sanitizeParams,
+  type Forme,
+  type Params,
+} from "../src/core/params";
+import { ECHAPPEE, compute, palierLayout, pickN, turnLengths, turnRange, type Stair } from "../src/core/stair";
 import { comfortableRun } from "../src/core/stair-notes";
 import { stairOf } from "./cases";
 
@@ -11,6 +21,100 @@ describe("nombre de hauteurs", () => {
       h = 2700 / n,
       g = 3650 / (n - 1);
     expect(Math.abs(2 * h + g - 630)).toBeLessThan(15);
+  });
+});
+
+describe("bornes des cotes", () => {
+  const FORMES: [Forme, Partial<Params>][] = [
+    ["droit", {}],
+    ["quart-d", {}],
+    ["dq-d", EXEMPLE_U],
+    ["demi-d", EXEMPLE_DEMI],
+  ];
+  /** Chaque forme, balancée et à palier, tout ce qui se règle en service. */
+  const BASES: Partial<Params>[] = FORMES.flatMap(([forme, cotes]) =>
+    (["balance", "palier"] as const).map((tournant) => ({
+      ...cotes,
+      forme,
+      tournant,
+      gc: "balustres" as const,
+      mp: true,
+      fAuto: false,
+      nAuto: false,
+      hljAuto: false,
+    })),
+  );
+  /** Temps maximum d'un calcul complet, large pour une machine lente : au-delà, la page ne répond plus. */
+  const MAX_MS = 4000;
+  const timed = (p: Params) => {
+    const t0 = performance.now();
+    const r = compute(p);
+    expect(performance.now() - t0).toBeLessThan(MAX_MS);
+    return r;
+  };
+
+  it("refuse sur le champ une hauteur hors bornes", () => {
+    for (const H of [H_MAX + 1, 1e15]) {
+      const r = compute({ ...DEFAULTS, H });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.map((e) => e.key)).toEqual(["H"]);
+    }
+    expect(compute({ ...DEFAULTS, H: H_MAX, A: 40000, B: 40000 }).ok).toBe(true);
+  });
+
+  it("nomme chaque cote hors bornes, seule, sans autre message", () => {
+    const base: Params = { ...DEFAULTS, ...BASES[3]!, tForme: "L", tAuto: false };
+    const lues = NUMERIC_KEYS.filter((k) => !["L", "C", "J", "n", "mb", "prog", "tL"].includes(k));
+    for (const k of lues)
+      for (const v of [1e15, -1e15]) {
+        const r = compute({ ...base, [k]: v });
+        expect(r.ok, `${k}=${v}`).toBe(false);
+        if (!r.ok) expect(r.errors.map((e) => e.key)).toEqual([k]);
+      }
+  });
+
+  it("ne bloque pas sur une cote que le calcul ne lit pas", () => {
+    const autres: Partial<Params>[] = [
+      { forme: "quart-d", L: 1e15, C: 1e15, J: 1e15, tL: 1e15 },
+      { forme: "droit", A: 1e15, B: 1e15, C: 1e15, J: 1e15, ps: 1e15, tX: 1e15, tY: 1e15 },
+      { forme: "demi-d", ...EXEMPLE_DEMI, C: 1e15 },
+      { n: 1e15, f: 1e15, hlj: 1e15 },
+      { tAuto: true, tL: 1e15, tX: 1e15, tY: 1e15, tbD: 1e15, tbA: 1e15 },
+      { gc: "aucun", bs: 1e15, mcL: 1e15, mcH: 1e15 },
+      { mp: false, mpP: 1e15, mpE: 1e15 },
+      { cm: false, ecm: 1e15 },
+    ];
+    for (const a of autres) expect(compute({ ...DEFAULTS, ...a }).ok, JSON.stringify(a)).toBe(true);
+  });
+
+  it("répond à temps, quelle que soit la cote", () => {
+    for (const b of BASES)
+      for (const k of NUMERIC_KEYS)
+        for (const v of [1e15, -1e15, COTE_MAX, -COTE_MAX]) timed({ ...DEFAULTS, ...b, tAuto: k === "tL", [k]: v });
+  }, 60000);
+
+  it("répond à temps aux bornes hautes de toutes les longueurs", () => {
+    const max = { H: H_MAX, L: COTE_MAX, A: COTE_MAX, B: COTE_MAX, C: COTE_MAX, J: COTE_MAX };
+    for (const b of BASES) {
+      const p: Params = { ...DEFAULTS, ...b, ...max, nAuto: true, tAuto: true };
+      expect(timed(p).ok, JSON.stringify(b)).toBe(true);
+      const t0 = performance.now();
+      turnRange(p);
+      expect(performance.now() - t0).toBeLessThan(MAX_MS);
+    }
+  }, 60000);
+
+  it("plafonne le nombre de hauteurs", () => {
+    const plafond = Math.floor(H_MAX / 120);
+    expect(pickN(H_MAX, COTE_MAX)).toBeLessThanOrEqual(plafond);
+    expect(pickN(1e15, COTE_MAX)).toBe(plafond);
+    // Un palier très long pour une volée d'arrivée très courte demanderait des milliers de girons.
+    expect(palierLayout(H_MAX, [COTE_MAX], 2, 50)).toBeNull();
+  });
+
+  it("cherche le balancement depuis 2 marches, quel que soit le réglage", () => {
+    const r = timed({ ...DEFAULTS, prog: 100, mb: -1e15 });
+    expect(r.ok && r.stair.notes.map(([, , fix]) => fix?.set.mb)).toContain(5);
   });
 });
 

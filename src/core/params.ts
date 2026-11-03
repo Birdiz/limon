@@ -239,6 +239,10 @@ export const NUMERIC_KEYS = [
 ] as const satisfies readonly (keyof Params)[];
 export type NumericKey = (typeof NUMERIC_KEYS)[number];
 
+/** Bornes de toute cote, en mm, loin de ce qu'un escalier demande : au-delà, le calcul ne tiendrait plus à l'écran. */
+export const H_MAX = 20000;
+export const COTE_MAX = 50000;
+
 export const BOOLEAN_KEYS = [
   "fAuto",
   "nAuto",

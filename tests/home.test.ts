@@ -4,8 +4,12 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULTS } from "../src/core/params";
 import { newProject, projectFile, withEtat, type Project } from "../src/core/project";
+import { compute } from "../src/core/stair";
 import { Home } from "../src/ui/home";
 import type { ProjectStore } from "../src/ui/store";
+
+vi.mock("../src/core/stair", async (actual) => ({ ...(await actual<object>()), compute: vi.fn() }));
+const realCompute = (await vi.importActual<{ compute: typeof compute }>("../src/core/stair")).compute;
 
 const html = fs.readFileSync(path.resolve("app/index.html"), "utf8");
 const host = {
@@ -27,6 +31,37 @@ describe("cartes de l'accueil", () => {
   beforeEach(() => {
     document.body.innerHTML = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
     window.scrollTo = () => {};
+    vi.mocked(compute).mockImplementation(realCompute);
+  });
+
+  it("garde et laisse supprimer un escalier hors bornes", async () => {
+    const hors = { ...newProject("hors", "Hors bornes", "complet", 1), params: { ...DEFAULTS, H: 1e15 } };
+    const list = [hors];
+    const store = {
+      list: () => Promise.resolve(list),
+      get: () => Promise.resolve(hors),
+      remove: vi.fn(() => {
+        list.length = 0;
+        return Promise.resolve();
+      }),
+    } as unknown as ProjectStore;
+    vi.stubGlobal("confirm", () => true);
+    await new Home(store, host).show();
+    const box = document.getElementById("homeDraft")!;
+    expect(box.querySelector(".thumb")!.innerHTML).toBe("");
+    box.querySelector<HTMLButtonElement>('[data-act="del"]')!.click();
+    await vi.waitFor(() => expect(store.remove).toHaveBeenCalledWith("hors"));
+    await vi.waitFor(() => expect(box.children).toHaveLength(0));
+  });
+
+  it("garde la carte quand le dessin d'un escalier échoue", async () => {
+    vi.mocked(compute).mockImplementation(() => {
+      throw new Error("calcul impossible");
+    });
+    await new Home(storeOf(newProject("a", "Dupont", "complet", 1)), host).show();
+    const box = document.getElementById("homeDraft")!;
+    expect(box.querySelector(".thumb")!.innerHTML).toBe("");
+    expect(box.querySelector('[data-act="del"]')).not.toBeNull();
   });
 
   it("un identifiant ne crée aucun nœud dans la carte", async () => {

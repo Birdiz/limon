@@ -3,7 +3,7 @@
    Tournants calculés à droite (2e volée vers +x, 3e vers −y en double quart) ; la version gauche est un miroir. */
 import { fmt, ceil10 } from "./format";
 import { ECHAPPEE, ECHAPPEE_MIN, type Headroom } from "./headroom";
-import { TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
+import { COTE_MAX, H_MAX, TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
 import { cncFrame, stringerPockets, type PocketOf } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import { GC, railing, type Railing } from "./railing";
@@ -337,14 +337,17 @@ const runScore = (h: number, g: number) =>
   3 * Math.max(0, 230 - g) +
   3 * Math.max(0, g - 320);
 
+/** Plus grand nombre de hauteurs calculé : la plus haute montée permise, en hauteurs de 120 mm. */
+const N_MAX = Math.floor(H_MAX / 120);
+
 /** Nombre de hauteurs qui approche le mieux Blondel (2h + g ≈ 630 mm) dans les plages de confort. */
 export function pickN(H: number, Lw: number): number {
   let best: { n: number; score: number } | null = null;
-  for (let n = Math.max(3, Math.ceil(H / 230)); n <= Math.floor(H / 120); n++) {
+  for (let n = Math.max(3, Math.ceil(H / 230)); n <= Math.min(Math.floor(H / 120), N_MAX); n++) {
     const score = runScore(H / n, Lw / (n - 1));
     if (!best || score < best.score) best = { n, score };
   }
-  return best ? best.n : Math.max(3, Math.round(H / 175));
+  return best ? best.n : clamp(Math.round(H / 175), 3, N_MAX);
 }
 
 /** Volées d'un escalier à palier : m girons sur la volée d'arrivée, qui fixent le giron g ; counts girons sur
@@ -381,7 +384,7 @@ export function palierLayout(
     }
     const n = lines(),
       rest = runs.map((r, i) => Math.max(0, r - counts[i]! * g));
-    if (n < 3) continue;
+    if (n < 3 || n > N_MAX) continue;
     const score = runScore(H / n, g) + (nFixed != null ? rest.reduce((a, v) => a + v, 0) / 100 : 0);
     if (!best || score < best.score) best = { n, g, m, counts, rest, score };
   }
@@ -390,10 +393,42 @@ export function palierLayout(
   return { n, g, m, counts, rest };
 }
 
+/** Cotes que le calcul lit avec ces réglages. Les autres (autre forme, valeur automatique) sont sans effet : hors de
+    vue, ou non relues du formulaire, elles ne doivent pas bloquer l'escalier. */
+function cotesLues(p: Params, tours: number): NumericKey[] {
+  return [
+    "H",
+    "W",
+    "et",
+    "deb",
+    "rn",
+    "el",
+    "hl",
+    "ep",
+    "enc",
+    "jeu",
+    "pL",
+    "pW",
+    ...(tours ? ["A", "B", "ps"] : ["L"]),
+    ...(tours === 2 ? [isDemi(p.forme) ? "J" : "C"] : []),
+    ...(p.cm ? ["ecm"] : []),
+    ...(p.fAuto ? [] : ["f"]),
+    ...(tours && !p.hljAuto ? ["hlj"] : []),
+    ...(p.tAuto ? [] : tours ? ["tX", "tY", ...(p.tForme === "L" ? ["tbD", "tbA"] : [])] : ["tL"]),
+    ...(p.gc === "aucun" ? [] : ["bs", "mcL", "mcH"]),
+    ...(p.mp ? ["mpP", "mpE"] : []),
+  ] as NumericKey[];
+}
+
 function validate(p: Params, tours: number): InputError[] {
   const quart = tours > 0;
   const errors: InputError[] = [];
   const err = (key: NumericKey, message: string) => errors.push({ key, message });
+  for (const k of cotesLues(p, tours)) {
+    const max = k === "H" ? H_MAX : COTE_MAX;
+    if (!(Math.abs(p[k]) <= max)) err(k, `Cette cote sort des limites d'un escalier : ${fmt(max)} mm au plus.`);
+  }
+  if (errors.length) return errors;
   const { H, W } = p;
   if (!(H >= 300)) err("H", "La hauteur à monter doit faire au moins 300 mm.");
   if (!(W >= 400)) err("W", "L'emmarchement doit faire au moins 400 mm.");
