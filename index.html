@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <script>
       /* Celui qui a déjà des escaliers sur cet appareil, l'application installée ou un lien de projet
-         (« #H=… », « #transfert=… » ; pas les ancres de la page) va droit à l'outil, sans voir cette
-         page. « ?visite » la montre quand même. Les anciennes adresses partent vers quart-de-tour.fr,
-         en passant par l'outil quand elles ont des escaliers à emporter (src/ui/move.ts). */
+         (« #H=… » ; pas les ancres de la page) va droit à l'outil, sans voir cette page. « ?visite »
+         la montre quand même. Les anciennes adresses partent vers quart-de-tour.fr, d'ici ou depuis
+         l'outil, qui garde l'ancre d'un lien (src/ui/move.ts). */
       (function () {
         if (/[?&]visite\b/.test(location.search)) return;
         var projets = null;

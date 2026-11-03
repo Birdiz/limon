@@ -1,57 +1,41 @@
-// @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
-import { DEFAULTS } from "../src/core/params";
-import { newProject } from "../src/core/project";
-import { storeMoved, takeMoved } from "../src/ui/move";
-import { LocalStore } from "../src/ui/store";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { leaveOldHost } from "../src/ui/move";
 
-describe("déménagement depuis l'ancienne adresse", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    history.replaceState(null, "", "/");
+function at(hostname: string, hash: string) {
+  const replace = vi.fn();
+  vi.stubGlobal("location", { hostname, hash, replace });
+  return replace;
+}
+
+describe("anciennes adresses", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["www.quart-de-tour.fr", "limon-escaliers.up.railway.app"])("%s part en gardant l'ancre", async (host) => {
+    const replace = at(host, "#H=3100");
+    expect(leaveOldHost()).toBe(true);
+    await Promise.resolve();
+    expect(replace).toHaveBeenCalledWith("https://quart-de-tour.fr/#H=3100");
   });
 
-  it("lit les projets dans l'ancre puis la retire", () => {
-    const p = newProject("a", "Dupont", "guide", 5, { ...DEFAULTS, H: 2900 });
-    const data = { projets: [p, { nom: "sans identifiant" }], courant: "a", lien: "#H=3100" };
-    history.replaceState(null, "", "/#transfert=" + encodeURIComponent(JSON.stringify(data)));
-    expect(takeMoved()).toEqual({ projets: [p], courant: "a", lien: "#H=3100" });
-    expect(location.hash).toBe("");
+  it("part sans ancre quand il n'y en a pas", async () => {
+    const replace = at("www.quart-de-tour.fr", "");
+    expect(leaveOldHost()).toBe(true);
+    await Promise.resolve();
+    expect(replace).toHaveBeenCalledWith("https://quart-de-tour.fr/");
   });
 
-  it("écarte un projet dont l'identifiant est hors format", () => {
-    const good = newProject("a", "Dupont", "guide", 5);
-    const data = { projets: [good, { ...good, id: 'b"c' }], courant: "a", lien: "" };
-    history.replaceState(null, "", "/#transfert=" + encodeURIComponent(JSON.stringify(data)));
-    expect(takeMoved()?.projets).toEqual([good]);
+  it("garde l'ancre lue avant que la page la réécrive", async () => {
+    const replace = at("www.quart-de-tour.fr", "#H=3100");
+    leaveOldHost();
+    location.hash = "";
+    await Promise.resolve();
+    expect(replace).toHaveBeenCalledWith("https://quart-de-tour.fr/#H=3100");
   });
 
-  it("ignore une ancre sans transfert ou illisible", () => {
-    history.replaceState(null, "", "/#H=3100");
-    expect(takeMoved()).toBeNull();
-    expect(location.hash).toBe("#H=3100");
-    history.replaceState(null, "", "/#transfert=%7Bpas");
-    expect(takeMoved()).toBeNull();
-  });
-
-  it("garde la version la plus récente de chaque projet et rouvre le projet en cours", async () => {
-    const s = new LocalStore();
-    await s.save(newProject("a", "Ici, plus récent", "guide", 10));
-    await s.save(newProject("b", "Ici, plus ancien", "guide", 1));
-    await storeMoved(s, {
-      projets: [
-        newProject("a", "Là-bas", "guide", 5),
-        newProject("b", "Là-bas", "guide", 8),
-        newProject("c", "Nouveau", "complet", 3),
-      ],
-      courant: "c",
-      lien: "",
-    });
-    expect((await s.list()).map((p) => [p.id, p.nom])).toEqual([
-      ["a", "Ici, plus récent"],
-      ["b", "Là-bas"],
-      ["c", "Nouveau"],
-    ]);
-    expect(await s.currentId()).toBe("c");
+  it("reste à la nouvelle adresse", async () => {
+    const replace = at("quart-de-tour.fr", "#H=3100");
+    expect(leaveOldHost()).toBe(false);
+    await Promise.resolve();
+    expect(replace).not.toHaveBeenCalled();
   });
 });
