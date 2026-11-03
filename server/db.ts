@@ -1,3 +1,5 @@
+import type { SendAvertissement } from "./mail";
+
 /** Base de données : Postgres en ligne, PGlite (Postgres en WebAssembly) en développement et dans les tests. */
 export interface Db {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
@@ -109,6 +111,19 @@ const MIGRATIONS = [
   );`,
   // Profil de l'atelier : une date par partie. Vide sur une ligne d'avant, relue par `sanitizeAtelier`.
   `alter table ateliers add column dates jsonb;`,
+  // Dernière activité du compte et avertissement avant effacement. Un compte existant part de sa dernière activité
+  // connue. `modifie` vient de l'horloge de l'appareil : bornée, une date à venir compte pour aujourd'hui.
+  `alter table comptes add column vu timestamptz not null default now(), add column averti timestamptz;
+  update comptes c set vu = least(now(), greatest(
+    c.cree,
+    (select max(coalesce(utilise, cree)) from passkeys where compte = c.id),
+    (select max(greatest(cree, expire - interval '365 days')) from sessions where compte = c.id),
+    (select max(cree) from devis_numeros where compte = c.id),
+    (select max(to_timestamp(greatest(0, least(modifie, extract(epoch from now()) * 1000)) / 1000.0))
+     from projets where compte = c.id),
+    (select to_timestamp(greatest(0, least(modifie, extract(epoch from now()) * 1000)) / 1000.0)
+     from ateliers where compte = c.id)
+  ));`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */
@@ -119,7 +134,51 @@ export async function migrate(db: Db): Promise<void> {
     await db.exec(`${MIGRATIONS[v]!}\ninsert into schema_version (v) values (${v + 1});`);
 }
 
-/** Efface codes, défis et sessions expirés. */
+/** Durée de conservation sans connexion, décidée : celle d'un compte et celle d'une trace de suppression. */
+const CONSERVATION = "24 months";
+/** Temps laissé après l'avertissement, même s'il part en retard (panne de Brevo, du serveur). */
+const PREAVIS = "30 days";
+/** Avertissements par passage, pour ne pas prendre aux codes de connexion ce que Brevo accepte par jour. */
+const AVERTIS_PAR_PASSE = 10;
+/** Un compte dont les droits courent encore n'est ni averti ni effacé. */
+const SANS_DROITS = "(droits_jusqu_a is null or droits_jusqu_a < now())";
+const A_AVERTIR = `vu + interval '${CONSERVATION}' - interval '${PREAVIS}' < now() and ${SANS_DROITS}`;
+
+/** Efface codes, défis et sessions expirés, et les traces de suppression anciennes. */
 export async function purge(db: Db): Promise<void> {
   for (const t of ["codes", "defis", "sessions"]) await db.query(`delete from ${t} where expire < now()`);
+  await db.query(
+    `delete from projets where supprime and modifie < extract(epoch from now() - interval '${CONSERVATION}') * 1000`,
+  );
+}
+
+/**
+ * Avertit les comptes qui approchent de la durée, puis efface ceux qui l'ont passée, avertis depuis le préavis.
+ * Sans avertissement parti, rien n'est effacé : un envoi en échec recommence au passage suivant, quitte à partir deux
+ * fois si l'enregistrement échoue après l'envoi. L'effacement n'arrive jamais avant la date annoncée : `averti` est
+ * posé après son calcul.
+ */
+export async function purgeComptes(db: Db, avertir: SendAvertissement): Promise<void> {
+  const comptes = await db.query<{ id: string; email: string; limite: Date }>(
+    `select id, email, now() + interval '${PREAVIS}' as limite
+     from comptes where averti is null and ${A_AVERTIR} order by vu limit ${AVERTIS_PAR_PASSE}`,
+  );
+  for (const c of comptes) {
+    try {
+      await avertir(c.email, new Date(c.limite));
+    } catch (e) {
+      console.error(e);
+      continue;
+    }
+    // Revenu pendant l'envoi : l'avertissement n'est pas retenu, il en faudra un autre le moment venu.
+    await db.query(`update comptes set averti = now() where id = $1 and averti is null and ${A_AVERTIR}`, [c.id]);
+  }
+  // Tout est relu par la base dans cette seule instruction : une connexion qui passe avant met `vu` à jour et l'épargne.
+  const effaces = await db.query(
+    `delete from comptes
+     where vu + interval '${CONSERVATION}' < now() and averti + interval '${PREAVIS}' < now() and averti > vu
+       and ${SANS_DROITS}
+     returning id`,
+  );
+  if (effaces.length) console.log(`[purge] comptes inactifs effacés : ${effaces.length}`);
 }

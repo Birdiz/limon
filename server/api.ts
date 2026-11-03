@@ -136,7 +136,11 @@ export function api(cfg: ApiConfig): Hono<Env> {
     return err(c, 500, "Le serveur ne répond pas. Réessayez dans un instant.");
   });
 
+  /** Le compte a servi : son effacement recule, et un avertissement déjà parti ne compte plus. */
+  const vu = (compte: string) => db.query("update comptes set vu = now(), averti = null where id = $1", [compte]);
+
   async function startSession(c: Context, compte: string): Promise<void> {
+    await vu(compte);
     const token = randomBytes(32).toString("base64url");
     await db.query(
       `insert into sessions (hash, compte, expire) values ($1, $2, now() + interval '${SESSION_DAYS} days')`,
@@ -158,18 +162,20 @@ export function api(cfg: ApiConfig): Hono<Env> {
     return r ?? null;
   }
 
-  /** Session valable, prolongée d'un an au plus une fois par jour. */
+  /** Session valable, prolongée d'un an au plus une fois par jour, comme la dernière activité du compte. */
   const auth = createMiddleware<Env>(async (c, next) => {
     const token = getCookie(c, COOKIE);
     const hash = token && sha256(token);
     const [s] = hash
-      ? await db.query<{ compte: string; renew: boolean }>(
-          `select compte, expire < now() + interval '${SESSION_DAYS - 1} days' as renew
-           from sessions where hash = $1 and expire > now()`,
+      ? await db.query<{ compte: string; renew: boolean; revu: boolean }>(
+          `select s.compte, s.expire < now() + interval '${SESSION_DAYS - 1} days' as renew,
+             c.vu < now() - interval '1 day' as revu
+           from sessions s join comptes c on c.id = s.compte where s.hash = $1 and s.expire > now()`,
           [hash],
         )
       : [];
     if (!s) return err(c, 401, "Vous n'êtes plus connecté.");
+    if (s.revu) await vu(s.compte);
     if (s.renew) {
       await db.query(`update sessions set expire = now() + interval '${SESSION_DAYS} days' where hash = $1`, [hash]);
       setSessionCookie(c, token!);

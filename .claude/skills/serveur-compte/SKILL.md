@@ -25,6 +25,8 @@ Session : cookie `limon-session` (`HttpOnly`, `Path=/api`), un an, prolongée à
 
 Minimales (e-mail, projets, clés publiques, empreinte des sessions ; pas d'IP conservée). `statut` du compte : `testeur` pour l'instant, l'abonnement viendra. Suppression du compte en cascade ; export des données dans Mon compte.
 
+**Conservation** : 24 mois sans connexion (décision du propriétaire), durée dans `CONSERVATION` (`server/db.ts`). `comptes.vu` avance à chaque connexion et, une fois par jour au plus, à toute requête authentifiée (`auth`) ; la migration a daté les comptes existants de leur dernière activité connue. `purgeComptes`, au démarrage (sans l'attendre) et toutes les heures : avertit par e-mail (`brevoAvertissement`) à 24 mois moins 30 jours, 10 par passage, puis efface en cascade quand les 24 mois sont passés **et** que l'avertissement a 30 jours (`PREAVIS`). L'avertissement n'est noté qu'une fois envoyé : Brevo en panne retarde l'effacement, jamais le contraire. Revenir l'annule. Un compte dont `droits_jusqu_a` court n'est ni averti ni effacé. `purge` retire aussi les traces de suppression de plus de 24 mois, à la date de l'appareil : un appareil resté plus longtemps sans échange renverrait son escalier.
+
 ## Synchronisation
 
 `SyncStore` (`src/ui/sync.ts`) implémente `ProjectStore` au-dessus de `LocalStore` : écriture locale immédiate, échange en arrière-plan (démarrage, retour du réseau, retour sur la page, 3 s après une modification, toutes les 5 min).
