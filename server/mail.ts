@@ -24,11 +24,12 @@ function html(code: string): string {
 </body></html>`;
 }
 
-/** E-mail transactionnel par l'API de Brevo. */
-export function brevo(apiKey: string): SendCode {
+/** E-mail transactionnel par l'API de Brevo ; le délai vaut aussi pour la lecture de la réponse. */
+export function brevo(apiKey: string, delai = 10_000): SendCode {
   return async (email, code) => {
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
+      signal: AbortSignal.timeout(delai),
       headers: { "api-key": apiKey, "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({
         sender: SENDER,

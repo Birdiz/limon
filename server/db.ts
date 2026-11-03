@@ -6,12 +6,25 @@ export interface Db {
   close(): Promise<void>;
 }
 
+/** Délais en millisecondes. Une requête trop longue est annulée par la base (`statement`) ; une base figée
+    n'annule plus rien, le client la lâche un peu après (`query`). Une écriture lâchée ainsi a pu être appliquée,
+    et une migration passe par ces délais : plus longue, elle fait échouer le démarrage. */
+export const PG_DELAIS = { connexion: 5_000, statement: 5_000, query: 7_000 };
+
 /** Postgres de Railway, par `DATABASE_URL`. */
-export async function pgDb(url: string): Promise<Db> {
+export async function pgDb(url: string, delais = PG_DELAIS): Promise<Db> {
   const { default: pg } = await import("pg");
   // bigint arrive en texte par défaut : les dates en millisecondes tiennent dans un nombre.
   pg.types.setTypeParser(pg.types.builtins.INT8, Number);
-  const pool = new pg.Pool({ connectionString: url, max: 5 });
+  const pool = new pg.Pool({
+    connectionString: url,
+    max: 5,
+    connectionTimeoutMillis: delais.connexion,
+    statement_timeout: delais.statement,
+    query_timeout: delais.query,
+  });
+  // Sans écouteur, une connexion au repos perdue (redémarrage de la base) ferait tomber le processus.
+  pool.on("error", (e) => console.error(e));
   return {
     query: async <T>(sql: string, params: unknown[] = []) => (await pool.query(sql, params)).rows as T[],
     // Sans paramètres, plusieurs instructions partent ensemble et forment une seule transaction.

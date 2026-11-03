@@ -7,8 +7,8 @@ import { brevo, consoleMail } from "./mail";
 import { staticFiles } from "./static";
 
 /* Serveur de Quart de tour : le site construit et /api, sur la même adresse.
-   En ligne : DATABASE_URL et BREVO_API_KEY. `--local` : base PGlite en mémoire et codes dans la console,
-   pour essayer le build (service worker compris) sans rien installer. */
+   En ligne : DATABASE_URL et BREVO_API_KEY. `--local` : base PGlite en mémoire et codes dans la console, même
+   si ces variables sont réglées, pour essayer le build (service worker compris) sans rien installer. */
 
 const local = process.argv.includes("--local");
 const port = Number(process.env.PORT ?? 3000);
@@ -18,7 +18,7 @@ if (!local && (!url || !key))
   throw new Error("DATABASE_URL et BREVO_API_KEY sont nécessaires (ou --local pour essayer).");
 const origin = process.env.ORIGIN ?? (local ? `http://localhost:${port}` : "https://quart-de-tour.fr");
 
-const db = url ? await pgDb(url) : await pgliteDb();
+const db = !local && url ? await pgDb(url) : await pgliteDb();
 await migrate(db);
 await purge(db);
 setInterval(() => void purge(db).catch(console.error), 3_600_000).unref();
