@@ -357,6 +357,50 @@ describe("escalier reçu par lien", () => {
   });
 });
 
+describe("échange avec le compte, l'accueil ouvert", () => {
+  afterEach(() => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(null, { status: 401 })));
+  });
+
+  it("reste sur l'onglet et sur sa saisie, l'escalier à jour attend derrière", async () => {
+    const ici = newProject("p", "Chantier", "complet", now);
+    let enLigne = ici;
+    storeProject(ici);
+    const compte = { id: "c", email: "a@exemple.fr", statut: "testeur" };
+    localStorage.setItem(
+      "limon-synchro",
+      JSON.stringify({ compte, dernier: compte.email, connu: true, serveur: { p: ici.modifie } }),
+    );
+    vi.stubGlobal("fetch", (url: string) => {
+      if (url === "/api/projets")
+        return Promise.resolve(Response.json([{ id: "p", modifie: enLigne.modifie, supprime: false }]));
+      if (url === "/api/projets/lire") return Promise.resolve(Response.json([enLigne]));
+      return Promise.resolve(Response.json(null));
+    });
+    await reload();
+    button("pjOpen").click();
+    await settle();
+    button("dtAt").click();
+    await settle();
+    const saisie = field("at-et");
+    saisie.value = "31";
+
+    enLigne = { ...ici, nom: "Modifié ailleurs", params: { ...ici.params, H: 2800 }, modifie: ici.modifie + 5000 };
+    document.dispatchEvent(new Event("visibilitychange"));
+    await settle();
+
+    expect(saved().params.H).toBe(2800);
+    expect(document.body.classList.contains("home-on")).toBe(true);
+    expect(document.getElementById("dpAt")!.hidden).toBe(false);
+    expect(saisie.value).toBe("31");
+    expect(button("homeBack").textContent).toContain("Modifié ailleurs");
+
+    button("homeBack").click();
+    expect(field("H").value).toBe("2800");
+    expect(field("pjName").value).toBe("Modifié ailleurs");
+  });
+});
+
 describe("escalier terminé", () => {
   /** Terminé, puis ouverture des fichiers pour la machine : l'état et la date ne bougent pas. */
   function finishThenExport(): void {
