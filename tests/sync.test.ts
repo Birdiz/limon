@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { atelierDefauts, newAtelier } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
-import { edited, newProject, parseProjectFile, projectFile, withEtat, type Project } from "../src/core/project";
+import { edited, newProject, parseProjectFile, projectFile, SCHEMA, withEtat, type Project } from "../src/core/project";
 import { compute } from "../src/core/stair";
 import { AtelierStore } from "../src/ui/atelier";
 import { Api } from "../src/ui/api";
@@ -389,6 +389,121 @@ describe("synchronisation des projets", () => {
     await a.signIn("jean@exemple.fr");
     await a.store.signOut();
     expect(a.store.known()).toBe(true);
+  });
+});
+
+describe("projet d'une version plus récente de l'outil", () => {
+  /** La ligne, telle que l'aurait écrite une version plus récente que cette page, ou redevenue lisible par elle. */
+  const schemaEnLigne = (id: string, schema: number) =>
+    s.db.query("update projets set donnees = donnees || jsonb_build_object('schema', $1::int) where id = $2", [
+      schema,
+      id,
+    ]);
+  const enLigne = async (id: string) =>
+    (
+      await s.db.query<{ modifie: number; nom: string }>(
+        "select modifie, donnees->>'nom' as nom from projets where id = $1",
+        [id],
+      )
+    )[0]!;
+  const deuxAppareils = async () => {
+    const [a, b] = [device(), device()];
+    await a.signIn("jean@exemple.fr");
+    await b.signIn("jean@exemple.fr");
+    return { a, b };
+  };
+
+  it("une page ne range pas un projet de schéma plus haut et l'indique, sans parler de conflit", async () => {
+    const { a, b } = await deuxAppareils();
+    await b.store.save(project("p", "Dupont", 5));
+    await b.store.sync();
+    await schemaEnLigne("p", SCHEMA + 1);
+    await a.store.sync();
+    expect(await a.store.get("p")).toBeNull();
+    expect(await a.store.status()).toMatchObject({
+      plusRecents: 1,
+      pending: 0,
+      refuses: [],
+      erreur: null,
+      offline: false,
+    });
+    await a.store.signOut();
+    expect((await a.store.status()).compte).toBeNull();
+  });
+
+  it("garde sa copie plus ancienne, et ne l'envoie pas", async () => {
+    const { a, b } = await deuxAppareils();
+    await a.store.save(project("p", "Dupont", 5));
+    await a.store.sync();
+    await b.store.sync();
+    await b.store.save(project("p", "Dupont (b)", 10));
+    await b.store.sync();
+    await schemaEnLigne("p", SCHEMA + 1);
+    await a.store.sync();
+    expect((await a.store.get("p"))!.nom).toBe("Dupont");
+    expect(await a.store.status()).toMatchObject({ plusRecents: 1, pending: 0, refuses: [] });
+    expect(await enLigne("p")).toMatchObject({ nom: "Dupont (b)" });
+  });
+
+  it("le projet arrive une fois lisible, et l'indication s'en va", async () => {
+    const { a, b } = await deuxAppareils();
+    await b.store.save(project("p", "Dupont", 5));
+    await b.store.sync();
+    await schemaEnLigne("p", SCHEMA + 1);
+    await a.store.sync();
+    await schemaEnLigne("p", SCHEMA);
+    await a.store.sync();
+    expect(await a.names()).toEqual(["Dupont"]);
+    expect((await a.store.status()).plusRecents).toBe(0);
+  });
+
+  it("une copie retouchée sur l'ancienne page n'écrase pas la ligne, reste ici, et le refus tient au chargement suivant", async () => {
+    const { a, b } = await deuxAppareils();
+    await a.store.save(project("p", "Dupont", 5));
+    await a.store.sync();
+    await b.store.sync();
+    await b.store.save(project("p", "Dupont (b)", 10));
+    await b.store.sync();
+    await schemaEnLigne("p", SCHEMA + 1);
+    await a.store.sync();
+    const copie = (await a.store.get("p"))!;
+    await a.store.save({ ...copie, nom: "Dupont (a)", modifie: 20 });
+    await a.store.sync();
+    expect(await enLigne("p")).toMatchObject({ nom: "Dupont (b)", modifie: 10 });
+    const st = await a.store.status();
+    expect(st).toMatchObject({ pending: 0, erreur: null, offline: false });
+    expect(st.refuses).toEqual([
+      { id: "p", nom: "Dupont (a)", raison: expect.stringContaining("version plus récente") as string },
+    ]);
+
+    const rechargee = device(a.storage);
+    await rechargee.signIn("jean@exemple.fr");
+    expect(await enLigne("p")).toMatchObject({ nom: "Dupont (b)", modifie: 10 });
+    expect((await rechargee.store.status()).refuses.map((r) => r.nom)).toEqual(["Dupont (a)"]);
+    await rechargee.store.signOut();
+    expect(await rechargee.names()).toEqual(["Dupont (a)"]);
+  });
+
+  it("une copie d'avant le numéro, encore à envoyer, garde en ligne ce qu'elle n'a jamais connu", async () => {
+    const { a, b } = await deuxAppareils();
+    const neuf = { lignes: "du futur" };
+    await a.store.save(project("p", "Dupont", 5));
+    await a.store.sync();
+    await s.db.query("update projets set donnees = donnees || jsonb_build_object('champNeuf', $1::jsonb)", [
+      JSON.stringify(neuf),
+    ]);
+    a.storage.setItem(
+      "limon-projets",
+      // Sans le numéro, comme l'a écrit une version d'avant lui.
+      JSON.stringify([{ ...project("p", "Dupont (a)", 20), schema: undefined }]),
+    );
+    const rechargee = device(a.storage);
+    await rechargee.signIn("jean@exemple.fr");
+    expect(await enLigne("p")).toMatchObject({ nom: "Dupont (a)", modifie: 20 });
+    const [row] = await s.db.query<{ neuf: unknown }>("select donnees->'champNeuf' as neuf from projets");
+    expect(row!.neuf).toEqual(neuf);
+    await b.store.sync();
+    expect((await b.store.get("p"))!.nom).toBe("Dupont (a)");
   });
 });
 

@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { newProject } from "../src/core/project";
+import { newProject, SCHEMA } from "../src/core/project";
 import { AccountPanel } from "../src/ui/account";
 import { Api } from "../src/ui/api";
 import { LocalStore, type KeyValue } from "../src/ui/store";
@@ -84,6 +84,32 @@ describe("état de l'enregistrement dans l'en-tête", () => {
     await settled();
     expect(line().textContent).toContain("pas gardé sur cet appareil");
     expect(line().classList.contains("fail")).toBe(true);
+  });
+
+  it("un escalier d'une version plus récente : ni échec, ni attente, et rien à faire pour l'artisan", async () => {
+    const m = new Map<string, string>();
+    const storage: KeyValue = {
+      getItem: (k) => m.get(k) ?? null,
+      setItem: (k, v) => void m.set(k, v),
+      removeItem: (k) => void m.delete(k),
+    };
+    const api = new Api(async (input) => {
+      const url = String(input);
+      const body = url.endsWith("lire")
+        ? [{ ...newProject("r", "Récent", "complet", 5), schema: SCHEMA + 1 }]
+        : url.endsWith("projets")
+          ? [{ id: "r", modifie: 5, supprime: false }]
+          : [];
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    const store = new SyncStore(new LocalStore(storage), api, storage);
+    new AccountPanel(store, api);
+    await store.signIn(COMPTE);
+    await settled();
+    expect(line().textContent).toContain("1 escalier d'un autre appareil arrivera tout seul");
+    expect(line().textContent).not.toContain("Enregistré sur tous");
+    expect(line().classList.contains("fail")).toBe(false);
+    expect(line().classList.contains("wait")).toBe(false);
   });
 
   describe("envoi au compte", () => {
