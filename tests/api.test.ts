@@ -652,6 +652,60 @@ describe("atelier", () => {
     expect((await post(f, "/api/atelier", { atelier: { defauts: {} } }, "PUT")).status).toBe(400);
   });
 
+  it("fusionne partie par partie : la plus récente gagne, à date égale celle du compte", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const tarifs = { ...TARIFS_VIDES, taux: 45 };
+    const entreprise = { ...ENTREPRISE_VIDE, nom: "Exemple" };
+    const compte = { ...a(30, "noyer"), tarifs, entreprise, dates: { defauts: 30, tarifs: 20, entreprise: 10 } };
+    await post(f, "/api/atelier", { atelier: compte }, "PUT");
+    // Plus vieux dans l'ensemble, mais sa fiche est plus récente ; ses tarifs, à date égale, ne passent pas.
+    const recu = {
+      ...a(15),
+      tarifs: { ...TARIFS_VIDES, taux: 50 },
+      entreprise: { ...ENTREPRISE_VIDE, nom: "Autre" },
+      dates: { defauts: 5, tarifs: 20, entreprise: 15 },
+    };
+    const attendu = { ...compte, entreprise: recu.entreprise, dates: { defauts: 30, tarifs: 20, entreprise: 15 } };
+    expect(await (await post(f, "/api/atelier", { atelier: recu }, "PUT")).json()).toEqual(attendu);
+    expect(await (await f("/api/atelier")).json()).toEqual(attendu);
+  });
+
+  it("deux envois en même temps : chacun garde sa partie", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await post(f, "/api/atelier", { atelier: a(1) }, "PUT");
+    const tarifs = {
+      ...a(10),
+      tarifs: { ...TARIFS_VIDES, taux: 45 },
+      dates: { defauts: 1, tarifs: 10, entreprise: 0 },
+    };
+    const fiche = {
+      ...a(20),
+      entreprise: { ...ENTREPRISE_VIDE, nom: "Exemple" },
+      dates: { defauts: 1, tarifs: 0, entreprise: 20 },
+    };
+    await Promise.all([tarifs, fiche].map((atelier) => post(f, "/api/atelier", { atelier }, "PUT")));
+    expect(await (await f("/api/atelier")).json()).toMatchObject({
+      tarifs: { taux: 45 },
+      entreprise: { nom: "Exemple" },
+      dates: { defauts: 1, tarifs: 10, entreprise: 20 },
+      modifie: 20,
+    });
+  });
+
+  it("une date de partie ne dépasse pas celle du profil", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const res = await post(
+      f,
+      "/api/atelier",
+      { atelier: { ...a(10), dates: { defauts: 1e15, tarifs: "hier", entreprise: -5 } } },
+      "PUT",
+    );
+    expect(await res.json()).toMatchObject({ modifie: 10, dates: { defauts: 10, tarifs: 0, entreprise: 0 } });
+  });
+
   it("garde les tarifs et la fiche de l'entreprise", async () => {
     const f = browser(s);
     await login(s, f, "a@exemple.fr");
@@ -771,10 +825,12 @@ describe("numéros de devis", () => {
     const db = await pgliteDb();
     await migrate(db);
     // La base telle qu'elle était avant cette migration.
-    await db.exec("drop table devis_numeros; delete from schema_version where v = 4;");
+    await db.exec(
+      "drop table devis_numeros; alter table ateliers drop column dates; delete from schema_version where v >= 4;",
+    );
     await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000001', 'a@exemple.fr')");
     await migrate(db);
-    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 4 }]);
+    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 5 }]);
     expect(await db.query("select email from comptes")).toEqual([{ email: "a@exemple.fr" }]);
     await db.query(
       "insert into devis_numeros (compte, projet, annee, rang) values ('00000000-0000-0000-0000-000000000001', 'a', 2026, 1)",

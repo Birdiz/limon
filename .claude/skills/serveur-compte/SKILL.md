@@ -45,7 +45,7 @@ L'envoi part par lots (500 éléments et 3 Mo au plus). `PUT /projets` range él
 Côté page, `SyncState.refuses` garde la version refusée : elle sort de l'attente, ne bloque ni l'échange ni la déconnexion, reste sur l'appareil, et repart si elle change, ou une fois à chaque chargement de la page. `offline` ne dit que le réseau (`TypeError`) ; une réponse d'erreur du serveur, envoi entier ou profil de l'atelier, est dans `erreur`, dite telle quelle à l'écran.
 
 - **Première connexion** : les projets de l'appareil montent dans le compte.
-- **Déconnexion** : tout est envoyé, puis les projets du compte quittent l'appareil (refusée s'il reste des envois ; un projet refusé n'en est pas un, et reste sur l'appareil).
+- **Déconnexion** : tout est envoyé, puis les projets du compte quittent l'appareil (refusée s'il reste des envois, profil de l'atelier compris ; un projet refusé n'en est pas un, et reste sur l'appareil).
 - **Session perdue** : les projets restent ; connexion à une autre adresse ensuite : ceux de l'ancien compte quittent l'appareil.
 - **Compte supprimé** : les projets restent sur l'appareil.
 
@@ -53,7 +53,13 @@ Côté page, `SyncState.refuses` garde la version refusée : elle sort de l'atte
 
 `Atelier` et `ATELIER_KEYS` dans `src/core/atelier.ts`, `AtelierStore` et `AtelierPanel` dans `src/ui/atelier.ts`. Les réglages qui tiennent à l'habitude de l'artisan (bois, limons, poteau, assemblage, plateaux, garde-corps), repris par chaque nouvel escalier ; les cotes du chantier n'en font pas partie, et l'escalier d'exemple comme « Revenir à l'exemple » gardent les valeurs d'origine.
 
-Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garder ces réglages pour mes prochains escaliers » (masqué en pas à pas, comme « Revenir à l'exemple »). Enregistré dans `limon-atelier` ; avec un compte, table `ateliers` et `/api/atelier` (GET, PUT), échangé avec les projets, la version la plus récente gagnant, et il quitte l'appareil à la déconnexion. Toute modification est datée par `stamped`, comme un projet : un appareil à l'horloge en retard ne perd pas contre la version qu'il remplace.
+Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garder ces réglages pour mes prochains escaliers » (masqué en pas à pas, comme « Revenir à l'exemple »). Enregistré dans `limon-atelier` ; avec un compte, table `ateliers` et `/api/atelier` (GET, PUT), échangé avec les projets, et il quitte l'appareil à la déconnexion. Toute modification est datée par `stamped`, comme un projet : un appareil à l'horloge en retard ne perd pas contre la version qu'il remplace.
+
+**Fusion par partie** : réglages, tarifs et fiche de l'entreprise ont chacun leur date (`Atelier.dates`, colonne `dates`), `set` ne date que la partie changée, et `modifie` reste la plus récente. `mergeAtelier` garde la plus récente partie par partie, côté serveur et côté page ; à date égale, celle du compte. Un appareil neuf qui garde un réglage ne vide donc ni les tarifs ni la fiche du compte. `PUT /atelier` renvoie le profil réuni, et relit la ligne s'il ne la retrouve pas telle qu'il l'a lue.
+
+**Profil d'avant ces dates** (appareil, ligne du compte, ancienne version encore ouverte) : `sanitizeAtelier` donne `modifie` à ce qu'il a de rempli, et 0 à ce qu'il a de vide, qui ne remplace donc rien. Limites : une partie vidée exprès par une ancienne version revient depuis le compte ; une ancienne version qui change une partie date les autres, si elles sont remplies, avec elle, et peut donc les remplacer d'un bloc.
+
+**Attente** : `SyncState.serveurAtelier` retient la date reçue au dernier échange. Un profil plus récent compte dans `pending` (`atelierAttend` le dit, l'en-tête le nomme « votre atelier »), donc dans la garde de `signOut`. Un refus (400 de `PUT /atelier`, date impossible) reste dit dans `erreur` mais sort de l'attente (`atelierRefuse`), jusqu'à la version suivante : il ne bloque pas la déconnexion, et ce profil quitte l'appareil avec le reste, sans avoir rejoint le compte.
 
 ## Compte à l'écran
 

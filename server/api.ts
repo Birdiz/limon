@@ -13,7 +13,14 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { cleanEmail, type Compte, type CompteDetail, type Entree, type Passkey, type Refus } from "../src/core/account";
-import { sanitizeAtelier, type Atelier, type AtelierDefauts } from "../src/core/atelier";
+import {
+  mergeAtelier,
+  sameAtelier,
+  sanitizeAtelier,
+  type Atelier,
+  type AtelierDates,
+  type AtelierDefauts,
+} from "../src/core/atelier";
 import type { Entreprise, Tarifs } from "../src/core/tarifs";
 import { fromNewerVersion, isProjectId, sanitizeProject, type Project } from "../src/core/project";
 import { sansControles } from "../src/core/texte";
@@ -481,22 +488,30 @@ export function api(cfg: ApiConfig): Hono<Env> {
 
   /* ---------- Atelier ---------- */
 
-  /** Profil du compte ; les lignes d'avant les devis reviennent sans tarifs ni fiche de l'entreprise. */
-  async function atelierOf(compte: string): Promise<Atelier | null> {
+  async function atelierRow(compte: string) {
     const [row] = await db.query<{
       modifie: number;
       donnees: AtelierDefauts;
       tarifs: Tarifs | null;
       entreprise: Entreprise | null;
-    }>("select modifie, donnees, tarifs, entreprise from ateliers where compte = $1", [compte]);
-    return row
-      ? sanitizeAtelier({ defauts: row.donnees, tarifs: row.tarifs, entreprise: row.entreprise, modifie: row.modifie })
-      : null;
+      dates: AtelierDates | null;
+    }>("select modifie, donnees, tarifs, entreprise, dates from ateliers where compte = $1", [compte]);
+    return row;
+  }
+
+  /** Profil d'une ligne ; celles d'avant les devis reviennent sans tarifs ni fiche de l'entreprise. */
+  const atelierFrom = (row: NonNullable<Awaited<ReturnType<typeof atelierRow>>>): Atelier | null =>
+    sanitizeAtelier({ ...row, defauts: row.donnees });
+
+  /** Profil du compte. */
+  async function atelierOf(compte: string): Promise<Atelier | null> {
+    const row = await atelierRow(compte);
+    return row ? atelierFrom(row) : null;
   }
 
   app.get("/atelier", auth, async (c) => c.json(await atelierOf(c.get("compte"))));
 
-  /** Le profil reçu ne remplace que plus ancien que lui ; renvoie celui qui l'emporte. */
+  /** Le profil reçu ne remplace que plus ancien que lui, partie par partie ; renvoie le résultat. */
   app.put("/atelier", auth, debit, async (c) => {
     const raw = (await body(c)).atelier;
     const a = sanitizeAtelier(raw);
@@ -507,24 +522,35 @@ export function api(cfg: ApiConfig): Hono<Env> {
         400,
         "Votre profil de l'atelier n'a pas rejoint votre compte : sa date de modification est impossible.",
       );
-    // Une version de l'outil d'avant les devis envoie son profil sans tarifs ni fiche : on garde ceux du compte.
-    const has = (k: string) => typeof raw === "object" && raw !== null && k in raw;
     const compte = c.get("compte");
-    await db.query(
-      `insert into ateliers (compte, modifie, donnees, tarifs, entreprise) values ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb)
-       on conflict (compte) do update set modifie = excluded.modifie, donnees = excluded.donnees,
-         tarifs = coalesce(excluded.tarifs, ateliers.tarifs),
-         entreprise = coalesce(excluded.entreprise, ateliers.entreprise)
-         where ateliers.modifie < excluded.modifie`,
-      [
-        compte,
-        a.modifie,
-        JSON.stringify(a.defauts),
-        has("tarifs") ? JSON.stringify(a.tarifs) : null,
-        has("entreprise") ? JSON.stringify(a.entreprise) : null,
-      ],
-    );
-    return c.json(await atelierOf(compte));
+    // Une version d'avant les devis envoie son profil sans tarifs ni fiche : sans date, ils ne remplacent pas ceux du compte.
+    for (let essai = 0; essai < 5; essai++) {
+      const row = await atelierRow(compte);
+      const avant = row ? atelierFrom(row) : null;
+      const apres = avant ? mergeAtelier(a, avant) : a;
+      if (avant && sameAtelier(avant, apres)) return c.json(avant);
+      // Deux envois en même temps : celui qui ne retrouve pas la ligne qu'il a lue n'écrit rien et recommence.
+      const ecrit = await db.query(
+        `insert into ateliers (compte, modifie, donnees, tarifs, entreprise, dates)
+         values ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb)
+         on conflict (compte) do update set modifie = excluded.modifie, donnees = excluded.donnees,
+           tarifs = excluded.tarifs, entreprise = excluded.entreprise, dates = excluded.dates
+           where ateliers.modifie = $7 and ateliers.dates is not distinct from $8::jsonb
+         returning compte`,
+        [
+          compte,
+          apres.modifie,
+          JSON.stringify(apres.defauts),
+          JSON.stringify(apres.tarifs),
+          JSON.stringify(apres.entreprise),
+          JSON.stringify(apres.dates),
+          row?.modifie ?? null,
+          row?.dates ? JSON.stringify(row.dates) : null,
+        ],
+      );
+      if (ecrit.length) return c.json(apres);
+    }
+    return err(c, 503, "Votre profil de l'atelier n'a pas pu être enregistré. Réessayez dans un instant.");
   });
 
   /* ---------- Devis ---------- */

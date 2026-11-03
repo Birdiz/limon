@@ -42,13 +42,21 @@ export const ATELIER_KEYS = [
 export type AtelierKey = (typeof ATELIER_KEYS)[number];
 export type AtelierDefauts = Pick<Params, AtelierKey>;
 
-/** Réglages de l'atelier, avec la date qui départage deux appareils. */
+/** Les parties du profil, datées chacune : un appareil ne remplace que ce qu'il a changé. */
+export const ATELIER_PARTS = ["defauts", "tarifs", "entreprise"] as const;
+
+export type AtelierPart = (typeof ATELIER_PARTS)[number];
+/** Dernière modification de chaque partie ; 0 pour une partie jamais remplie sur cet appareil. */
+export type AtelierDates = Record<AtelierPart, number>;
+
+/** Réglages de l'atelier, avec les dates qui départagent deux appareils. */
 export interface Atelier {
   defauts: AtelierDefauts;
   /** Pour les devis : tarifs et fiche de l'entreprise. */
   tarifs: Tarifs;
   entreprise: Entreprise;
-  /** Dernière modification, en millisecondes depuis 1970. */
+  dates: AtelierDates;
+  /** Dernière modification de tout le profil, en millisecondes depuis 1970. Jamais avant celle d'une partie. */
   modifie: number;
 }
 
@@ -71,7 +79,55 @@ export function isDefaultAtelier(d: AtelierDefauts): boolean {
 
 /** Profil sans tarifs ni fiche de l'entreprise, comme avant les devis. */
 export function newAtelier(defauts: AtelierDefauts, modifie: number): Atelier {
-  return { defauts, tarifs: TARIFS_VIDES, entreprise: ENTREPRISE_VIDE, modifie };
+  return {
+    defauts,
+    tarifs: TARIFS_VIDES,
+    entreprise: ENTREPRISE_VIDE,
+    dates: { defauts: modifie, tarifs: 0, entreprise: 0 },
+    modifie,
+  };
+}
+
+const memeTexte = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Réunit deux profils : pour chaque partie la plus récente, celle de `b` à date égale. */
+export function mergeAtelier(a: Atelier, b: Atelier): Atelier {
+  const de = (k: AtelierPart) => (a.dates[k] > b.dates[k] ? a : b);
+  return {
+    defauts: de("defauts").defauts,
+    tarifs: de("tarifs").tarifs,
+    entreprise: de("entreprise").entreprise,
+    dates: {
+      defauts: de("defauts").dates.defauts,
+      tarifs: de("tarifs").dates.tarifs,
+      entreprise: de("entreprise").dates.entreprise,
+    },
+    modifie: Math.max(a.modifie, b.modifie),
+  };
+}
+
+/** Vrai si les deux profils disent la même chose, dates comprises, dans quelque ordre que soient leurs clés. */
+export function sameAtelier(a: Atelier, b: Atelier): boolean {
+  return memeTexte(sanitizeAtelier(a), sanitizeAtelier(b));
+}
+
+/**
+ * Dates relues, jamais après celle du profil, que le serveur borne. Un profil d'avant ces dates (ou écrit par une
+ * version qui les ignore) donne sa date à ce qu'il a de rempli. Ce qu'il a de vide n'a pas de date : il ne dit rien
+ * de cette partie, et ne vide pas celle du compte.
+ */
+function sanitizeDates(raw: unknown, a: Omit<Atelier, "dates">): AtelierDates {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const date = (k: AtelierPart, vide: boolean) => {
+    const v = r[k];
+    if (typeof v === "number" && Number.isFinite(v)) return Math.min(Math.max(Math.round(v), 0), a.modifie);
+    return vide ? 0 : a.modifie;
+  };
+  return {
+    defauts: date("defauts", isDefaultAtelier(a.defauts)),
+    tarifs: date("tarifs", memeTexte(a.tarifs, TARIFS_VIDES)),
+    entreprise: date("entreprise", memeTexte(a.entreprise, ENTREPRISE_VIDE)),
+  };
 }
 
 /** Profil relu (stockage ou serveur, non fiable) ; null s'il n'a pas de date. Un profil d'avant les devis
@@ -80,10 +136,11 @@ export function sanitizeAtelier(raw: unknown): Atelier | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   if (typeof r.modifie !== "number" || !Number.isFinite(r.modifie)) return null;
-  return {
+  const a = {
     defauts: atelierDefauts(sanitizeParams(r.defauts)),
     tarifs: textesPropres(sanitizeTarifs(r.tarifs)),
     entreprise: textesPropres(sanitizeEntreprise(r.entreprise)),
     modifie: Math.round(r.modifie),
   };
+  return { ...a, dates: sanitizeDates(r.dates, a) };
 }

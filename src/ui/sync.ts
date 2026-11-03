@@ -1,4 +1,5 @@
 import type { Changement, Compte, Entree, Refus } from "../core/account";
+import { mergeAtelier, sameAtelier, type Atelier } from "../core/atelier";
 import { fromNewerVersion, sanitizeProject, stamped, type Project } from "../core/project";
 import { ApiError, NotSignedIn, type Api } from "./api";
 import type { AtelierStore } from "./atelier";
@@ -30,9 +31,22 @@ interface SyncState {
   supprimes: Record<string, number>;
   /** Versions refusées par le serveur : elles ne comptent plus comme à envoyer, une autre version repart. */
   refuses: Record<string, { modifie: number; raison: string }>;
+  /** Date du profil de l'atelier que le serveur avait au dernier échange. */
+  serveurAtelier: number | null;
+  /** Version du profil refusée par le serveur : elle ne compte plus comme à envoyer, une autre version repart. */
+  atelierRefuse: number | null;
 }
 
-const EMPTY: SyncState = { compte: null, dernier: null, connu: false, serveur: {}, supprimes: {}, refuses: {} };
+const EMPTY: SyncState = {
+  compte: null,
+  dernier: null,
+  connu: false,
+  serveur: {},
+  supprimes: {},
+  refuses: {},
+  serveurAtelier: null,
+  atelierRefuse: null,
+};
 
 /** Découpe un envoi : 500 éléments au plus, et de quoi tenir dans ce que le serveur accepte. */
 export function lots(changes: Changement[]): Changement[][] {
@@ -60,8 +74,10 @@ export interface RefusVu extends Refus {
 
 export interface SyncStatus {
   compte: Compte | null;
-  /** Projets modifiés ou supprimés ici, pas encore envoyés. */
+  /** Projets modifiés ou supprimés ici, pas encore envoyés, et le profil de l'atelier s'il l'est aussi. */
   pending: number;
+  /** Le profil de l'atelier est compté dans `pending`. */
+  atelierAttend: boolean;
   /** Le dernier échange a échoué faute de réseau. */
   offline: boolean;
   /** Le serveur a répondu non au dernier échange, en entier ou pour le profil de l'atelier : ses mots. */
@@ -188,7 +204,8 @@ export class SyncStore implements ProjectStore {
   async status(): Promise<SyncStatus> {
     return {
       compte: this.state.compte,
-      pending: this.state.compte ? (await this.pending()).length : 0,
+      pending: this.state.compte ? await this.waiting() : 0,
+      atelierAttend: !!this.state.compte && this.atelierWaits(),
       offline: this.offline,
       erreur: this.erreur,
       refuses: this.state.compte ? await this.refused() : [],
@@ -218,6 +235,8 @@ export class SyncStore implements ProjectStore {
       this.state.serveur = {};
       this.state.supprimes = {};
       this.state.refuses = {};
+      this.state.serveurAtelier = null;
+      this.state.atelierRefuse = null;
     }
     this.state.compte = compte;
     this.state.dernier = compte.email;
@@ -229,11 +248,12 @@ export class SyncStore implements ProjectStore {
 
   /**
    * Déconnexion : tout est envoyé, puis les projets du compte quittent l'appareil. Refusée s'il reste
-   * des modifications à envoyer (hors ligne, ou serveur qui répond non). Un projet refusé ne bloque pas : il reste ici.
+   * des modifications à envoyer, profil de l'atelier compris (hors ligne, ou serveur qui répond non).
+   * Un projet refusé ne bloque pas : il reste ici. Un profil refusé non plus, et il part avec le reste.
    */
   async signOut(): Promise<void> {
     await this.sync();
-    if (this.state.compte && (await this.pending()).length)
+    if (this.state.compte && (await this.waiting()))
       throw new Error(
         this.erreur
           ? `Des modifications n'ont pas encore pu être envoyées. ${this.erreur}`
@@ -310,6 +330,18 @@ export class SyncStore implements ProjectStore {
     return changes;
   }
 
+  /** Le profil de l'atelier a changé ici depuis le dernier échange, et cette version n'a pas été refusée. */
+  private atelierWaits(): boolean {
+    const a = this.atelier?.get();
+    const { serveurAtelier, atelierRefuse } = this.state;
+    return !!a && a.modifie !== atelierRefuse && (serveurAtelier === null || a.modifie > serveurAtelier);
+  }
+
+  /** Ce qui reste à envoyer : les projets et les suppressions, plus le profil de l'atelier. */
+  private async waiting(): Promise<number> {
+    return (await this.pending()).length + (this.atelierWaits() ? 1 : 0);
+  }
+
   /** Envoie par lots et note les refus ; renvoie l'index à jour. */
   private async send(changes: Changement[], keepalive: boolean): Promise<Entree[]> {
     const refuses = new Map(Object.entries(this.state.refuses));
@@ -358,12 +390,26 @@ export class SyncStore implements ProjectStore {
     this.emitStatus();
   }
 
-  /** Profil de l'atelier : le plus récent des deux côtés l'emporte, comme pour un projet. */
+  /** Profil de l'atelier : le plus récent des deux côtés l'emporte, partie par partie. */
   private async exchangeAtelier(): Promise<void> {
     if (!this.atelier) return;
     const mine = this.atelier.get();
-    const theirs = mine ? await this.api.pushAtelier(mine) : await this.api.atelierOf();
-    if (theirs && theirs.modifie > (mine?.modifie ?? 0)) this.atelier.adopt(theirs);
+    let theirs: Atelier | null;
+    try {
+      theirs = mine ? await this.api.pushAtelier(mine) : await this.api.atelierOf();
+    } catch (e) {
+      // Le serveur refuse cette version, et la refusera encore : dit à l'écran, elle ne bloque pas la déconnexion.
+      if (mine && e instanceof ApiError && e.status === 400) this.state.atelierRefuse = mine.modifie;
+      throw e;
+    }
+    this.state.atelierRefuse = null;
+    this.state.serveurAtelier = theirs?.modifie ?? null;
+    this.persist();
+    if (!theirs) return;
+    // Une modification faite ici pendant l'échange reste la plus récente.
+    const cur = this.atelier.get();
+    const merged = cur ? mergeAtelier(cur, theirs) : theirs;
+    if (!cur || !sameAtelier(cur, merged)) this.atelier.adopt(merged);
   }
 
   /** Range l'index du serveur : télécharge ce qui est plus récent en ligne, retire ce qui y a été supprimé. */

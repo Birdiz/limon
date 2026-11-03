@@ -1,7 +1,7 @@
 import type { Compte, CompteDetail } from "../core/account";
 import { ApiError, NotSignedIn, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
-import type { RefusVu, SyncStore } from "./sync";
+import type { RefusVu, SyncStatus, SyncStore } from "./sync";
 
 const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
 const webauthn = () => import("@simplewebauthn/browser");
@@ -31,6 +31,13 @@ function problem(e: unknown): string | null {
 
 /** Le stockage refuse : rien ne survivrait au rechargement de la page. */
 const NOT_STORED = "Escalier pas gardé sur cet appareil : gardez-en une copie en fichier";
+
+/** En-tête : ce qui attend l'envoi, en mots ; le profil de l'atelier n'est pas un escalier. */
+function waitingWords({ pending, atelierAttend }: SyncStatus): string {
+  const n = pending - (atelierAttend ? 1 : 0);
+  const escaliers = `${n} escalier${n > 1 ? "s" : ""}`;
+  return !atelierAttend ? escaliers : n ? `${escaliers} et votre atelier` : "votre atelier";
+}
 
 /** En-tête : les escaliers que le serveur a refusés, par leur nom s'il n'y en a qu'un. */
 const refusedLine = (refused: RefusVu[]) =>
@@ -108,18 +115,19 @@ export class AccountPanel {
       return;
     }
     const s = st.pending > 1 ? "s" : "";
+    const attente = waitingWords(st);
     const state = !st.stored
       ? NOT_STORED
       : st.pending && st.offline
-        ? `${st.pending} escalier${s} à envoyer dès que le réseau revient`
+        ? `${attente} à envoyer dès que le réseau revient`
         : st.erreur
           ? st.pending
-            ? `${st.pending} escalier${s} pas encore envoyé${s}. ${st.erreur}`
+            ? `${attente} pas encore envoyé${s}. ${st.erreur}`
             : st.erreur
           : refused.length
             ? refusedLine(refused)
             : st.pending
-              ? `${st.pending} escalier${s} en cours d'envoi`
+              ? `${attente} en cours d'envoi`
               : st.plusRecents
                 ? newerLine(st.plusRecents)
                 : "escaliers enregistrés sur tous vos appareils";

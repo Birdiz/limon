@@ -1,4 +1,5 @@
 import {
+  ATELIER_PARTS,
   atelierDefauts,
   atelierParams,
   isDefaultAtelier,
@@ -19,7 +20,7 @@ const ATELIER_KEY = "limon-atelier";
 
 /**
  * Profil de l'atelier sur cet appareil. Écrit tout de suite dans le stockage du navigateur ; avec un
- * compte, `SyncStore` le recopie sur les autres appareils, la version la plus récente gagnant.
+ * compte, `SyncStore` le recopie sur les autres appareils, la version la plus récente gagnant, partie par partie.
  */
 export class AtelierStore {
   private a: Atelier | null;
@@ -45,13 +46,16 @@ export class AtelierStore {
     return atelierParams(this.a);
   }
 
-  /** Change une partie du profil (réglages, tarifs ou fiche de l'entreprise) en gardant le reste. */
-  set(part: Partial<Omit<Atelier, "modifie">>, now = Date.now()): void {
-    const base = this.a ?? newAtelier(atelierDefauts(DEFAULTS), now);
-    this.put({ ...base, ...part, modifie: this.a ? stamped(this.a, now) : now });
+  /** Change une partie du profil (réglages, tarifs ou fiche de l'entreprise) en gardant le reste, sans le dater. */
+  set(part: Partial<Omit<Atelier, "dates" | "modifie">>, now = Date.now()): void {
+    const base = this.a ?? newAtelier(atelierDefauts(DEFAULTS), 0);
+    const modifie = this.a ? stamped(this.a, now) : now;
+    const dates = { ...base.dates };
+    for (const k of ATELIER_PARTS) if (k in part) dates[k] = modifie;
+    this.put({ ...base, ...part, dates, modifie });
   }
 
-  /** Version reçue du compte, plus récente que celle d'ici. */
+  /** Version réunie avec celle du compte. */
   adopt(a: Atelier): void {
     this.put(a);
   }
