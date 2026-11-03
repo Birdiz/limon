@@ -38,6 +38,12 @@ const refusedLine = (refused: RefusVu[]) =>
     ? `${refused.length} escaliers n'ont pas pu rejoindre votre compte`
     : `« ${refused[0]!.nom} » n'a pas pu rejoindre votre compte`;
 
+/** En-tête : les escaliers qu'une version plus récente a écrits. Pas un échec : ils arriveront sans rien à faire. */
+const newerLine = (n: number) =>
+  n > 1
+    ? `${n} escaliers d'un autre appareil arriveront tout seuls à la prochaine mise à jour`
+    : "1 escalier d'un autre appareil arrivera tout seul à la prochaine mise à jour";
+
 /** Mon compte : le refus, sa raison et la copie à garder ; une suppression n'a plus d'escalier à copier. */
 const refusedItem = (r: RefusVu) =>
   r.nom === null
@@ -114,8 +120,10 @@ export class AccountPanel {
             ? refusedLine(refused)
             : st.pending
               ? `${st.pending} escalier${s} en cours d'envoi`
-              : "escaliers enregistrés sur tous vos appareils";
-    const allSaved = st.stored && !st.pending && !st.erreur && !refused.length;
+              : st.plusRecents
+                ? newerLine(st.plusRecents)
+                : "escaliers enregistrés sur tous vos appareils";
+    const allSaved = st.stored && !st.pending && !st.erreur && !refused.length && !st.plusRecents;
     const toSee = refused.length && state === refusedLine(refused) ? " : voir Mon compte" : "";
     saved.textContent = allSaved
       ? "Enregistré sur tous vos appareils"

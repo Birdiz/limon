@@ -12,6 +12,8 @@ export type Etat = "brouillon" | "fini";
 /** Un escalier enregistré. Dates en millisecondes depuis 1970. */
 export interface Project {
   id: string;
+  /** Version du contenu : voir `SCHEMA`. 0 pour une copie d'avant ce numéro. */
+  schema: number;
   nom: string;
   cree: number;
   modifie: number;
@@ -29,9 +31,26 @@ export interface Project {
 export const NOM_PAR_DEFAUT = "Mon escalier";
 const FORMAT = "limon-projet";
 const VERSION = 1;
+/**
+ * Numéro du contenu d'un projet, à monter à chaque champ ou valeur d'énumération ajoutés. Les mises à jour étant
+ * silencieuses, deux versions de l'outil coexistent : celle qui relit un projet oublie ce qu'elle ne connaît pas, et ce
+ * numéro l'empêche de le faire disparaître du compte.
+ */
+export const SCHEMA = 1;
+
+/** Numéro d'un projet non fiable ; 0 s'il n'en a pas, ou pas un vrai. */
+function schemaOf(raw: unknown): number {
+  const s = (raw as { schema?: unknown } | null)?.schema;
+  return typeof s === "number" && Number.isSafeInteger(s) && s > 0 ? s : 0;
+}
+
+/** Projet écrit par une version de l'outil plus récente que celle-ci : le relire lui ferait perdre des champs. */
+export function fromNewerVersion(raw: unknown): boolean {
+  return schemaOf(raw) > SCHEMA;
+}
 
 export function newProject(id: string, nom: string, mode: Mode, now: number, params: Params = DEFAULTS): Project {
-  const base = { id, nom: nom.trim() || NOM_PAR_DEFAUT, cree: now, modifie: now, mode, etape: 0 };
+  const base = { id, schema: SCHEMA, nom: nom.trim() || NOM_PAR_DEFAUT, cree: now, modifie: now, mode, etape: 0 };
   return { ...base, etat: "brouillon", finiLe: 0, params: { ...params }, devis: null };
 }
 
@@ -40,7 +59,10 @@ export function isProjectId(id: unknown): id is string {
   return typeof id === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(id);
 }
 
-/** Projet relu (stockage ou fichier, non fiable) ; null si son identifiant manque ou sort du format. */
+/**
+ * Projet relu (stockage ou fichier, non fiable) ; null si son identifiant manque ou sort du format.
+ * Il garde son numéro : le relire ne lui rend pas ce qu'une ancienne version a perdu, seule une modification le monte.
+ */
 export function sanitizeProject(raw: unknown): Project | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -52,6 +74,7 @@ export function sanitizeProject(raw: unknown): Project | null {
   const nom = typeof r.nom === "string" ? sansControles(r.nom).trim() : "";
   return {
     id: r.id,
+    schema: Math.min(schemaOf(r), SCHEMA),
     nom: nom || NOM_PAR_DEFAUT,
     cree: date(r.cree),
     modifie: date(r.modifie),
@@ -99,7 +122,8 @@ export function parseProjectFile(
     return { erreur: "Ce projet vient d'une version plus récente de Quart de tour." };
   if (!isObjet(r.projet) || !isObjet(r.projet.params)) return { erreur: ABIME };
   const lus = r.projet.params;
-  const p = sanitizeProject({ ...r.projet, id })!;
+  // Un import est un nouveau projet, sans version en ligne à abîmer.
+  const p = sanitizeProject({ ...r.projet, id, schema: SCHEMA })!;
   const ignores = Object.keys(lus).filter((k) => p.params[k as keyof Params] !== lus[k]);
   if (ignores.length === Object.keys(lus).length) return { erreur: ABIME };
   // Une cote remplacée : la fiche ne peut plus passer pour celle qui a été validée.
@@ -123,21 +147,26 @@ export function stamped(remplacee: { modifie: number }, now: number): number {
   return Math.max(now, Math.floor(remplacee.modifie) + 1);
 }
 
+/** Ce que change toute modification d'un escalier : sa date, et son numéro, celui de la version qui l'a écrit. */
+export function touched(p: Project, now: number): Pick<Project, "modifie" | "schema"> {
+  return { modifie: stamped(p, now), schema: SCHEMA };
+}
+
 /** Escalier avec son devis changé ; la date de modification avance, pour l'échange avec le compte. */
 export function withDevis(p: Project, devis: DevisProjet | null, now: number): Project {
-  return { ...p, devis, modifie: stamped(p, now) };
+  return { ...p, devis, ...touched(p, now) };
 }
 
 /** Escalier passé à l'état donné ; la date de modification avance, pour l'échange avec le compte. */
 export function withEtat(p: Project, etat: Etat, now: number): Project {
-  return { ...p, etat, finiLe: etat === "fini" ? now : 0, modifie: stamped(p, now) };
+  return { ...p, etat, finiLe: etat === "fini" ? now : 0, ...touched(p, now) };
 }
 
 /** Escalier avec ces réglages ; le même objet s'ils n'ont pas changé. Un escalier terminé qu'on modifie redevient
     un brouillon : sa fiche n'est plus celle qui a été validée. */
 export function edited(p: Project, params: Params, now: number): Project {
   if (JSON.stringify(params) === JSON.stringify(p.params)) return p;
-  return { ...(p.etat === "fini" ? withEtat(p, "brouillon", now) : p), params, modifie: stamped(p, now) };
+  return { ...(p.etat === "fini" ? withEtat(p, "brouillon", now) : p), params, ...touched(p, now) };
 }
 
 /** Passage à « fini » : impossible tant que le calcul échoue, à confirmer si un contrôle n'est pas respecté. */

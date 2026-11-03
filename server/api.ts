@@ -15,7 +15,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { cleanEmail, type Compte, type CompteDetail, type Entree, type Passkey, type Refus } from "../src/core/account";
 import { sanitizeAtelier, type Atelier, type AtelierDefauts } from "../src/core/atelier";
 import type { Entreprise, Tarifs } from "../src/core/tarifs";
-import { isProjectId, sanitizeProject, type Project } from "../src/core/project";
+import { fromNewerVersion, isProjectId, sanitizeProject, type Project } from "../src/core/project";
 import { sansControles } from "../src/core/texte";
 import type { Db } from "./db";
 import type { SendCode } from "./mail";
@@ -45,7 +45,25 @@ const MAX_ENVOIS = 120;
 
 const DATE_REFUSEE = "Sa date de modification est impossible.";
 const ILLISIBLE = "Cet escalier ne peut pas être relu.";
+const SCHEMA_PLUS_HAUT =
+  "Il a été changé sur un autre appareil, avec une version plus récente de l'outil : votre compte garde celle-là.";
+const SCHEMA_INCONNU = "Il vient d'une version de l'outil que votre compte ne connaît pas encore.";
 const COMPTE_PLEIN = `Votre compte garde au plus ${MAX_PROJETS} escaliers, supprimés compris : celui-ci n'y entre plus.`;
+
+/**
+ * Ce qu'un envoi sans numéro de schéma contient vraiment : `sanitizeProject` a rempli le reste, qu'une version de
+ * l'outil d'avant ce numéro ne connaissait peut-être pas. Un réglage illisible compte comme absent.
+ */
+function sent(raw: Record<string, unknown>, p: Project): Partial<Project> {
+  const out: Record<string, unknown> = Object.fromEntries(
+    Object.entries(p).filter(([k]) => k in raw && k !== "schema" && k !== "params"),
+  );
+  if (raw.params && typeof raw.params === "object") {
+    const params = raw.params as Record<string, unknown>;
+    out.params = Object.fromEntries(Object.entries(p.params).filter(([k, v]) => params[k] === v));
+  }
+  return out;
+}
 
 /** Compteur d'essais en mémoire : un seul serveur tourne, et rien n'est conservé. */
 class Limiter {
@@ -391,15 +409,22 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const id = ch.id;
     if (!isProjectId(id)) return "Cet escalier a un identifiant que le compte ne peut pas garder.";
     let modifie: number, supprime: boolean, donnees: string | null;
+    // Sans numéro, l'envoi est fusionné dans la ligne ; avec, il la remplace, sauf si elle a un numéro plus haut.
+    // Une suppression n'en a pas : elle est un geste voulu, et ne dépend pas des champs connus.
+    let partie: string | null = null;
+    let schema = 0;
     if (ch.supprime === true) {
       if (!validDate(ch.modifie)) return DATE_REFUSEE;
       [modifie, supprime, donnees] = [ch.modifie, true, null];
     } else {
-      const p = ch.projet && typeof ch.projet === "object" ? sanitizeProject({ ...ch.projet, id }) : null;
+      if (fromNewerVersion(ch.projet)) return SCHEMA_INCONNU;
+      const raw = ch.projet && typeof ch.projet === "object" ? { ...ch.projet, id } : null;
+      const p = raw && sanitizeProject(raw);
       if (!p) return ILLISIBLE;
       if (!validDate(p.modifie)) return DATE_REFUSEE;
       p.nom = sansControles(p.nom.slice(0, 80));
-      [modifie, supprime, donnees] = [p.modifie, false, JSON.stringify(p)];
+      [modifie, supprime, donnees, schema] = [p.modifie, false, JSON.stringify(p), p.schema];
+      if (!schema) partie = JSON.stringify(sent(raw!, p));
     }
     try {
       // Le plafond est relu à chaque ligne : deux envois en même temps ne le dépassent que de quelques lignes.
@@ -409,15 +434,23 @@ export function api(cfg: ApiConfig): Hono<Env> {
          where exists (select 1 from projets where compte = $1::uuid and id = $2)
            or (select count(*) from projets where compte = $1::uuid) < ${MAX_PROJETS}
          on conflict (compte, id) do update
-           set modifie = excluded.modifie, supprime = excluded.supprime, donnees = excluded.donnees
+           set modifie = excluded.modifie, supprime = excluded.supprime,
+             donnees = case when $6::jsonb is null or projets.donnees is null then excluded.donnees
+               else projets.donnees || $6::jsonb || jsonb_build_object('params',
+                 coalesce(projets.donnees->'params', '{}'::jsonb) || coalesce($6::jsonb->'params', '{}'::jsonb)) end
            where projets.modifie < excluded.modifie
+             and ($7::int = 0 or coalesce((projets.donnees->>'schema')::int, 0) <= $7::int)
          returning id`,
-        [compte, id, modifie, supprime, donnees],
+        [compte, id, modifie, supprime, donnees, partie, schema],
       );
       if (rows.length) return null;
-      // Rien de rangé : une version plus récente est déjà là, ou le compte est plein.
-      const [there] = await db.query("select 1 from projets where compte = $1 and id = $2", [compte, id]);
-      return there ? null : COMPTE_PLEIN;
+      // Rien de rangé : une version plus récente est déjà là, ou de schéma plus haut, ou le compte est plein.
+      const [there] = await db.query<{ plus_vieille: boolean }>(
+        "select modifie < $3::bigint as plus_vieille from projets where compte = $1 and id = $2",
+        [compte, id, modifie],
+      );
+      if (!there) return COMPTE_PLEIN;
+      return there.plus_vieille ? SCHEMA_PLUS_HAUT : null;
     } catch (e) {
       if (!isDataError(e)) throw e;
       return ILLISIBLE;
@@ -425,9 +458,9 @@ export function api(cfg: ApiConfig): Hono<Env> {
   }
 
   /**
-   * Range les versions reçues, une par une : chacune ne remplace que plus ancienne qu'elle, et un refus n'arrête pas
-   * les suivantes. Renvoie l'index à jour, avec les refus si l'envoi les demande par `detail`. Un onglet ouvert depuis
-   * avant les refus lit encore un tableau.
+   * Range les versions reçues, une par une : chacune ne remplace que plus ancienne qu'elle et de schéma pas plus haut,
+   * et un refus n'arrête pas les suivantes. Renvoie l'index à jour, avec les refus si l'envoi les demande par `detail`.
+   * Un onglet ouvert depuis avant les refus lit encore un tableau.
    */
   app.put("/projets", auth, debit, async (c) => {
     const b = await body(c);
