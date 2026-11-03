@@ -19,7 +19,7 @@ import {
   edited,
   fileBase,
   newProject,
-  stamped,
+  touched,
   withDevis,
   withEtat,
   type Project,
@@ -288,7 +288,7 @@ function openProject(p: Project | null): void {
 
 const steps = new Steps((mode, etape) => {
   if (!project) return;
-  project = { ...project, mode, etape, modifie: stamped(project, Date.now()) };
+  project = { ...project, mode, etape, ...touched(project, Date.now()) };
   saveProject();
 });
 
@@ -449,7 +449,7 @@ store.onChange(async (ids) => {
 byId<HTMLInputElement>("pjName").addEventListener("change", (e) => {
   const el = e.target as HTMLInputElement;
   if (!project) return;
-  project = { ...project, nom: el.value.trim() || NOM_PAR_DEFAUT, modifie: stamped(project, Date.now()) };
+  project = { ...project, nom: el.value.trim() || NOM_PAR_DEFAUT, ...touched(project, Date.now()) };
   el.value = project.nom;
   saveProject();
 });

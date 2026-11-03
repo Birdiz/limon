@@ -3,7 +3,7 @@ import { atelierDefauts, newAtelier } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
 import { newDevis } from "../src/core/devis";
-import { newProject, NOM_PAR_DEFAUT, type Project } from "../src/core/project";
+import { newProject, NOM_PAR_DEFAUT, SCHEMA, type Project } from "../src/core/project";
 import { migrate, pgliteDb } from "../server/db";
 import { browser, login, ORIGIN, testServer, type TestServer } from "./server";
 
@@ -245,6 +245,149 @@ describe("projets", () => {
 
   it("demande une session", async () => {
     expect((await browser(s)("/api/projets")).status).toBe(401);
+  });
+});
+
+describe("numéro de schéma des projets", () => {
+  const p = (id: string, modifie: number, nom = id) => ({ ...newProject(id, nom, "complet", 1), modifie });
+  const devis = newDevis();
+  /** Le projet tel que l'envoie une version de l'outil qui ne connaît pas ces clés. */
+  const sans = (o: object, ...cles: string[]) =>
+    Object.fromEntries(Object.entries(o).filter(([k]) => !cles.includes(k)));
+  const envoi = (f: typeof fetch, changements: unknown[]) =>
+    post(f, "/api/projets", { changements, detail: true }, "PUT");
+  const lu = async (f: typeof fetch, id: string) =>
+    ((await (await post(f, "/api/projets/lire", { ids: [id] })).json()) as Project[])[0]!;
+  const connecte = async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    return f;
+  };
+  /** La ligne, telle que l'aurait écrite une version de l'outil plus récente que celle-ci. */
+  const montee = (id: string) =>
+    s.db.query("update projets set donnees = donnees || jsonb_build_object('schema', $1::int) where id = $2", [
+      SCHEMA + 1,
+      id,
+    ]);
+
+  it("un projet plus récent envoyé sans devis ni schéma garde le devis", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: { ...p("a", 10), devis } }]);
+    const ancien = sans(p("a", 20, "retouché"), "devis", "schema");
+    expect(await (await envoi(f, [{ id: "a", projet: ancien }])).json()).toMatchObject({ refus: [] });
+    expect(await lu(f, "a")).toMatchObject({ nom: "retouché", modifie: 20, devis, schema: SCHEMA });
+    expect(await (await f("/api/projets")).json()).toEqual([{ id: "a", modifie: 20, supprime: false }]);
+  });
+
+  it("sans schéma, un réglage absent reste celui du compte, un réglage envoyé le remplace", async () => {
+    const f = await connecte();
+    const avant = p("a", 10);
+    await envoi(f, [{ id: "a", projet: { ...avant, params: { ...avant.params, H: 3100, tournant: "balance" } } }]);
+    const ancien = p("a", 20);
+    const params = sans({ ...ancien.params, H: 2800 }, "tournant");
+    await envoi(f, [{ id: "a", projet: { ...sans(ancien, "schema"), params } }]);
+    const a = await lu(f, "a");
+    expect(a.params.H).toBe(2800);
+    expect(a.params.tournant).toBe("balance");
+  });
+
+  it("sans schéma, une clé absente garde l'état, un devis retiré par une version qui le connaît part", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: { ...p("a", 10), devis, etat: "fini", finiLe: 9 } }]);
+    const ancien = sans(p("a", 20), "schema", "etat", "finiLe");
+    await envoi(f, [{ id: "a", projet: ancien }]);
+    expect(await lu(f, "a")).toMatchObject({ etat: "fini", finiLe: 9, devis: null });
+  });
+
+  it("sans schéma, une version plus ancienne ne change toujours rien", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: { ...p("a", 10, "dix"), devis } }]);
+    const ancien = sans(p("a", 5, "cinq"), "devis", "schema");
+    await envoi(f, [{ id: "a", projet: ancien }]);
+    expect(await lu(f, "a")).toMatchObject({ nom: "dix", modifie: 10, devis });
+  });
+
+  it("sans schéma, un escalier nouveau ou revenu d'une suppression arrive complet", async () => {
+    const f = await connecte();
+    const ancien = sans(p("a", 10), "devis", "schema", "params");
+    await envoi(f, [{ id: "a", projet: ancien }]);
+    expect(await lu(f, "a")).toMatchObject({ devis: null, params: DEFAULTS });
+    await envoi(f, [{ id: "a", modifie: 20, supprime: true }]);
+    await envoi(f, [{ id: "a", projet: { ...ancien, modifie: 30 } }]);
+    expect(await lu(f, "a")).toMatchObject({ modifie: 30, devis: null, params: DEFAULTS });
+  });
+
+  it("sans schéma, une ligne de schéma plus haut garde son numéro et ce que l'envoi ignore", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: { ...p("a", 10), devis } }]);
+    await montee("a");
+    const ancien = sans(p("a", 20, "retouché"), "devis", "schema");
+    await envoi(f, [{ id: "a", projet: ancien }]);
+    expect(await lu(f, "a")).toMatchObject({ nom: "retouché", modifie: 20, devis, schema: SCHEMA + 1 });
+  });
+
+  it("un envoi de schéma plus bas n'écrase rien, et le refus est nommé", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: { ...p("a", 10, "récent"), devis } }]);
+    await montee("a");
+    const res = await envoi(f, [{ id: "a", projet: p("a", 20, "ancien") }]);
+    expect(await res.json()).toEqual({
+      index: [{ id: "a", modifie: 10, supprime: false }],
+      refus: [{ id: "a", raison: expect.stringContaining("version plus récente") as string }],
+    });
+    expect(await lu(f, "a")).toMatchObject({ nom: "récent", modifie: 10, devis, schema: SCHEMA + 1 });
+  });
+
+  it("un envoi de schéma plus bas et plus vieux que la ligne n'est pas un refus", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: p("a", 10, "récent") }]);
+    await montee("a");
+    expect(await (await envoi(f, [{ id: "a", projet: p("a", 5) }])).json()).toMatchObject({ refus: [] });
+  });
+
+  it("un envoi plus récent de même schéma remplace, et sa date gagne", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: { ...p("a", 10), devis } }]);
+    const sansDevis = sans(p("a", 20, "remplacé"), "devis");
+    expect(await (await envoi(f, [{ id: "a", projet: sansDevis }])).json()).toMatchObject({ refus: [] });
+    expect(await lu(f, "a")).toMatchObject({ nom: "remplacé", modifie: 20, devis: null, schema: SCHEMA });
+  });
+
+  it("une ligne d'avant le numéro se remplace", async () => {
+    const f = await connecte();
+    const ancien = sans({ ...p("a", 10), devis }, "schema");
+    await envoi(f, [{ id: "a", projet: ancien }]);
+    await envoi(f, [{ id: "a", projet: p("a", 20, "remplacé") }]);
+    expect(await lu(f, "a")).toMatchObject({ nom: "remplacé", devis: null, schema: SCHEMA });
+  });
+
+  it("une suppression plus récente passe, quel que soit le schéma de la ligne", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: p("a", 10) }]);
+    await montee("a");
+    await envoi(f, [{ id: "a", modifie: 20, supprime: true }]);
+    expect(await (await f("/api/projets")).json()).toEqual([{ id: "a", modifie: 20, supprime: true }]);
+  });
+
+  it("refuse un schéma que ce serveur ne connaît pas plutôt que d'en retirer des champs", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: { ...p("a", 10, "gardé"), devis } }]);
+    const res = await envoi(f, [
+      { id: "a", projet: { ...p("a", 20), schema: SCHEMA + 1 } },
+      { id: "b", projet: p("b", 20) },
+    ]);
+    const { refus } = (await res.json()) as { refus: { id: string }[] };
+    expect(refus.map((r) => r.id)).toEqual(["a"]);
+    expect(await lu(f, "a")).toMatchObject({ nom: "gardé", modifie: 10, devis });
+    expect(await lu(f, "b")).toMatchObject({ modifie: 20 });
+  });
+
+  it("un schéma mal formé compte comme absent", async () => {
+    const f = await connecte();
+    await envoi(f, [{ id: "a", projet: { ...p("a", 10), devis } }]);
+    const sansDevis = sans(p("a", 20), "devis");
+    await envoi(f, [{ id: "a", projet: { ...sansDevis, schema: "beaucoup" } }]);
+    expect(await lu(f, "a")).toMatchObject({ modifie: 20, devis });
   });
 });
 
