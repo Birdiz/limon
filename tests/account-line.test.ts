@@ -3,8 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { newProject, SCHEMA } from "../src/core/project";
+import { TARIFS_VIDES } from "../src/core/tarifs";
 import { AccountPanel } from "../src/ui/account";
 import { Api } from "../src/ui/api";
+import { AtelierStore } from "../src/ui/atelier";
 import { LocalStore, type KeyValue } from "../src/ui/store";
 import { SyncStore } from "../src/ui/sync";
 
@@ -24,6 +26,11 @@ function panel(storage: KeyValue | null) {
   );
   new AccountPanel(store, new Api());
   return store;
+}
+
+function memoire(): KeyValue {
+  const m = new Map<string, string>();
+  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v), removeItem: (k) => void m.delete(k) };
 }
 
 function refusing() {
@@ -185,6 +192,28 @@ describe("état de l'enregistrement dans l'en-tête", () => {
       expect(line().textContent).toContain("Trop d'envois en peu de temps.");
       expect(line().textContent).toContain("1 escalier pas encore envoyé");
       expect(line().textContent).not.toContain("réseau");
+    });
+
+    it("le profil de l'atelier en attente est nommé, sans parler d'escalier", async () => {
+      const storage = memoire();
+      const atelier = new AtelierStore(storage);
+      const store = new SyncStore(
+        new LocalStore(storage),
+        new Api(() => Promise.reject(new TypeError("Failed to fetch"))),
+        storage,
+        atelier,
+      );
+      new AccountPanel(store, new Api());
+      await store.signIn(COMPTE);
+      atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 45 } }, 1000);
+      store.atelierChanged();
+      await settled();
+      expect(line().textContent).toBe("Votre atelier à envoyer dès que le réseau revient");
+      expect(line().classList.contains("wait")).toBe(true);
+      await store.save(newProject("a", "A", "complet", 1));
+      await store.sync();
+      await settled();
+      expect(line().textContent).toBe("1 escalier et votre atelier à envoyer dès que le réseau revient");
     });
 
     it("une vraie coupure reste annoncée comme une coupure", async () => {

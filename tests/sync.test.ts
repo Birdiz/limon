@@ -796,6 +796,193 @@ describe("synchronisation du profil de l'atelier", () => {
     expect(a.atelier.get()!.modifie).toBe(2002);
   });
 
+  /** Compte avec des tarifs et une fiche, posés par un premier appareil. */
+  const compteRempli = async () => {
+    const a = device();
+    await a.signIn("jean@exemple.fr");
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 45 }, entreprise: { ...ENTREPRISE_VIDE, nom: "Exemple" } }, 1000);
+    await a.store.sync();
+    return a;
+  };
+
+  it("un appareil neuf qui a gardé un réglage ne vide pas les tarifs ni la fiche du compte", async () => {
+    const a = await compteRempli();
+    const neuf = device();
+    neuf.atelier.set({ defauts: defauts("noyer") }, 5000);
+    await neuf.signIn("jean@exemple.fr");
+    for (const d of [neuf, a]) {
+      await d.store.sync();
+      expect(d.atelier.get()).toMatchObject({
+        defauts: { ess: "noyer" },
+        tarifs: { taux: 45 },
+        entreprise: { nom: "Exemple" },
+      });
+    }
+    expect(await new Api(a.f).atelierOf()).toMatchObject({ tarifs: { taux: 45 }, entreprise: { nom: "Exemple" } });
+  });
+
+  it("deux appareils changent chacun une partie hors ligne : les deux restent", async () => {
+    const a = await compteRempli();
+    const b = device();
+    await b.signIn("jean@exemple.fr");
+    a.online = b.online = false;
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 60 } }, 2000);
+    b.atelier.set({ entreprise: { ...ENTREPRISE_VIDE, nom: "Autre nom" } }, 3000);
+    b.atelier.set({ defauts: defauts("sapin") }, 3500);
+    a.online = b.online = true;
+    // Le plus ancien arrive en dernier : ce qu'il a changé compte quand même.
+    await b.store.sync();
+    await a.store.sync();
+    await b.store.sync();
+    for (const d of [a, b])
+      expect(d.atelier.get()).toMatchObject({
+        defauts: { ess: "sapin" },
+        tarifs: { taux: 60 },
+        entreprise: { nom: "Autre nom" },
+      });
+    expect(await a.store.status()).toMatchObject({ pending: 0, atelierAttend: false });
+    expect(await b.store.status()).toMatchObject({ pending: 0, atelierAttend: false });
+  });
+
+  it("une même partie changée des deux côtés : la plus récente gagne", async () => {
+    const a = await compteRempli();
+    const b = device();
+    await b.signIn("jean@exemple.fr");
+    a.online = b.online = false;
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 70 } }, 4000);
+    b.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 50 } }, 3000);
+    a.online = b.online = true;
+    await a.store.sync();
+    await b.store.sync();
+    expect(a.atelier.get()!.tarifs.taux).toBe(70);
+    expect(b.atelier.get()!.tarifs.taux).toBe(70);
+  });
+
+  it("tarifs ou fiche changés hors ligne : le profil attend, et la déconnexion refuse", async () => {
+    const a = await compteRempli();
+    expect(await a.store.status()).toMatchObject({ pending: 0, atelierAttend: false });
+    a.online = false;
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 60 } }, Date.now());
+    a.store.atelierChanged();
+    expect(await a.store.status()).toMatchObject({ pending: 1, atelierAttend: true });
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ pending: 1, offline: true });
+    await expect(a.store.signOut()).rejects.toThrow("retrouvez du réseau");
+    expect(a.store.account()).not.toBeNull();
+    expect(a.atelier.get()!.tarifs.taux).toBe(60);
+
+    a.atelier.set({ entreprise: { ...ENTREPRISE_VIDE, nom: "Autre nom" } }, Date.now());
+    expect((await a.store.status()).pending).toBe(1);
+
+    a.online = true;
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ pending: 0, atelierAttend: false, offline: false });
+    await a.store.signOut();
+    expect(a.atelier.get()).toBeNull();
+    expect(await new LocalStore(a.storage).list()).toEqual([]);
+  });
+
+  it("une panne du serveur laisse le profil en attente ; un escalier et le profil comptent pour deux", async () => {
+    const a = await compteRempli();
+    a.panne = 500;
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 60 } }, Date.now());
+    await a.store.save(project("p", "Dupont", 10));
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ pending: 2, atelierAttend: true });
+    await expect(a.store.signOut()).rejects.toThrow("Des modifications");
+    a.panne = null;
+    await a.store.sync();
+    expect((await a.store.status()).pending).toBe(0);
+  });
+
+  it("un profil refusé reste dit, sort de l'attente, et une autre version repart", async () => {
+    const a = await compteRempli();
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 60 } }, Date.now() + 3000 * 86400_000);
+    await a.store.sync();
+    const st = await a.store.status();
+    expect(st).toMatchObject({ pending: 0, atelierAttend: false });
+    expect(st.erreur).toContain("profil de l'atelier");
+    // L'état survit au rechargement de la page.
+    const rouvert = device(a.storage);
+    expect(await rouvert.store.status()).toMatchObject({ pending: 0, atelierAttend: false });
+    // Une version suivante est de nouveau à envoyer.
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 61 } }, Date.now());
+    expect(await a.store.status()).toMatchObject({ pending: 1, atelierAttend: true });
+  });
+
+  it("un état enregistré avant `serveurAtelier` se reprend au premier échange", async () => {
+    const a = await compteRempli();
+    const { serveurAtelier, ...ancien } = JSON.parse(a.storage.getItem("limon-synchro")!) as Record<string, unknown>;
+    expect(serveurAtelier).toBe(a.atelier.get()!.modifie);
+    a.storage.setItem("limon-synchro", JSON.stringify(ancien));
+    const rouvert = device(a.storage);
+    expect((await rouvert.store.status()).pending).toBe(1);
+  });
+
+  it("une modification faite pendant l'échange reste à envoyer", async () => {
+    const a = await compteRempli();
+    const api = Object.getOwnPropertyDescriptor(a.store, "api")!.value as Api;
+    const push = api.pushAtelier;
+    api.pushAtelier = async (x) => {
+      const r = await push(x);
+      a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 99 } }, Date.now() + 1000);
+      return r;
+    };
+    await a.store.sync();
+    expect(a.atelier.get()!.tarifs.taux).toBe(99);
+    expect(await a.store.status()).toMatchObject({ pending: 1, atelierAttend: true });
+    api.pushAtelier = push;
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ pending: 0, atelierAttend: false });
+    expect(await new Api(a.f).atelierOf()).toMatchObject({ tarifs: { taux: 99 } });
+  });
+
+  it("un échange sans rien de neuf ne dérange pas le profil à l'écran", async () => {
+    const a = await compteRempli();
+    let vus = 0;
+    a.atelier.onChange(() => vus++);
+    await a.store.sync();
+    await a.store.sync();
+    expect(vus).toBe(0);
+  });
+
+  it("un profil d'avant les dates se relit sans perte, sur l'appareil comme en ligne", async () => {
+    const tarifs = { ...TARIFS_VIDES, taux: 45 };
+    const entreprise = { ...ENTREPRISE_VIDE, nom: "Exemple" };
+    // L'appareil relit ce qu'une ancienne version a écrit, tarifs compris.
+    const storage = memory();
+    storage.setItem("limon-atelier", JSON.stringify({ defauts: defauts("noyer"), tarifs, entreprise, modifie: 1000 }));
+    const a = device(storage);
+    expect(a.atelier.get()).toMatchObject({ defauts: { ess: "noyer" }, tarifs, entreprise, modifie: 1000 });
+    await a.signIn("jean@exemple.fr");
+    expect(await a.store.status()).toMatchObject({ pending: 0 });
+
+    // La ligne du compte d'avant les dates, relue par un nouvel appareil, puis par un autre qui a son réglage.
+    await s.db.query("update ateliers set dates = null");
+    const b = device();
+    await b.signIn("jean@exemple.fr");
+    expect(b.atelier.get()).toMatchObject({ defauts: { ess: "noyer" }, tarifs, entreprise, modifie: 1000 });
+    const c = device();
+    c.atelier.set({ defauts: defauts("sapin") }, 2000);
+    await c.signIn("jean@exemple.fr");
+    expect(c.atelier.get()).toMatchObject({ defauts: { ess: "sapin" }, tarifs, entreprise, modifie: 2000 });
+    expect(await new Api(c.f).atelierOf()).toMatchObject({ defauts: { ess: "sapin" }, tarifs, entreprise });
+  });
+
+  it("un profil d'avant les dates, resté vide de tarifs, ne vide pas ceux du compte", async () => {
+    await compteRempli();
+    const storage = memory();
+    const ancien = { defauts: defauts("noyer"), tarifs: TARIFS_VIDES, entreprise: ENTREPRISE_VIDE, modifie: 9000 };
+    storage.setItem("limon-atelier", JSON.stringify(ancien));
+    const d = device(storage);
+    await d.signIn("jean@exemple.fr");
+    expect(d.atelier.get()).toMatchObject({
+      defauts: { ess: "noyer" },
+      tarifs: { taux: 45 },
+      entreprise: { nom: "Exemple" },
+    });
+  });
+
   it("quitte l'appareil à la déconnexion, et ne suit pas sur un autre compte", async () => {
     const a = device();
     a.atelier.set({ defauts: defauts("noyer") }, 1000);

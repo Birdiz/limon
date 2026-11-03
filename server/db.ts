@@ -94,6 +94,8 @@ const MIGRATIONS = [
     primary key (compte, projet),
     unique (compte, annee, rang)
   );`,
+  // Profil de l'atelier : une date par partie. Vide sur une ligne d'avant, relue par `sanitizeAtelier`.
+  `alter table ateliers add column dates jsonb;`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */
