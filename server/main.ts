@@ -2,8 +2,8 @@ import path from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { api } from "./api";
-import { migrate, pgDb, pgliteDb, purge } from "./db";
-import { brevo, consoleMail } from "./mail";
+import { migrate, pgDb, pgliteDb, purge, purgeComptes } from "./db";
+import { brevo, brevoAvertissement, consoleAvertissement, consoleMail } from "./mail";
 import { staticFiles } from "./static";
 
 /* Serveur de Quart de tour : le site construit et /api, sur la même adresse.
@@ -21,7 +21,14 @@ const origin = process.env.ORIGIN ?? (local ? `http://localhost:${port}` : "http
 const db = !local && url ? await pgDb(url) : await pgliteDb();
 await migrate(db);
 await purge(db);
-setInterval(() => void purge(db).catch(console.error), 3_600_000).unref();
+// Les comptes à part et sans attendre : les envois ne retardent pas le démarrage.
+const avertir = key && !local ? brevoAvertissement(key) : consoleAvertissement;
+const purgeInactifs = () => void purgeComptes(db, avertir).catch(console.error);
+purgeInactifs();
+setInterval(() => {
+  void purge(db).catch(console.error);
+  purgeInactifs();
+}, 3_600_000).unref();
 
 const app = new Hono();
 app.use(async (c, next) => {
