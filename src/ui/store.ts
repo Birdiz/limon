@@ -45,6 +45,15 @@ export function read(store: KeyValue | null, key: string): string | null {
   }
 }
 
+/** Valeur JSON enregistrée, sans en vérifier la forme ; null si elle est absente ou illisible. */
+export function readJSON(store: KeyValue | null, key: string): unknown {
+  try {
+    return JSON.parse(read(store, key) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
 /** Vrai si l'écriture a eu lieu. */
 export function write(store: KeyValue | null, key: string, value: string | null): boolean {
   if (!store) return false;
@@ -87,24 +96,14 @@ export class LocalStore implements ProjectStore {
 
   /** Projets du stockage ; null s'il n'en dit rien : indisponible, vide ou abîmé. */
   private readProjects(): Project[] | null {
-    let raw: unknown;
-    try {
-      raw = JSON.parse(read(this.storage, PROJECTS_KEY) ?? "null");
-    } catch {
-      raw = null;
-    }
+    const raw = readJSON(this.storage, PROJECTS_KEY);
     return Array.isArray(raw) ? raw.map(sanitizeProject).filter((p): p is Project => p !== null) : null;
   }
 
   private migrate(): Project[] {
-    const legacy = read(this.storage, LEGACY_KEY);
-    if (legacy === null) return [];
-    let params;
-    try {
-      params = sanitizeParams(JSON.parse(legacy));
-    } catch {
-      params = sanitizeParams(null);
-    }
+    // Absente, il n'y a rien à reprendre ; illisible, elle donne quand même un escalier, aux réglages de l'exemple.
+    if (read(this.storage, LEGACY_KEY) === null) return [];
+    const params = sanitizeParams(readJSON(this.storage, LEGACY_KEY));
     return [newProject(newId(), NOM_PAR_DEFAUT, "complet", Date.now(), params)];
   }
 

@@ -1,3 +1,4 @@
+import { day } from "../core/format";
 import type { Params } from "../core/params";
 import { planShapes, type PlanShape } from "../core/plan-shapes";
 import { hasClient, newProject, parseProjectFile, type Mode, type Project } from "../core/project";
@@ -6,8 +7,6 @@ import { COTE_LABEL, FORME_LABEL } from "../core/summary";
 import type { Pt } from "../core/vec";
 import { byId, downloadProject, esc, flash } from "./dom";
 import { newId, type ProjectStore } from "./store";
-
-const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
 
 /** Onglets de la page : escaliers, profil de l'atelier, compte. */
 export type Panel = "escaliers" | "atelier" | "compte";

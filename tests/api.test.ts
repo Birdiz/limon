@@ -7,8 +7,16 @@ import { quantites } from "../src/cnc/quantites";
 import { MAX_OCTETS, SAISIE_DEFAUT, bloquants, devis, newDevis, remettre, type DevisProjet } from "../src/core/devis";
 import { compute } from "../src/core/stair";
 import { newProject, NOM_PAR_DEFAUT, SCHEMA, type Project } from "../src/core/project";
+import { api, balayeLimites, CODES_PAR_HEURE, Limiter, VERIFICATIONS_PAR_IP } from "../server/api";
 import { migrate, pgliteDb, purge, purgeComptes } from "../server/db";
-import { brevoAvertissement } from "../server/mail";
+import {
+  brevoAdresseChangee,
+  brevoAvertissement,
+  brevoCodeAdresse,
+  brevoCodePreuve,
+  brevoPasskeyAjoutee,
+} from "../server/mail";
+import { FausseCle } from "./passkey";
 import { browser, login, ORIGIN, testServer, type TestServer } from "./server";
 
 const json = { "content-type": "application/json" };
@@ -232,7 +240,16 @@ describe("appareils connectés", () => {
     const f = browser(s);
     await connecter(f, "iPhone");
     const [ligne] = await s.db.query<Record<string, unknown>>("select * from sessions");
-    expect(Object.keys(ligne!).sort()).toEqual(["appareil", "compte", "cree", "expire", "hash", "id", "utilise"]);
+    expect(Object.keys(ligne!).sort()).toEqual([
+      "appareil",
+      "compte",
+      "cree",
+      "expire",
+      "hash",
+      "id",
+      "preuve",
+      "utilise",
+    ]);
     expect(JSON.stringify(ligne)).not.toContain("10.0.0");
   });
 
@@ -317,7 +334,8 @@ describe("appareils connectés", () => {
       const db = await pgliteDb();
       await migrate(db);
       await db.exec(
-        `alter table sessions drop column id, drop column appareil, drop column utilise;
+        `drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
+         alter table sessions drop column id, drop column appareil, drop column utilise;
          delete from schema_version where v >= 8;`,
       );
       await db.query("insert into comptes (id, email) values ($1, 'a@exemple.fr')", [COMPTE_ID]);
@@ -978,30 +996,6 @@ describe("atelier", () => {
     expect(await (await f("/api/atelier")).json()).toEqual({ ...a(20, "noyer"), tarifs });
   });
 
-  it("garde les tarifs et la fiche de l'entreprise", async () => {
-    const f = browser(s);
-    await login(s, f, "a@exemple.fr");
-    const avec = {
-      ...a(10),
-      tarifs: { ...TARIFS_VIDES, taux: 45 },
-      entreprise: { ...ENTREPRISE_VIDE, nom: "Menuiserie Exemple" },
-    };
-    await post(f, "/api/atelier", { atelier: avec }, "PUT");
-    expect(await (await f("/api/atelier")).json()).toEqual(avec);
-    const d = (await (await f("/api/compte/donnees")).json()) as { atelier: typeof avec };
-    expect(d.atelier.tarifs.taux).toBe(45);
-  });
-
-  it("ne perd pas les tarifs quand une version d'avant les devis envoie son profil", async () => {
-    const f = browser(s);
-    await login(s, f, "a@exemple.fr");
-    const tarifs = { ...TARIFS_VIDES, taux: 45 };
-    await post(f, "/api/atelier", { atelier: { ...a(10), tarifs } }, "PUT");
-    const ancien = { defauts: { ...atelierDefauts(DEFAULTS), ess: "noyer" }, modifie: 20 };
-    await post(f, "/api/atelier", { atelier: ancien }, "PUT");
-    expect(await (await f("/api/atelier")).json()).toEqual({ ...a(20, "noyer"), tarifs });
-  });
-
   it("sépare les comptes", async () => {
     const f = browser(s);
     const g = browser(s);
@@ -1281,14 +1275,15 @@ describe("numéros de devis", () => {
     await migrate(db);
     // La base telle qu'elle était avant cette migration.
     await db.exec(
-      `alter table sessions drop column id, drop column appareil, drop column utilise;
+      `drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
+       alter table sessions drop column id, drop column appareil, drop column utilise;
        drop table devis_numeros; alter table ateliers drop column dates;
        drop table purge_passage; alter table comptes drop column essai;
        alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 4;`,
     );
     await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000001', 'a@exemple.fr')");
     await migrate(db);
-    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 8 }]);
+    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 10 }]);
     expect(await db.query("select email from comptes")).toEqual([{ email: "a@exemple.fr" }]);
     await db.query(
       "insert into devis_numeros (compte, projet, annee, rang) values ('00000000-0000-0000-0000-000000000001', 'a', 2026, 1)",
@@ -1338,6 +1333,9 @@ const HORS_EXPORT: Record<string, string> = {
   "devis_numeros.compte": DEJA_RENDU,
   "sessions.hash": "Empreinte du jeton de session : un secret, qui ne dit rien de la personne et ne sort jamais.",
   codes: "Code de connexion haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
+  codes_preuve: "Code de preuve, haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
+  changements_adresse:
+    "Changement d'adresse en cours, code haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
   defis: "Défi de passkey : valable 5 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
   purge_passage: "L'heure du dernier passage de la purge : rien sur une personne.",
   schema_version: "Le numéro de la dernière migration : rien sur une personne.",
@@ -1449,6 +1447,7 @@ describe("compte", () => {
           cree: expect.any(String),
           utilise: expect.any(String),
           expire: expect.any(String),
+          preuve: expect.any(String),
         },
       ]);
       expect(d.suppressions).toEqual([{ id: "b", modifie: 20 }]);
@@ -1497,6 +1496,603 @@ describe("compte", () => {
   it("ne garde pas les réponses en cache", async () => {
     expect((await browser(s)("/api/sante")).headers.get("cache-control")).toBe("no-store");
     expect(ORIGIN).toMatch(/^https:/);
+  });
+});
+
+describe("changer d'adresse", () => {
+  const demande = (f: typeof fetch, email: string) => post(f, "/api/compte/email/code", { email });
+  const change = (f: typeof fetch, email: string, code: unknown) =>
+    post(f, "/api/compte/email", { email, code }, "PUT");
+  const adresse = async (id: string) =>
+    (await s.db.query<{ email: string }>("select email from comptes where id = $1", [id]))[0]?.email;
+  const autreCode = (code: string) => (code === "000000" ? "111111" : "000000");
+
+  it("change l'adresse avec le bon code : même compte, mêmes escaliers, mêmes appareils", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    const projet = newProject("p", "Dupont", "guide", 3);
+    await post(f, "/api/projets", { changements: [{ id: "p", projet }] }, "PUT");
+    const ailleurs = browser(s);
+    await login(s, ailleurs, "a@exemple.fr");
+
+    expect((await demande(f, " Neuve@Exemple.fr ")).status).toBe(204);
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+    const res = await change(f, "neuve@exemple.fr", s.codesAdresse.get("neuve@exemple.fr"));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: a.id, email: "neuve@exemple.fr" });
+    expect(await adresse(a.id)).toBe("neuve@exemple.fr");
+    expect(s.avis).toEqual(["a@exemple.fr"]);
+    expect((await ailleurs("/api/compte")).status).toBe(200);
+    expect(await (await f("/api/projets")).json()).toMatchObject([{ id: "p" }]);
+    // La nouvelle adresse retrouve le compte ; l'ancienne, libre, n'y mène plus.
+    expect((await login(s, browser(s), "neuve@exemple.fr")).id).toBe(a.id);
+    expect((await login(s, browser(s), "a@exemple.fr")).id).not.toBe(a.id);
+  });
+
+  it("refuse une adresse qui a déjà un compte, et ne le dit qu'à qui a reçu le code", async () => {
+    await login(s, browser(s), "prise@exemple.fr");
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    const prise = await demande(f, "prise@exemple.fr");
+    const libre = await demande(f, "libre@exemple.fr");
+    expect([prise.status, libre.status]).toEqual([204, 204]);
+    await demande(f, "prise@exemple.fr");
+    const good = s.codesAdresse.get("prise@exemple.fr")!;
+
+    expect(await (await change(f, "prise@exemple.fr", autreCode(good))).json()).toEqual({ erreur: "Code incorrect." });
+    const res = await change(f, "prise@exemple.fr", good);
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      erreur: "Cette adresse a déjà son propre compte. Votre compte garde son adresse actuelle.",
+    });
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+    expect(s.avis).toEqual([]);
+  });
+
+  it("refuse un mauvais code, puis tout code après 5 essais", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const good = s.codesAdresse.get("neuve@exemple.fr")!;
+    for (let i = 0; i < 5; i++) {
+      const r = await change(f, "neuve@exemple.fr", autreCode(good));
+      expect(await r.json()).toEqual({ erreur: "Code incorrect." });
+    }
+    expect((await change(f, "neuve@exemple.fr", good)).status).toBe(400);
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+  });
+
+  it("refuse un code expiré, déjà servi, ou demandé pour une autre adresse", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const code = s.codesAdresse.get("neuve@exemple.fr");
+    expect((await change(f, "autre@exemple.fr", code)).status).toBe(400);
+
+    await s.db.query("update changements_adresse set expire = now() - interval '1 second'");
+    expect((await change(f, "neuve@exemple.fr", code)).status).toBe(400);
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+
+    await demande(f, "neuve@exemple.fr");
+    const frais = s.codesAdresse.get("neuve@exemple.fr");
+    expect((await change(f, "neuve@exemple.fr", frais)).status).toBe(200);
+    expect((await change(f, "neuve@exemple.fr", frais)).status).toBe(400);
+  });
+
+  it("le code ne vaut que pour le compte qui l'a demandé", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    const g = browser(s);
+    const b = await login(s, g, "b@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const code = s.codesAdresse.get("neuve@exemple.fr");
+    expect((await change(g, "neuve@exemple.fr", code)).status).toBe(400);
+    expect(await adresse(b.id)).toBe("b@exemple.fr");
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+  });
+
+  it("un code de changement n'ouvre pas de session, un code de connexion ne change pas l'adresse", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const pourAdresse = s.codesAdresse.get("neuve@exemple.fr");
+    const inconnu = browser(s);
+    const entre = await post(inconnu, "/api/code/verifier", { email: "neuve@exemple.fr", code: pourAdresse });
+    expect(entre.status).toBe(400);
+    expect((await inconnu("/api/compte")).status).toBe(401);
+
+    await post(browser(s), "/api/code", { email: "neuve2@exemple.fr" });
+    await demande(f, "neuve2@exemple.fr");
+    const pourConnexion = s.codes.get("neuve2@exemple.fr")!;
+    const pourChanger = s.codesAdresse.get("neuve2@exemple.fr")!;
+    expect(pourConnexion).toBeTruthy();
+    if (pourConnexion !== pourChanger) expect((await change(f, "neuve2@exemple.fr", pourConnexion)).status).toBe(400);
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+    // Le code de changement n'a pas remplacé le code de connexion déjà parti.
+    const ok = await post(browser(s), "/api/code/verifier", { email: "neuve2@exemple.fr", code: pourConnexion });
+    expect(ok.status).toBe(200);
+  });
+
+  it("refuse sans session, une adresse mal formée, et l'adresse du compte", async () => {
+    const anonyme = browser(s);
+    expect((await demande(anonyme, "neuve@exemple.fr")).status).toBe(401);
+    expect((await change(anonyme, "neuve@exemple.fr", "123456")).status).toBe(401);
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect((await demande(f, "pas-une-adresse")).status).toBe(400);
+    const meme = await demande(f, "A@exemple.fr");
+    expect(meme.status).toBe(400);
+    expect(await meme.json()).toEqual({ erreur: "C'est déjà l'adresse de votre compte." });
+    expect((await change(f, "neuve@exemple.fr", "douze")).status).toBe(400);
+    expect(s.codesAdresse.size).toBe(0);
+  });
+
+  it("limite les codes par adresse et par compte, sans toucher à ceux de connexion", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    for (let i = 0; i < 3; i++) expect((await demande(f, "neuve@exemple.fr")).status).toBe(204);
+    expect((await demande(f, "neuve@exemple.fr")).status).toBe(429);
+    expect((await post(browser(s), "/api/code", { email: "neuve@exemple.fr" })).status).toBe(204);
+
+    const g = browser(s);
+    await login(s, g, "b@exemple.fr");
+    // Ce refus compte pour le compte, qui ne peut donc pas user l'adresse d'un autre une fois à sa limite.
+    expect((await demande(g, "neuve@exemple.fr")).status).toBe(429);
+    for (let i = 0; i < 4; i++) expect((await demande(g, `n${i}@exemple.fr`)).status).toBe(204);
+    expect((await demande(g, "n9@exemple.fr")).status).toBe(429);
+  });
+
+  it("dit quand le code n'a pas pu partir", async () => {
+    s.app = api({
+      db: s.db,
+      origin: ORIGIN,
+      sendCode: async (email, code) => void s.codes.set(email, code),
+      sendCodeAdresse: async () => {
+        throw new Error("Brevo 500");
+      },
+      sendAdresseChangee: async () => {},
+      sendCodePreuve: async () => {},
+      sendPasskeyAjoutee: async () => {},
+    });
+    const erreur = vi.spyOn(console, "error").mockImplementation(() => {});
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect((await demande(f, "neuve@exemple.fr")).status).toBe(502);
+    erreur.mockRestore();
+  });
+
+  it("un avis qui ne part pas à l'ancienne adresse ne revient pas sur le changement", async () => {
+    const codes = new Map<string, string>();
+    s.app = api({
+      db: s.db,
+      origin: ORIGIN,
+      sendCode: async (email, code) => void s.codes.set(email, code),
+      sendCodeAdresse: async (email, code) => void codes.set(email, code),
+      sendAdresseChangee: async () => {
+        throw new Error("Brevo 500");
+      },
+      sendCodePreuve: async () => {},
+      sendPasskeyAjoutee: async () => {},
+    });
+    const erreur = vi.spyOn(console, "error").mockImplementation(() => {});
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const res = await change(f, "neuve@exemple.fr", codes.get("neuve@exemple.fr"));
+    expect(res.status).toBe(200);
+    expect(await adresse(a.id)).toBe("neuve@exemple.fr");
+    expect(erreur).toHaveBeenCalled();
+    erreur.mockRestore();
+  });
+
+  it("efface l'échec d'envoi noté sur l'ancienne adresse", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await s.db.query("update comptes set essai = now() where id = $1", [a.id]);
+    await demande(f, "neuve@exemple.fr");
+    await change(f, "neuve@exemple.fr", s.codesAdresse.get("neuve@exemple.fr"));
+    expect(await s.db.query("select essai from comptes where id = $1", [a.id])).toEqual([{ essai: null }]);
+  });
+
+  it("la purge retire un changement expiré, et la suppression du compte le sien", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const g = browser(s);
+    await login(s, g, "b@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    await demande(g, "neuve2@exemple.fr");
+    await s.db.query(
+      "update changements_adresse set expire = now() - interval '1 second' where email = 'neuve@exemple.fr'",
+    );
+    await purge(s.db);
+    expect(await s.db.query("select email from changements_adresse")).toEqual([{ email: "neuve2@exemple.fr" }]);
+    await g("/api/compte", { method: "DELETE" });
+    expect(await s.db.query("select email from changements_adresse")).toEqual([]);
+  });
+});
+
+describe("preuve récente", () => {
+  const sansPreuve = (quand = "now() - interval '6 minutes'") => s.db.query(`update sessions set preuve = ${quand}`);
+  /** Les gestes qui engagent le compte, sans passkey à présenter : tous s'arrêtent avant d'agir. */
+  const gestes = (f: typeof fetch) => [
+    () => post(f, "/api/passkey/ajout/options", {}),
+    () => post(f, "/api/passkey/ajout", { reponse: {}, nom: "Mac" }),
+    () => post(f, "/api/compte/email/code", { email: "neuve@exemple.fr" }),
+    () => f("/api/compte", { method: "DELETE" }),
+  ];
+  const options = async (f: typeof fetch, route: string) =>
+    (await (await post(f, route, {})).json()) as {
+      challenge: string;
+      userVerification?: string;
+      allowCredentials?: { id: string }[];
+      authenticatorSelection?: { userVerification?: string };
+    };
+  /** Une passkey ajoutée au compte de cette session, encore sous sa preuve. */
+  async function ajoute(f: typeof fetch, uv = true) {
+    const cle = new FausseCle(ORIGIN);
+    const { challenge } = await options(f, "/api/passkey/ajout/options");
+    const res = await post(f, "/api/passkey/ajout", { reponse: cle.creation(challenge, uv), nom: "iPhone" });
+    return { cle, res };
+  }
+  const silence = () => vi.spyOn(console, "error").mockImplementation(() => {});
+
+  it("refuse les gestes d'une session sans preuve récente, sans y toucher", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await sansPreuve();
+    for (const geste of gestes(f)) {
+      const res = await geste();
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ preuve: true });
+    }
+    expect(s.codesAdresse.size).toBe(0);
+    expect(await s.db.query("select id from comptes where id = $1", [a.id])).toHaveLength(1);
+    expect(await s.db.query("select defi from defis where compte = $1", [a.id])).toEqual([]);
+  });
+
+  it("refuse une session d'avant la preuve, qui n'en a aucune", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await sansPreuve("null");
+    expect((await f("/api/compte", { method: "DELETE" })).status).toBe(403);
+  });
+
+  it("une connexion est une preuve : les gestes passent aussitôt après", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect((await ajoute(f)).res.status).toBe(200);
+    expect((await post(f, "/api/compte/email/code", { email: "neuve@exemple.fr" })).status).toBe(204);
+    expect((await f("/api/compte", { method: "DELETE" })).status).toBe(204);
+  });
+
+  it("une preuve de presque 5 minutes passe encore", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await sansPreuve("now() - interval '4 minutes 50 seconds'");
+    expect((await post(f, "/api/passkey/ajout/options", {})).status).toBe(200);
+  });
+
+  it("la preuve d'un appareil ne vaut pas pour un autre", async () => {
+    const f = browser(s);
+    const g = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await login(s, g, "a@exemple.fr");
+    await sansPreuve();
+    await post(f, "/api/preuve/code", {});
+    await post(f, "/api/preuve/code/verifier", { code: s.codesPreuve.get("a@exemple.fr") });
+    expect((await post(f, "/api/passkey/ajout/options", {})).status).toBe(200);
+    expect((await post(g, "/api/passkey/ajout/options", {})).status).toBe(403);
+  });
+
+  it("déconnecter un appareil et retirer une passkey restent possibles sans preuve", async () => {
+    const f = browser(s);
+    const g = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await login(s, g, "a@exemple.fr");
+    const { cle } = await ajoute(f);
+    await sansPreuve();
+    expect((await f(`/api/passkeys/${cle.id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await f("/api/sessions", { method: "DELETE" })).status).toBe(200);
+    expect((await g("/api/compte")).status).toBe(401);
+    expect((await post(f, "/api/deconnexion", {})).status).toBe(204);
+  });
+
+  it("une demande faite sous preuve laisse les 10 minutes du code pour changer l'adresse", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await post(f, "/api/compte/email/code", { email: "neuve@exemple.fr" });
+    await sansPreuve();
+    const res = await post(
+      f,
+      "/api/compte/email",
+      { email: "neuve@exemple.fr", code: s.codesAdresse.get("neuve@exemple.fr") },
+      "PUT",
+    );
+    expect(res.status).toBe(200);
+    expect(await s.db.query("select email from comptes where id = $1", [a.id])).toEqual([
+      { email: "neuve@exemple.fr" },
+    ]);
+  });
+
+  describe("par code", () => {
+    it("part à l'adresse du compte, et ouvre les gestes", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await sansPreuve();
+      expect((await post(f, "/api/preuve/code", {})).status).toBe(204);
+      const code = s.codesPreuve.get("a@exemple.fr");
+      expect((await post(f, "/api/preuve/code/verifier", { code })).status).toBe(204);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(204);
+    });
+
+    it("refuse un mauvais code, puis tout code après 5 essais", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await sansPreuve();
+      await post(f, "/api/preuve/code", {});
+      const bon = s.codesPreuve.get("a@exemple.fr")!;
+      const mauvais = bon === "000000" ? "111111" : "000000";
+      for (let i = 0; i < 5; i++) {
+        const r = await post(f, "/api/preuve/code/verifier", { code: mauvais });
+        expect(await r.json()).toEqual({ erreur: "Code incorrect." });
+      }
+      expect((await post(f, "/api/preuve/code/verifier", { code: bon })).status).toBe(400);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(403);
+    });
+
+    it("refuse un code expiré, déjà servi ou mal formé", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await sansPreuve();
+      await post(f, "/api/preuve/code", {});
+      const code = s.codesPreuve.get("a@exemple.fr");
+      expect((await post(f, "/api/preuve/code/verifier", { code: "12" })).status).toBe(400);
+      await s.db.query("update codes_preuve set expire = now() - interval '1 second'");
+      expect((await post(f, "/api/preuve/code/verifier", { code })).status).toBe(400);
+      await post(f, "/api/preuve/code", {});
+      const frais = s.codesPreuve.get("a@exemple.fr");
+      expect((await post(f, "/api/preuve/code/verifier", { code: frais })).status).toBe(204);
+      expect((await post(f, "/api/preuve/code/verifier", { code: frais })).status).toBe(400);
+    });
+
+    it("n'ouvre pas de session, et un code de connexion n'en tient pas lieu", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await sansPreuve();
+      await post(f, "/api/preuve/code", {});
+      const inconnu = browser(s);
+      const entree = await post(inconnu, "/api/code/verifier", {
+        email: "a@exemple.fr",
+        code: s.codesPreuve.get("a@exemple.fr"),
+      });
+      expect(entree.status).toBe(400);
+      expect((await inconnu("/api/compte")).status).toBe(401);
+
+      await post(browser(s), "/api/code", { email: "a@exemple.fr" });
+      const connexion = s.codes.get("a@exemple.fr");
+      if (connexion !== s.codesPreuve.get("a@exemple.fr"))
+        expect((await post(f, "/api/preuve/code/verifier", { code: connexion })).status).toBe(400);
+    });
+
+    it("le code d'un compte ne vaut pas pour un autre", async () => {
+      const f = browser(s);
+      const g = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await login(s, g, "b@exemple.fr");
+      await sansPreuve();
+      await post(f, "/api/preuve/code", {});
+      expect((await post(g, "/api/preuve/code/verifier", { code: s.codesPreuve.get("a@exemple.fr") })).status).toBe(
+        400,
+      );
+    });
+
+    it("demande une session, et limite les envois à 5 par heure", async () => {
+      expect((await post(browser(s), "/api/preuve/code", {})).status).toBe(401);
+      expect((await post(browser(s), "/api/preuve/code/verifier", { code: "123456" })).status).toBe(401);
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const statuts = [];
+      for (let i = 0; i < 6; i++) statuts.push((await post(f, "/api/preuve/code", {})).status);
+      expect(statuts).toEqual([204, 204, 204, 204, 204, 429]);
+    });
+
+    it("dit quand le code n'a pas pu partir", async () => {
+      s.app = api({
+        db: s.db,
+        origin: ORIGIN,
+        sendCode: async (email, code) => void s.codes.set(email, code),
+        sendCodeAdresse: async () => {},
+        sendAdresseChangee: async () => {},
+        sendCodePreuve: async () => {
+          throw new Error("Brevo 500");
+        },
+        sendPasskeyAjoutee: async () => {},
+      });
+      const erreur = silence();
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      expect((await post(f, "/api/preuve/code", {})).status).toBe(502);
+      erreur.mockRestore();
+    });
+
+    it("la purge retire les codes expirés, la suppression du compte les autres", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await post(f, "/api/preuve/code", {});
+      await s.db.query("update codes_preuve set expire = now() - interval '1 second'");
+      await purge(s.db);
+      expect(await s.db.query("select compte from codes_preuve")).toEqual([]);
+      await post(f, "/api/preuve/code", {});
+      await f("/api/compte", { method: "DELETE" });
+      expect(await s.db.query("select compte from codes_preuve")).toEqual([]);
+    });
+  });
+
+  describe("par passkey", () => {
+    it("propose les passkeys du compte, personne vérifiée, et ouvre les gestes", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { cle } = await ajoute(f);
+      await sansPreuve();
+      const o = await options(f, "/api/preuve/passkey/options");
+      expect(o.userVerification).toBe("required");
+      expect(o.allowCredentials?.map((c) => c.id)).toEqual([cle.id]);
+      expect((await post(f, "/api/preuve/passkey", { reponse: cle.entree(o.challenge) })).status).toBe(204);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(204);
+    });
+
+    it("refuse une réponse sans vérification de la personne", async () => {
+      const erreur = silence();
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { cle } = await ajoute(f);
+      await sansPreuve();
+      const { challenge } = await options(f, "/api/preuve/passkey/options");
+      expect((await post(f, "/api/preuve/passkey", { reponse: cle.entree(challenge, false) })).status).toBe(400);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(403);
+      erreur.mockRestore();
+    });
+
+    it("refuse la passkey d'un autre compte, un défi rejoué, et un défi de connexion", async () => {
+      const f = browser(s);
+      const g = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await login(s, g, "b@exemple.fr");
+      const { cle } = await ajoute(f);
+      const { cle: autre } = await ajoute(g);
+      await sansPreuve();
+
+      const { challenge } = await options(f, "/api/preuve/passkey/options");
+      expect((await post(f, "/api/preuve/passkey", { reponse: autre.entree(challenge) })).status).toBe(400);
+      expect((await post(f, "/api/preuve/passkey", { reponse: cle.entree(challenge) })).status).toBe(400);
+
+      const connexion = await options(browser(s), "/api/passkey/options");
+      expect((await post(f, "/api/preuve/passkey", { reponse: cle.entree(connexion.challenge) })).status).toBe(400);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(403);
+    });
+
+    it("un compte sans passkey est renvoyé au code", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const res = await post(f, "/api/preuve/passkey/options", {});
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ erreur: "Votre compte n'a pas de passkey : demandez un code par e-mail." });
+    });
+
+    it("demande une session", async () => {
+      expect((await post(browser(s), "/api/preuve/passkey/options", {})).status).toBe(401);
+      expect((await post(browser(s), "/api/preuve/passkey", { reponse: {} })).status).toBe(401);
+    });
+  });
+
+  describe("vérification de la personne", () => {
+    it("est exigée dans les options de connexion et d'ajout", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      expect((await options(f, "/api/passkey/options")).userVerification).toBe("required");
+      const ajout = await options(f, "/api/passkey/ajout/options");
+      expect(ajout.authenticatorSelection?.userVerification).toBe("required");
+    });
+
+    it("à l'ajout : une réponse sans elle est refusée, rien n'est gardé ni annoncé", async () => {
+      const erreur = silence();
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { res } = await ajoute(f, false);
+      expect(res.status).toBe(400);
+      expect(await s.db.query("select id from passkeys")).toEqual([]);
+      expect(s.ajouts).toEqual([]);
+      erreur.mockRestore();
+    });
+
+    it("à la connexion : une passkey vérifiée entre, une réponse sans vérification non", async () => {
+      const erreur = silence();
+      const f = browser(s);
+      const a = await login(s, f, "a@exemple.fr");
+      const { cle } = await ajoute(f);
+
+      const inconnu = browser(s);
+      const { challenge } = await options(inconnu, "/api/passkey/options");
+      const refusee = await post(inconnu, "/api/passkey/connexion", { reponse: cle.entree(challenge, false) });
+      expect(refusee.status).toBe(400);
+      expect(await refusee.json()).toEqual({
+        erreur: "La passkey n'a pas pu être vérifiée : connectez-vous avec un code par e-mail.",
+      });
+      expect((await inconnu("/api/compte")).status).toBe(401);
+
+      const nouveau = await options(inconnu, "/api/passkey/options");
+      const entree = await post(inconnu, "/api/passkey/connexion", { reponse: cle.entree(nouveau.challenge) });
+      expect(entree.status).toBe(200);
+      expect((await (await inconnu("/api/compte")).json()) as { id: string }).toMatchObject({ id: a.id });
+      // Se connecter avec elle est une preuve.
+      expect((await post(inconnu, "/api/passkey/ajout/options", {})).status).toBe(200);
+      erreur.mockRestore();
+    });
+
+    it("une passkey créée sans vérification n'entre plus, mais le code reste la sortie, et elle se retire", async () => {
+      const erreur = silence();
+      const f = browser(s);
+      const a = await login(s, f, "a@exemple.fr");
+      // Comme celles créées avant cette exigence : la vérification n'était que préférée.
+      const { cle } = await ajoute(f);
+      await post(f, "/api/deconnexion", {});
+
+      const g = browser(s);
+      const { challenge } = await options(g, "/api/passkey/options");
+      expect((await post(g, "/api/passkey/connexion", { reponse: cle.entree(challenge, false) })).status).toBe(400);
+
+      expect(await login(s, g, "a@exemple.fr")).toMatchObject({ id: a.id });
+      expect((await g(`/api/passkeys/${cle.id}`, { method: "DELETE" })).status).toBe(200);
+      expect(await s.db.query("select id from passkeys")).toEqual([]);
+      erreur.mockRestore();
+    });
+  });
+
+  describe("avis d'ajout", () => {
+    it("part à l'adresse du compte une fois la passkey gardée", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { res } = await ajoute(f);
+      expect(res.status).toBe(200);
+      expect(s.ajouts).toEqual(["a@exemple.fr"]);
+    });
+
+    it("ne part pas pour une passkey qui est déjà celle d'un autre compte", async () => {
+      const f = browser(s);
+      const g = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await login(s, g, "b@exemple.fr");
+      const { cle } = await ajoute(f);
+      s.ajouts.length = 0;
+      const { challenge } = await options(g, "/api/passkey/ajout/options");
+      const res = await post(g, "/api/passkey/ajout", { reponse: cle.creation(challenge), nom: "Mac" });
+      expect(res.status).toBe(200);
+      expect(s.ajouts).toEqual([]);
+    });
+
+    it("un avis qui ne part pas ne revient pas sur l'ajout", async () => {
+      s.app = api({
+        db: s.db,
+        origin: ORIGIN,
+        sendCode: async (email, code) => void s.codes.set(email, code),
+        sendCodeAdresse: async () => {},
+        sendAdresseChangee: async () => {},
+        sendCodePreuve: async () => {},
+        sendPasskeyAjoutee: async () => {
+          throw new Error("Brevo 500");
+        },
+      });
+      const erreur = silence();
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { res } = await ajoute(f);
+      expect(res.status).toBe(200);
+      expect(await s.db.query("select id from passkeys")).toHaveLength(1);
+      expect(erreur).toHaveBeenCalled();
+      erreur.mockRestore();
+    });
   });
 });
 
@@ -1815,6 +2411,10 @@ describe("comptes sans connexion", () => {
     const tour = async () => {
       const essai: string[] = [];
       await purgeComptes(s.db, async (email, limite) => {
+        // Un envoi prend du temps : sans cette attente, l'horloge de PGlite, à la milliseconde, date plusieurs essais
+        // du même instant, et l'ordre des essais n'est plus défini entre eux.
+        const debut = performance.now();
+        while (performance.now() - debut < 1);
         essai.push(email);
         if (email.startsWith("rejet")) throw new Error("Brevo 400");
         avertis.push({ email, limite });
@@ -1905,7 +2505,8 @@ describe("comptes sans connexion", () => {
     const db = await pgliteDb();
     await migrate(db);
     await db.exec(
-      `alter table sessions drop column id, drop column appareil, drop column utilise;
+      `drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
+       alter table sessions drop column id, drop column appareil, drop column utilise;
        drop table purge_passage; alter table comptes drop column essai;
        alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 6;`,
     );
@@ -1994,5 +2595,244 @@ describe("comptes sans connexion", () => {
   it("un refus de Brevo se voit comme un échec", async () => {
     vi.stubGlobal("fetch", async () => new Response("non", { status: 500 }));
     await expect(brevoAvertissement("cle")("a@exemple.fr", new Date())).rejects.toThrow(/Brevo 500/);
+  });
+
+  it("le code de changement d'adresse ne se présente pas comme un code de connexion", async () => {
+    let envoi: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return new Response("{}", { status: 201 });
+    });
+    await brevoCodeAdresse("cle")("neuve@exemple.fr", "123456");
+    expect(envoi.to).toEqual([{ email: "neuve@exemple.fr" }]);
+    expect(envoi.subject).toContain("changer d'adresse");
+    expect(envoi.textContent).toContain("123456");
+    expect(envoi.textContent).not.toContain("connexion");
+    expect(envoi.htmlContent).toContain("123456");
+  });
+
+  it("le code de preuve dit à quoi il sert et que faire s'il n'a pas été demandé", async () => {
+    let envoi: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return new Response("{}", { status: 201 });
+    });
+    await brevoCodePreuve("cle")("a@exemple.fr", "123456");
+    expect(envoi.to).toEqual([{ email: "a@exemple.fr" }]);
+    expect(envoi.subject).toContain("123456");
+    for (const texte of [envoi.textContent, envoi.htmlContent]) {
+      expect(texte).toContain("123456");
+      expect(texte).toContain("supprimer le compte");
+      expect(texte).toContain("Déconnectez-le dans Mon compte");
+    }
+  });
+
+  it("l'avis d'ajout dit où retirer la passkey", async () => {
+    let envoi: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return new Response("{}", { status: 201 });
+    });
+    await brevoPasskeyAjoutee("cle")("a@exemple.fr");
+    expect(envoi.to).toEqual([{ email: "a@exemple.fr" }]);
+    for (const texte of [envoi.textContent, envoi.htmlContent]) {
+      expect(texte).toContain("Si c'est vous, vous n'avez rien à faire");
+      expect(texte).toContain("Face ID et empreinte");
+    }
+  });
+
+  it("l'avis à l'ancienne adresse dit à qui écrire, sans donner la nouvelle", async () => {
+    let envoi: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return new Response("{}", { status: 201 });
+    });
+    await brevoAdresseChangee("cle")("a@exemple.fr");
+    expect(envoi.to).toEqual([{ email: "a@exemple.fr" }]);
+    expect(envoi.textContent).toContain("tom.bouzy@gmail.com");
+    expect(envoi.htmlContent).toContain("tom.bouzy@gmail.com");
+  });
+});
+
+describe("limites de débit", () => {
+  const HEURE = 3_600_000;
+  /** Sans passer par un navigateur : l'adresse IP est choisie, ou absente. */
+  const envoi = (url: string, ip: string | null, corps: unknown = {}) =>
+    s.app.request(url, {
+      method: "POST",
+      headers: { ...json, origin: ORIGIN, ...(ip ? { "x-forwarded-for": ip } : {}) },
+      body: JSON.stringify(corps),
+    });
+  const adresse = (i: number) => `9.${i >> 16}.${(i >> 8) & 255}.${i & 255}`;
+  const demandeCode = (ip: string | null, email: string) => envoi("/api/code", ip, { email });
+  const plusTard = (ms: number) => {
+    const t = Date.now() + ms;
+    vi.spyOn(Date, "now").mockImplementation(() => t);
+  };
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("refuse dès la limite les demandes de code sans en-tête d'adresse", async () => {
+    const statuts = [];
+    for (let i = 0; i < 22; i++) statuts.push((await demandeCode(null, `p${i}@exemple.fr`)).status);
+    expect(statuts).toEqual([...Array<number>(20).fill(204), 429, 429]);
+  });
+
+  it(
+    "garde une adresse limitée après 10 000 autres, sans toucher aux e-mails ni aux codes",
+    { timeout: 60_000 },
+    async () => {
+      const options = (ip: string) => envoi("/api/passkey/options", ip);
+      for (let i = 0; i < 3; i++) await demandeCode("1.1.1.1", "cible@exemple.fr");
+      for (let i = 0; i < 60; i++) expect((await options("2.2.2.2")).status).toBe(200);
+      expect((await options("2.2.2.2")).status).toBe(429);
+
+      for (let i = 0; i < 10_100; i++) expect((await options(adresse(i))).status).toBe(200);
+
+      expect(s.limites.passkeysParIp.taille).toBe(10_000);
+      expect((await options("2.2.2.2")).status).toBe(429);
+      expect(s.limites.codesParEmail.taille).toBe(1);
+      expect(s.limites.codesParIp.taille).toBe(1);
+      expect((await demandeCode("1.1.1.2", "cible@exemple.fr")).status).toBe(429);
+    },
+  );
+
+  it("garde une limite par e-mail et par adresse quand leur table déborde", async () => {
+    for (let i = 0; i < 3; i++) await demandeCode(`1.1.1.${i}`, "cible@exemple.fr");
+    for (let i = 0; i < 20; i++) await demandeCode("2.2.2.2", `p${i}@exemple.fr`);
+    expect((await demandeCode("2.2.2.2", "autre@exemple.fr")).status).toBe(429);
+
+    for (let i = 0; i < 10_100; i++) {
+      s.limites.codesParEmail.hit(`f${i}@exemple.fr`);
+      s.limites.codesParIp.hit(adresse(i));
+    }
+
+    expect(s.limites.codesParEmail.taille).toBe(10_000);
+    expect(s.limites.codesParIp.taille).toBe(10_000);
+    expect((await demandeCode("3.3.3.3", "cible@exemple.fr")).status).toBe(429);
+    expect((await demandeCode("2.2.2.2", "autre@exemple.fr")).status).toBe(429);
+  });
+
+  it("limite les vérifications de code par adresse, sans compter un code mal formé", async () => {
+    const verifie = (ip: string, code: string) => envoi("/api/code/verifier", ip, { email: "a@exemple.fr", code });
+    await demandeCode("1.1.1.1", "a@exemple.fr");
+    const bon = s.codes.get("a@exemple.fr")!;
+    const mauvais = bon === "000000" ? "111111" : "000000";
+    for (let i = 0; i < VERIFICATIONS_PAR_IP; i++) expect((await verifie("2.2.2.2", mauvais)).status).toBe(400);
+    const refus = await verifie("2.2.2.2", bon);
+    expect(refus.status).toBe(429);
+    expect(await refus.json()).toEqual({ erreur: "Trop d'essais. Réessayez dans une heure." });
+
+    for (let i = 0; i < VERIFICATIONS_PAR_IP + 1; i++) expect((await verifie("3.3.3.3", "douze")).status).toBe(400);
+    expect(s.limites.verificationsParIp.taille).toBe(1);
+
+    await demandeCode("1.1.1.1", "a@exemple.fr");
+    expect((await verifie("3.3.3.3", s.codes.get("a@exemple.fr")!)).status).toBe(200);
+  });
+
+  it("plafonne les codes de tous les chemins, puis les laisse repartir", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect((await post(f, "/api/preuve/code", {})).status).toBe(204);
+    expect((await post(f, "/api/compte/email/code", { email: "neuve@exemple.fr" })).status).toBe(204);
+    for (let i = 3; i < CODES_PAR_HEURE; i++)
+      expect((await demandeCode(adresse(i), `p${i}@exemple.fr`)).status).toBe(204);
+    const emails = s.limites.codesParEmail.taille;
+    const envoyes = s.codes.size;
+
+    const refus = await demandeCode("1.1.1.1", "tard@exemple.fr");
+    expect(refus.status).toBe(429);
+    expect(((await refus.json()) as { erreur: string }).erreur).toContain("pour tout le monde");
+    s.codesPreuve.clear();
+    s.codesAdresse.clear();
+    expect((await post(f, "/api/preuve/code", {})).status).toBe(429);
+    expect((await post(f, "/api/compte/email/code", { email: "n2@exemple.fr" })).status).toBe(429);
+    expect([s.codes.size, s.codesPreuve.size, s.codesAdresse.size]).toEqual([envoyes, 0, 0]);
+    // Rien n'est usé par ces refus, et ce qui ne passe pas par un envoi reste ouvert.
+    expect(s.limites.codesParEmail.taille).toBe(emails);
+    expect((await envoi("/api/passkey/options", "1.1.1.1")).status).toBe(200);
+    const parti = { email: "p3@exemple.fr", code: s.codes.get("p3@exemple.fr") };
+    expect((await envoi("/api/code/verifier", "1.1.1.1", parti)).status).toBe(200);
+
+    plusTard(HEURE);
+    expect((await demandeCode("1.1.1.1", "tard@exemple.fr")).status).toBe(204);
+  });
+
+  it("n'use pas le plafond pour un code refusé à une personne", async () => {
+    for (let i = 0; i < 3; i++) await demandeCode("1.1.1.1", "cible@exemple.fr");
+    for (let i = 0; i <= CODES_PAR_HEURE; i++) {
+      const refus = await demandeCode(adresse(i), "cible@exemple.fr");
+      expect(await refus.json()).toEqual({ erreur: "Trop de codes demandés. Réessayez dans une heure." });
+    }
+    expect((await demandeCode("1.1.1.1", "autre@exemple.fr")).status).toBe(204);
+  });
+
+  it("oublie les adresses et les e-mails expirés au balayage", async () => {
+    await demandeCode("1.1.1.1", "a@exemple.fr");
+    plusTard(HEURE - 1000);
+    balayeLimites(s.limites);
+    expect([s.limites.codesParIp.taille, s.limites.codesParEmail.taille]).toEqual([1, 1]);
+    plusTard(1000);
+    balayeLimites(s.limites);
+    expect([s.limites.codesParIp.taille, s.limites.codesParEmail.taille]).toEqual([0, 0]);
+    expect(s.limites.codesEnvoyes.taille).toBe(0);
+  });
+
+  describe("une table", () => {
+    let maintenant = 0;
+    beforeEach(() => {
+      maintenant = 1_000_000;
+      vi.spyOn(Date, "now").mockImplementation(() => maintenant);
+    });
+
+    it("balaie ce qui a expiré, sans toucher à une clé encore comptée", () => {
+      const l = new Limiter(2, 60_000);
+      l.hit("vieille");
+      l.hit("revue");
+      maintenant += 30_000;
+      l.hit("revue");
+      maintenant += 30_000;
+      l.balaye();
+      expect(l.taille).toBe(1);
+      expect(l.hit("revue")).toBe(true);
+      expect(l.hit("revue")).toBe(false);
+    });
+
+    it("pleine, retire la plus ancienne des clés qui ne sont pas limitées", () => {
+      const l = new Limiter(2, 60_000, 3);
+      l.hit("limitee");
+      l.hit("limitee");
+      l.hit("ancienne");
+      l.hit("recente");
+      expect(l.hit("neuve")).toBe(true);
+      expect(l.taille).toBe(3);
+      expect(l.hit("limitee")).toBe(false);
+      expect(l.atteinte("recente")).toBe(false);
+      expect(l.hit("recente")).toBe(true);
+      expect(l.atteinte("recente")).toBe(true);
+      expect(l.hit("ancienne")).toBe(true);
+      expect(l.atteinte("ancienne")).toBe(false);
+    });
+
+    it("pleine de clés limitées, refuse une clé neuve jusqu'à leur expiration", () => {
+      const l = new Limiter(1, 60_000, 2);
+      l.hit("a");
+      l.hit("b");
+      expect(l.hit("c")).toBe(false);
+      expect(l.taille).toBe(2);
+      expect([l.hit("a"), l.hit("b")]).toEqual([false, false]);
+      maintenant += 60_000;
+      expect(l.hit("c")).toBe(true);
+      expect(l.taille).toBe(2);
+    });
+
+    it("ne garde qu'un début de clé", () => {
+      const l = new Limiter(1, 60_000);
+      const longue = "x".repeat(400);
+      l.hit(`${longue}a`);
+      expect(l.hit(`${longue}b`)).toBe(false);
+      expect(l.atteinte(`${longue}b`)).toBe(true);
+    });
   });
 });

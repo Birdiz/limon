@@ -221,6 +221,41 @@
           <p>Connecté avec <b id="acMe"></b></p>
           <p class="disclaimer" id="acState"></p>
           <ul class="plist" id="acRefus" hidden></ul>
+          <div class="actions">
+            <button class="btn" id="acEmailChange" type="button">Changer d'adresse e-mail</button>
+          </div>
+          <form class="newp" id="acNewEmailForm" hidden>
+            <label for="acNewEmail">Nouvelle adresse e-mail</label>
+            <input
+              id="acNewEmail"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              required
+              placeholder="vous@exemple.fr"
+            />
+            <small>Vos escaliers, vos appareils et Face ID restent : seule l'adresse change.</small>
+            <div class="actions">
+              <button class="btn go" type="submit">Recevoir un code à cette adresse</button
+              ><button class="btn" id="acNewEmailNo" type="button">Annuler</button>
+            </div>
+          </form>
+          <form class="newp" id="acNewCodeForm" hidden>
+            <label for="acNewCode">Code reçu à <span id="acNewCodeTo"></span></label>
+            <input
+              id="acNewCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              pattern="[0-9 ]{6,7}"
+              maxlength="7"
+              required
+            />
+            <div class="actions">
+              <button class="btn go" type="submit">Changer mon adresse</button
+              ><button class="btn" id="acNewCodeBack" type="button">Changer d'adresse ou renvoyer</button>
+            </div>
+          </form>
           <h3>Face ID et empreinte</h3>
           <ul class="plist" id="acKeys"></ul>
           <div class="actions">
@@ -255,6 +290,46 @@
               <button class="btn danger" id="acDeleteYes" type="button">Supprimer définitivement</button
               ><button class="btn" id="acDeleteNo" type="button">Garder mon compte</button>
             </div>
+          </div>
+        </div>
+        <div class="acview" id="acProof" hidden>
+          <h3>Confirmez que c'est bien vous</h3>
+          <p>
+            Ce geste engage votre compte : personne d'autre ne doit pouvoir le faire depuis un appareil resté ouvert.
+          </p>
+          <div id="acProofAsk">
+            <div class="actions">
+              <button class="btn go" id="acProofPk" type="button" hidden>Avec Face ID ou l'empreinte</button
+              ><button class="btn" id="acProofMail" type="button">Recevoir un code par e-mail</button>
+            </div>
+            <p class="disclaimer">
+              Le code part à <b id="acProofTo"></b>. Vous n'avez plus accès à cette adresse ? Écrivez à
+              <a href="mailto:tom.bouzy@gmail.com">tom.bouzy@gmail.com</a>.
+            </p>
+          </div>
+          <form class="newp" id="acProofCodeForm" hidden>
+            <label for="acProofCode">Code reçu par e-mail</label>
+            <input
+              id="acProofCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              pattern="[0-9 ]{6,7}"
+              maxlength="7"
+              required
+            />
+            <div class="actions">
+              <button class="btn go" type="submit">Valider</button>
+            </div>
+          </form>
+          <div id="acProofDone" hidden>
+            <p>C'est bien vous.</p>
+            <div class="actions">
+              <button class="btn go" id="acProofGo" type="button">Continuer</button>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn" id="acProofNo" type="button">Annuler</button>
           </div>
         </div>
         <p class="copied" id="acMsg" role="status" hidden></p>
@@ -294,9 +369,9 @@
             Responsable : Thomas Bouzy, <a href="mailto:tom.bouzy@gmail.com">tom.bouzy@gmail.com</a>. Le compte garde
             votre adresse e-mail, vos projets, le profil de votre atelier (avec vos tarifs et la fiche de votre
             entreprise si vous les remplissez) et la clé publique de vos passkeys : Face ID et l'empreinte ne quittent
-            pas votre appareil. Il garde aussi le nom de chaque appareil connecté et la date de son dernier usage. Ces
-            données servent seulement à vous connecter et à retrouver votre travail sur vos appareils ; ni publicité, ni
-            mesure d'audience.
+            pas votre appareil. Il garde aussi le nom de chaque appareil connecté, la date de son dernier usage et celle
+            de la dernière fois où vous y avez confirmé que c'était bien vous. Ces données servent seulement à vous
+            connecter et à retrouver votre travail sur vos appareils ; ni publicité, ni mesure d'audience.
             <span data-devis
               >Le nom et l'adresse des clients de vos devis sont gardés avec l'escalier, pour être imprimés sur le
               devis, et partent avec lui.</span
@@ -312,8 +387,8 @@
             votre atelier part avec le compte, et vous choisissez d'effacer aussi vos escaliers, avec leurs devis et
             leurs clients ; vos autres appareils gardent ce qu'ils ont déjà. Si votre connexion prend fin, vos escaliers
             restent enregistrés ici, mais leurs devis et leurs clients ne s'affichent plus tant que vous ne vous êtes
-            pas reconnecté. Vous pouvez télécharger vos données et supprimer votre compte ici même. Pour toute autre
-            demande, écrivez à l'adresse ci-dessus ; vous pouvez aussi vous adresser à la CNIL.
+            pas reconnecté. Vous pouvez télécharger vos données, changer votre adresse et supprimer votre compte ici
+            même. Pour toute autre demande, écrivez à l'adresse ci-dessus ; vous pouvez aussi vous adresser à la CNIL.
           </p>
         </details>
       </div>

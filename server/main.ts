@@ -1,9 +1,22 @@
 import path from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { api } from "./api";
+import { api, balayeLimites, nouvellesLimites } from "./api";
 import { migrate, pgDb, pgliteDb, purge, purgeComptes } from "./db";
-import { brevo, brevoAvertissement, consoleAvertissement, consoleMail } from "./mail";
+import {
+  brevo,
+  brevoAdresseChangee,
+  brevoAvertissement,
+  brevoCodeAdresse,
+  brevoCodePreuve,
+  brevoPasskeyAjoutee,
+  consoleAdresseChangee,
+  consoleAvertissement,
+  consoleCodeAdresse,
+  consoleCodePreuve,
+  consoleMail,
+  consolePasskeyAjoutee,
+} from "./mail";
 import { staticFiles } from "./static";
 
 /* Serveur de Quart de tour : le site construit et /api, sur la même adresse.
@@ -29,6 +42,10 @@ setInterval(() => {
   void purge(db).catch(console.error);
   purgeInactifs();
 }, 3_600_000).unref();
+// Les limites gardent des adresses IP et des e-mails : oubliés sans attendre une prochaine demande. Peu coûteux, le
+// balayage ne parcourt que ce qui a expiré.
+const limites = nouvellesLimites();
+setInterval(() => balayeLimites(limites), 60_000).unref();
 
 const app = new Hono();
 app.use(async (c, next) => {
@@ -37,7 +54,20 @@ app.use(async (c, next) => {
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   if (origin.startsWith("https:")) c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
 });
-app.route("/", api({ db, origin, sendCode: key && !local ? brevo(key) : consoleMail }));
+const parBrevo = !!key && !local;
+app.route(
+  "/",
+  api({
+    db,
+    origin,
+    limites,
+    sendCode: parBrevo ? brevo(key) : consoleMail,
+    sendCodeAdresse: parBrevo ? brevoCodeAdresse(key) : consoleCodeAdresse,
+    sendAdresseChangee: parBrevo ? brevoAdresseChangee(key) : consoleAdresseChangee,
+    sendCodePreuve: parBrevo ? brevoCodePreuve(key) : consoleCodePreuve,
+    sendPasskeyAjoutee: parBrevo ? brevoPasskeyAjoutee(key) : consolePasskeyAjoutee,
+  }),
+);
 app.use(await staticFiles(path.resolve(import.meta.dirname, "../dist")));
 
 const server = serve({ fetch: app.fetch, port }, () => {

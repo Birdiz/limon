@@ -1,25 +1,53 @@
 import { cleanEmail, type Compte } from "../src/core/account";
-import { api } from "../server/api";
+import { api, nouvellesLimites, type Limites } from "../server/api";
 import { migrate, pgliteDb, type Db } from "../server/db";
 
 export const ORIGIN = "https://quart-de-tour.fr";
 
-/** Serveur de test sur PGlite en mémoire ; les codes envoyés restent dans `codes`. */
+/**
+ * Serveur de test sur PGlite en mémoire ; les codes envoyés restent dans `codes`, `codesAdresse` et `codesPreuve`, les
+ * avis dans `avis` et `ajouts`.
+ */
 export async function testServer() {
   const db: Db = await pgliteDb();
   await migrate(db);
   const codes = new Map<string, string>();
-  const make = () => api({ db, origin: ORIGIN, sendCode: async (email, code) => void codes.set(email, code) });
+  const codesAdresse = new Map<string, string>();
+  const avis: string[] = [];
+  const codesPreuve = new Map<string, string>();
+  const ajouts: string[] = [];
+  const make = (limites: Limites) =>
+    api({
+      db,
+      origin: ORIGIN,
+      limites,
+      sendCode: async (email, code) => void codes.set(email, code),
+      sendCodeAdresse: async (email, code) => void codesAdresse.set(email, code),
+      sendAdresseChangee: async (ancienne) => void avis.push(ancienne),
+      sendCodePreuve: async (email, code) => void codesPreuve.set(email, code),
+      sendPasskeyAjoutee: async (email) => void ajouts.push(email),
+    });
+  const limites = nouvellesLimites();
   const s = {
     db,
     codes,
-    app: make(),
+    codesAdresse,
+    avis,
+    codesPreuve,
+    ajouts,
+    limites,
+    app: make(limites),
     /** Base vide et serveur neuf, limites de débit comprises. */
     async reset() {
       await db.query("delete from comptes");
       await db.query("delete from codes");
       codes.clear();
-      s.app = make();
+      codesAdresse.clear();
+      avis.length = 0;
+      codesPreuve.clear();
+      ajouts.length = 0;
+      s.limites = nouvellesLimites();
+      s.app = make(s.limites);
     },
   };
   return s;

@@ -1,6 +1,7 @@
 import type { Mode } from "../core/project";
 import { SECTIONS, SECTION_TITLE, type Section } from "../core/summary";
 import { byId } from "./dom";
+import { browserStorage, readJSON, write } from "./store";
 
 const OPEN_KEY = "limon-sections";
 /** En mode complet, au premier passage : tout ouvert sauf le bois et le garde-corps. */
@@ -35,16 +36,12 @@ function fanPaths(n: number): string {
 
 function loadOpen(): Record<Section, boolean> {
   const o = { ...DEFAULT_OPEN };
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(OPEN_KEY) ?? "null");
-    if (raw && typeof raw === "object")
-      for (const k of SECTIONS) {
-        const v = (raw as Record<string, unknown>)[k];
-        if (typeof v === "boolean") o[k] = v;
-      }
-  } catch {
-    // Préférence perdue : on garde l'ouverture par défaut.
-  }
+  const raw = readJSON(browserStorage(), OPEN_KEY);
+  if (raw && typeof raw === "object")
+    for (const k of SECTIONS) {
+      const v = (raw as Record<string, unknown>)[k];
+      if (typeof v === "boolean") o[k] = v;
+    }
   return o;
 }
 
@@ -100,11 +97,8 @@ export class Steps {
 
   private saveOpen(): void {
     const o = Object.fromEntries(SECTIONS.map((k, i) => [k, this.secs[i]!.open]));
-    try {
-      localStorage.setItem(OPEN_KEY, JSON.stringify(o));
-    } catch {
-      // Stockage indisponible : l'ouverture des sections n'est pas retenue.
-    }
+    // Refusée, l'ouverture des sections n'est simplement pas retenue.
+    write(browserStorage(), OPEN_KEY, JSON.stringify(o));
   }
 
   private render(): void {

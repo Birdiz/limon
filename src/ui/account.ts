@@ -1,10 +1,10 @@
 import type { Appareil, Compte, CompteDetail } from "../core/account";
+import { day } from "../core/format";
 import type { Project } from "../core/project";
-import { ApiError, NotSignedIn, type Api } from "./api";
+import { ApiError, NotSignedIn, ProofNeeded, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
 import type { RefusVu, SyncStatus, SyncStore } from "./sync";
 
-const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
 const webauthn = () => import("@simplewebauthn/browser");
 const hasWebAuthn = () => typeof window.PublicKeyCredential === "function";
 const PERSON =
@@ -75,7 +75,7 @@ const deviceItem = (a: Appareil) =>
     : `<li><div><b>${esc(a.nom)}</b><small>connecté le ${day(a.cree)} · utilisé le ${day(a.utilise)}</small></div>` +
       `<button class="btn" type="button" data-device="${esc(a.id)}">Déconnecter</button></li>`;
 
-type View = "login" | "offer" | "account";
+type View = "login" | "offer" | "account" | "proof";
 
 /**
  * Compte : bouton et état de l'enregistrement dans l'en-tête, et onglet Mon compte de l'accueil : connexion (passkey,
@@ -84,6 +84,10 @@ type View = "login" | "offer" | "account";
 export class AccountPanel {
   private msg = byId("acMsg");
   private email = "";
+  private current: View = "login";
+  /** Le geste qui demande une preuve, et la vue où il attend. */
+  private pending: { action: () => Promise<void>; from: View } | null = null;
+  private newEmail = "";
 
   constructor(
     private store: SyncStore,
@@ -99,6 +103,17 @@ export class AccountPanel {
       void this.run(() => this.checkCode());
     });
     byId("acBack").addEventListener("click", () => this.codeStep(false));
+    byId("acEmailChange").addEventListener("click", () => this.emailStep("adresse"));
+    byId("acNewEmailNo").addEventListener("click", () => this.emailStep(null));
+    byId("acNewEmailForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      void this.run(() => this.sendEmailCode());
+    });
+    byId("acNewCodeBack").addEventListener("click", () => this.emailStep("adresse"));
+    byId("acNewCodeForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      void this.run(() => this.changeEmail());
+    });
     byId("acOfferYes").addEventListener("click", () => void this.run(() => this.addPasskey()));
     byId("acOfferNo").addEventListener("click", () => void this.run(() => this.showAccount()));
     byId("acAddKey").addEventListener("click", () => void this.run(() => this.addPasskey()));
@@ -115,6 +130,14 @@ export class AccountPanel {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-copie]");
       if (b) void this.run(() => this.keepCopy(b.dataset.copie!));
     });
+    byId("acProofPk").addEventListener("click", () => void this.run(() => this.proveByPasskey()));
+    byId("acProofMail").addEventListener("click", () => void this.run(() => this.sendProofCode()));
+    byId("acProofCodeForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      void this.run(() => this.checkProofCode());
+    });
+    byId("acProofGo").addEventListener("click", () => void this.resume());
+    byId("acProofNo").addEventListener("click", () => this.leaveProof());
     byId("acLogout").addEventListener("click", () => void this.run(() => this.logout()));
     byId("acDelete").addEventListener("click", () => void this.run(() => this.askDelete()));
     byId("acDeleteYes").addEventListener("click", () => void this.run(() => this.deleteAccount()));
@@ -137,7 +160,7 @@ export class AccountPanel {
       btn.innerHTML = `${PERSON}<span class="lbl-long">Ouvrir l'outil</span><span class="lbl-short">Compte</span>`;
       btn.removeAttribute("aria-label");
       // Déconnecté pendant que le compte était à l'écran : plus rien à y montrer.
-      if (!byId("acAccount").hidden || !byId("acOffer").hidden) this.showLogin();
+      if (["account", "offer", "proof"].includes(this.current)) this.showLogin();
       return;
     }
     const s = st.pending > 1 ? "s" : "";
@@ -176,14 +199,17 @@ export class AccountPanel {
   async show(): Promise<void> {
     this.msg.hidden = true;
     byId("acDeleteBox").hidden = true;
+    this.emailStep(null, false);
     if (this.store.account()) await this.run(() => this.showAccount());
     else this.showLogin();
   }
 
   private view(v: View): void {
+    this.current = v;
     byId("acLogin").hidden = v !== "login";
     byId("acOffer").hidden = v !== "offer";
     byId("acAccount").hidden = v !== "account";
+    byId("acProof").hidden = v !== "proof";
   }
 
   /** Lance une action du dialogue et affiche son erreur éventuelle. */
@@ -191,10 +217,66 @@ export class AccountPanel {
     try {
       await action();
     } catch (e) {
+      if (e instanceof ProofNeeded) return this.askProof(action);
       if (e instanceof NotSignedIn) await this.store.sessionLost();
       const m = problem(e);
       if (m) flash(this.msg, m, true, 6000);
     }
+  }
+
+  /** Le serveur demande une preuve : passkey si le compte en a une et le navigateur la connaît, sinon code par e-mail. */
+  private async askProof(action: () => Promise<void>): Promise<void> {
+    this.pending = { action, from: this.current };
+    this.view("proof");
+    byId("acProof").scrollIntoView({ block: "nearest" });
+    this.proofStep("choix");
+    byId("acProofTo").textContent = this.store.account()?.email ?? "";
+    byId("acProofPk").hidden = true;
+    byId("acProofMail").classList.add("go");
+    const d = hasWebAuthn() ? await this.api.account().catch(() => null) : null;
+    const withKey = !!d?.passkeys.length;
+    byId("acProofPk").hidden = !withKey;
+    byId("acProofMail").classList.toggle("go", !withKey);
+  }
+
+  private proofStep(step: "choix" | "code" | "fait"): void {
+    byId("acProofAsk").hidden = step !== "choix";
+    byId("acProofCodeForm").hidden = step !== "code";
+    byId("acProofDone").hidden = step !== "fait";
+    byId("acProofNo").hidden = step === "fait";
+    byId<HTMLInputElement>("acProofCode").value = "";
+    if (step === "code") byId("acProofCode").focus();
+  }
+
+  private async proveByPasskey(): Promise<void> {
+    const w = await webauthn();
+    const optionsJSON =
+      await this.api.proofPasskeyOptions<Parameters<typeof w.startAuthentication>[0]["optionsJSON"]>();
+    await this.api.proofPasskey(await w.startAuthentication({ optionsJSON }));
+    this.proofStep("fait");
+  }
+
+  private async sendProofCode(): Promise<void> {
+    await this.api.sendProofCode();
+    this.proofStep("code");
+    flash(this.msg, "Code envoyé : regardez vos e-mails (et les indésirables).", false, 8000);
+  }
+
+  private async checkProofCode(): Promise<void> {
+    await this.api.checkProofCode(byId<HTMLInputElement>("acProofCode").value);
+    this.proofStep("fait");
+  }
+
+  /** Le geste repart sur ce clic, pas tout seul : Safari n'ouvre Face ID qu'après un geste de la personne. */
+  private async resume(): Promise<void> {
+    const pending = this.pending;
+    this.leaveProof();
+    if (pending) await this.run(pending.action);
+  }
+
+  private leaveProof(): void {
+    this.view(this.pending?.from ?? "account");
+    this.pending = null;
   }
 
   private showLogin(): void {
@@ -272,6 +354,36 @@ export class AccountPanel {
     if (n && confirm(`Passkey retirée. Déconnecter aussi ${qui} ? Celui-ci reste connecté.`)) await this.closeOthers();
   }
 
+  /** Changer d'adresse : le bouton, puis la nouvelle adresse, puis le code qu'elle a reçu. */
+  private emailStep(step: "adresse" | "code" | null, focus = true): void {
+    byId("acEmailChange").hidden = step !== null;
+    byId("acNewEmailForm").hidden = step !== "adresse";
+    byId("acNewCodeForm").hidden = step !== "code";
+    byId("acNewCodeTo").textContent = this.newEmail;
+    byId<HTMLInputElement>("acNewCode").value = "";
+    if (step === null) byId<HTMLInputElement>("acNewEmail").value = "";
+    else if (focus) byId<HTMLInputElement>(step === "code" ? "acNewCode" : "acNewEmail").focus();
+  }
+
+  private async sendEmailCode(): Promise<void> {
+    this.newEmail = byId<HTMLInputElement>("acNewEmail").value.trim();
+    await this.api.sendEmailCode(this.newEmail);
+    this.emailStep("code");
+    flash(this.msg, "Code envoyé : regardez vos e-mails (et les indésirables).", false, 8000);
+  }
+
+  private async changeEmail(): Promise<void> {
+    try {
+      this.render(await this.api.changeEmail(this.newEmail, byId<HTMLInputElement>("acNewCode").value));
+    } catch (e) {
+      // Adresse déjà prise : le code est usé, il en faut une autre.
+      if (e instanceof ApiError && e.status === 409) this.emailStep("adresse");
+      throw e;
+    }
+    this.emailStep(null);
+    flash(this.msg, "Adresse changée : connectez-vous désormais avec celle-ci.", false, 8000);
+  }
+
   private async closeDevice(id: string): Promise<void> {
     this.render(await this.api.closeDevice(id));
     flash(this.msg, "Appareil déconnecté");
@@ -302,6 +414,7 @@ export class AccountPanel {
 
   private render(d: CompteDetail): void {
     this.view("account");
+    this.store.accountSeen(d);
     byId("acMe").textContent = d.email;
     byId("acKeys").innerHTML = d.passkeys.length
       ? d.passkeys
