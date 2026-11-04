@@ -45,7 +45,7 @@ const refus = (status: number, erreur: string) => () => json({ erreur }, status)
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const msg = () => el("acMsg");
 const settled = () => new Promise((r) => setTimeout(r));
-const vue = () => ["acLogin", "acOffer", "acAccount"].filter((id) => !el(id).hidden);
+const vue = () => ["acLogin", "acOffer", "acAccount", "acProof"].filter((id) => !el(id).hidden);
 const enErreur = () => !msg().hidden && msg().classList.contains("err");
 
 function soumettre(id: string): void {
@@ -715,6 +715,204 @@ describe("se déconnecter", () => {
     await vi.waitFor(() => expect(vue()).toEqual(["acLogin"]));
     expect(store.account()).toBeNull();
     expect(msg().hidden).toBe(true);
+  });
+});
+
+describe("preuve récente", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = () => {};
+  });
+
+  const demandee = () => json({ erreur: "Par sécurité, reconnectez-vous.", preuve: true }, 403);
+  /** Répond « preuve demandée » une fois, comme le serveur à une session sans preuve, puis `ensuite`. */
+  const uneFois = (ensuite: () => Response) => {
+    let n = 0;
+    return () => (n++ ? ensuite() : demandee());
+  };
+  async function supprimer(reponses: Record<string, () => Response>) {
+    const d = await connecte({ "DELETE compte": uneFois(vide), ...reponses });
+    el("acDelete").click();
+    await vi.waitFor(() => expect(el("acDeleteBox").hidden).toBe(false));
+    el("acDeleteYes").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acProof"]));
+    await settled();
+    return d;
+  }
+
+  it("sans passkey : ne propose que le code, dit où il part et à qui écrire sans cette adresse", async () => {
+    const { routes } = await supprimer({});
+    expect(el("acProofPk").hidden).toBe(true);
+    expect(el("acProofMail").classList.contains("go")).toBe(true);
+    expect(el("acProofTo").textContent).toBe(COMPTE.email);
+    expect(el("acProof").querySelector<HTMLAnchorElement>("a[href^='mailto:']")).not.toBeNull();
+    expect(enErreur()).toBe(false);
+    // Rien ne part sans qu'on l'ait demandé.
+    expect(routes()).not.toContain("POST preuve/code");
+  });
+
+  it("par code : le geste repart sur « Continuer », avec le choix fait pour cet appareil", async () => {
+    const { store, appels, routes } = await connecte({ "DELETE compte": uneFois(vide) });
+    await store.save(newProject("a", "Dupont", "complet", 1));
+    el("acDelete").click();
+    await vi.waitFor(() => expect(el("acDeleteBox").hidden).toBe(false));
+    el<HTMLInputElement>("acWipe").checked = true;
+    el("acDeleteYes").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acProof"]));
+
+    el("acProofMail").click();
+    await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
+    expect(msg().textContent).toContain("Code envoyé");
+    el<HTMLInputElement>("acProofCode").value = "123 456";
+    soumettre("acProofCodeForm");
+    await vi.waitFor(() => expect(el("acProofDone").hidden).toBe(false));
+    expect(appels).toContainEqual({ route: "POST preuve/code/verifier", corps: { code: "123 456" } });
+    expect(routes().filter((r) => r === "DELETE compte")).toHaveLength(1);
+
+    el("acProofGo").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acLogin"]));
+    expect(routes().filter((r) => r === "DELETE compte")).toHaveLength(2);
+    expect(await store.list()).toEqual([]);
+  });
+
+  it("un mauvais code est dit, et on reste à le saisir", async () => {
+    await supprimer({ "POST preuve/code/verifier": refus(400, "Code incorrect.") });
+    el("acProofMail").click();
+    await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
+    el<HTMLInputElement>("acProofCode").value = "000000";
+    soumettre("acProofCodeForm");
+    await vi.waitFor(() => expect(msg().textContent).toBe("Code incorrect."));
+    expect(enErreur()).toBe(true);
+    expect(el("acProofCodeForm").hidden).toBe(false);
+    expect(el("acProofDone").hidden).toBe(true);
+  });
+
+  it("avec une passkey : Face ID d'abord, et le code reste proposé", async () => {
+    vi.stubGlobal("PublicKeyCredential", function () {});
+    vi.mocked(webauthn.startAuthentication).mockResolvedValue({ id: "k" } as never);
+    const { appels } = await supprimer({
+      "GET compte": () => json(detail(CLE)),
+      "POST preuve/passkey/options": () => json({ challenge: "x" }),
+    });
+    expect(el("acProofPk").hidden).toBe(false);
+    expect(el("acProofPk").classList.contains("go")).toBe(true);
+    expect(el("acProofMail").hidden).toBe(false);
+    expect(el("acProofMail").classList.contains("go")).toBe(false);
+    el("acProofPk").click();
+    await vi.waitFor(() => expect(el("acProofDone").hidden).toBe(false));
+    expect(appels).toContainEqual({ route: "POST preuve/passkey", corps: { reponse: { id: "k" } } });
+    expect(webauthn.startAuthentication).toHaveBeenLastCalledWith({ optionsJSON: { challenge: "x" } });
+  });
+
+  it("Face ID annulé ou passkey refusée : le code reste la sortie", async () => {
+    vi.stubGlobal("PublicKeyCredential", function () {});
+    vi.mocked(webauthn.startAuthentication).mockRejectedValueOnce(
+      Object.assign(new Error("annulé"), { name: "NotAllowedError" }),
+    );
+    await supprimer({
+      "GET compte": () => json(detail(CLE)),
+      "POST preuve/passkey/options": () => json({ challenge: "x" }),
+      "POST preuve/passkey": refus(400, "La passkey n'a pas pu être vérifiée : demandez un code par e-mail."),
+    });
+    el("acProofPk").click();
+    await settled();
+    await settled();
+    expect(enErreur()).toBe(false);
+    expect(el("acProofAsk").hidden).toBe(false);
+
+    vi.mocked(webauthn.startAuthentication).mockResolvedValue({ id: "k" } as never);
+    el("acProofPk").click();
+    await vi.waitFor(() => expect(msg().textContent).toContain("demandez un code"));
+    expect(el("acProofMail").hidden).toBe(false);
+    el("acProofMail").click();
+    await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
+  });
+
+  it("sans réseau pour lire le compte : le code reste proposé", async () => {
+    vi.stubGlobal("PublicKeyCredential", function () {});
+    await supprimer({ "GET compte": coupure });
+    expect(el("acProofPk").hidden).toBe(true);
+    expect(el("acProofMail").hidden).toBe(false);
+  });
+
+  it("« Annuler » revient là où on était, et le geste ne part pas", async () => {
+    const { routes } = await supprimer({});
+    el("acProofNo").click();
+    expect(vue()).toEqual(["acAccount"]);
+    expect(el("acDeleteBox").hidden).toBe(false);
+    await settled();
+    expect(routes().filter((r) => r === "DELETE compte")).toHaveLength(1);
+  });
+
+  it("une preuve de nouveau trop vieille au moment de continuer est redemandée", async () => {
+    await supprimer({ "DELETE compte": demandee });
+    el("acProofMail").click();
+    await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
+    el<HTMLInputElement>("acProofCode").value = "123456";
+    soumettre("acProofCodeForm");
+    await vi.waitFor(() => expect(el("acProofDone").hidden).toBe(false));
+    el("acProofGo").click();
+    await vi.waitFor(() => expect(el("acProofAsk").hidden).toBe(false));
+    expect(vue()).toEqual(["acProof"]);
+    el("acProofNo").click();
+    expect(vue()).toEqual(["acAccount"]);
+  });
+
+  it("changer d'adresse : la demande repart après la preuve, à la même adresse", async () => {
+    const { appels } = await connecte({ "POST compte/email/code": uneFois(vide) });
+    el("acEmailChange").click();
+    el<HTMLInputElement>("acNewEmail").value = "neuve@exemple.fr";
+    soumettre("acNewEmailForm");
+    await vi.waitFor(() => expect(vue()).toEqual(["acProof"]));
+    el("acProofMail").click();
+    await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
+    el<HTMLInputElement>("acProofCode").value = "123456";
+    soumettre("acProofCodeForm");
+    await vi.waitFor(() => expect(el("acProofDone").hidden).toBe(false));
+    el("acProofGo").click();
+    await vi.waitFor(() => expect(el("acNewCodeForm").hidden).toBe(false));
+    expect(vue()).toEqual(["acAccount"]);
+    expect(appels.filter((a) => a.route === "POST compte/email/code").at(-1)?.corps).toEqual({
+      email: "neuve@exemple.fr",
+    });
+  });
+
+  it("ajouter une passkey : Face ID ne s'ouvre pas tout seul, seulement sur « Continuer »", async () => {
+    vi.mocked(webauthn.startRegistration).mockClear();
+    vi.mocked(webauthn.startRegistration).mockResolvedValue({ id: "r" } as never);
+    await connecte({
+      "POST passkey/ajout/options": uneFois(() => json({ challenge: "x" })),
+      "POST passkey/ajout": () => json(detail(CLE)),
+    });
+    el("acAddKey").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acProof"]));
+    el("acProofMail").click();
+    await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
+    el<HTMLInputElement>("acProofCode").value = "123456";
+    soumettre("acProofCodeForm");
+    await vi.waitFor(() => expect(el("acProofDone").hidden).toBe(false));
+    await settled();
+    expect(webauthn.startRegistration).not.toHaveBeenCalled();
+    el("acProofGo").click();
+    await vi.waitFor(() => expect(el("acKeys").querySelector("b")?.textContent).toBe("iPhone"));
+    expect(vue()).toEqual(["acAccount"]);
+  });
+
+  it("l'offre restée ouverte trop longtemps : la preuve, puis retour à l'offre si on annule", async () => {
+    vi.mocked(webauthn.platformAuthenticatorIsAvailable).mockResolvedValue(true);
+    await auCode({ "POST code/verifier": () => json(COMPTE), "POST passkey/ajout/options": demandee });
+    soumettre("acCodeForm");
+    await vi.waitFor(() => expect(vue()).toEqual(["acOffer"]));
+    el("acOfferYes").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acProof"]));
+    el("acProofNo").click();
+    expect(vue()).toEqual(["acOffer"]);
+  });
+
+  it("déconnecté pendant la preuve : revient à la connexion", async () => {
+    const { store } = await supprimer({ "POST preuve/code": () => new Response(null, { status: 401 }) });
+    el("acProofMail").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acLogin"]));
+    expect(store.account()).toBeNull();
   });
 });
 

@@ -35,7 +35,7 @@ import type { Entreprise, Tarifs } from "../src/core/tarifs";
 import { avecRemis, fromNewerVersion, isProjectId, sanitizeProject, schemaOf, type Project } from "../src/core/project";
 import { sansControles } from "../src/core/texte";
 import type { Db } from "./db";
-import type { SendAdresseChangee, SendCode } from "./mail";
+import type { SendAdresseChangee, SendCode, SendPasskeyAjoutee } from "./mail";
 
 export interface ApiConfig {
   db: Db;
@@ -46,6 +46,10 @@ export interface ApiConfig {
   sendCodeAdresse: SendCode;
   /** Avis à son ancienne adresse, une fois changée. */
   sendAdresseChangee: SendAdresseChangee;
+  /** Code envoyé à l'adresse du compte, pour prouver que c'est bien la personne avant un geste qui l'engage. */
+  sendCodePreuve: SendCode;
+  /** Avis à l'adresse du compte, une passkey ajoutée. */
+  sendPasskeyAjoutee: SendPasskeyAjoutee;
 }
 
 type Env = { Variables: { compte: string; session: string } };
@@ -60,6 +64,10 @@ const CODE_TRIES = 5;
 /** Codes de changement d'adresse par heure : une adresse reçoit peu, un compte peut se tromper en la tapant. */
 const CODES_ADRESSE_PAR_ADRESSE = 3;
 const CODES_ADRESSE_PAR_COMPTE = 5;
+/** Codes de preuve par heure et par compte : chacun arrive dans la boîte de la personne. */
+const CODES_PREUVE_PAR_COMPTE = 5;
+/** Une connexion, une passkey ou un code de moins de cette durée permet les gestes qui engagent le compte. */
+const PREUVE_MINUTES = 5;
 const HOUR = 3_600_000;
 /** Projets ou identifiants par requête. */
 const MAX_BATCH = 1000;
@@ -70,6 +78,9 @@ const MAX_AVANCE = 732 * 24 * HOUR;
 /** Envois ou lectures par minute, par compte et par route : largement au-dessus d'un échange toutes les 3 s. */
 const MAX_ENVOIS = 120;
 
+/** Lu par un onglet ouvert depuis avant la preuve, qui ne sait pas la demander : se reconnecter en est une. */
+const PREUVE_DEMANDEE = `Par sécurité, ce geste demande une connexion de moins de ${PREUVE_MINUTES} minutes : déconnectez-vous, puis reconnectez-vous.`;
+const PASSKEY_REFUSEE = "La passkey n'a pas pu être vérifiée : connectez-vous avec un code par e-mail.";
 const ILLISIBLE = "Cet escalier ne peut pas être relu.";
 const SCHEMA_PLUS_HAUT =
   "Il a été changé sur un autre appareil, avec une version plus récente de l'outil : votre compte garde celle-là.";
@@ -170,7 +181,8 @@ export function api(cfg: ApiConfig): Hono<Env> {
     await vu(compte);
     const token = randomBytes(32).toString("base64url");
     await db.query(
-      `insert into sessions (hash, compte, appareil, expire) values ($1, $2, $3, now() + interval '${SESSION_DAYS} days')`,
+      `insert into sessions (hash, compte, appareil, expire, preuve)
+       values ($1, $2, $3, now() + interval '${SESSION_DAYS} days', now())`,
       [sha256(token), compte, nomAppareil(appareil)],
     );
     setSessionCookie(c, token, SESSION_DAYS * 86400);
@@ -208,6 +220,20 @@ export function api(cfg: ApiConfig): Hono<Env> {
     }
     c.set("compte", s.compte);
     c.set("session", hash!);
+    await next();
+  });
+
+  /**
+   * Geste qui engage le compte, après `auth` : une session ne suffit pas, il faut une connexion ou une preuve récente.
+   * Déconnecter un appareil et retirer une passkey n'en demandent pas : c'est ce qu'on fait quand un téléphone est perdu,
+   * souvent avec la boîte mail dessus, et cela ne donne aucun accès.
+   */
+  const preuve = createMiddleware<Env>(async (c, next) => {
+    const [s] = await db.query<{ recente: boolean | null }>(
+      `select preuve > now() - interval '${PREUVE_MINUTES} minutes' as recente from sessions where hash = $1`,
+      [c.get("session")],
+    );
+    if (!s?.recente) return c.json({ erreur: PREUVE_DEMANDEE, preuve: true }, 403);
     await next();
   });
 
@@ -273,9 +299,40 @@ export function api(cfg: ApiConfig): Hono<Env> {
 
   /* ---------- Passkeys ---------- */
 
+  /** Signature de la passkey, visage, empreinte ou code de l'appareil compris ; note son usage. */
+  async function verifiePasskey(
+    reponse: AuthenticationResponseJSON,
+    defi: string,
+    pk: { cle: string; compteur: number; transports: string },
+  ): Promise<boolean> {
+    let newCounter: number;
+    try {
+      const v = await verifyAuthenticationResponse({
+        response: reponse,
+        expectedChallenge: defi,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+        credential: {
+          id: reponse.id,
+          publicKey: Buffer.from(pk.cle, "base64url"),
+          counter: pk.compteur,
+          transports: pk.transports ? pk.transports.split(",") : [],
+        },
+        requireUserVerification: true,
+      });
+      if (!v.verified) throw new Error("non vérifiée");
+      newCounter = v.authenticationInfo.newCounter;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+    await db.query("update passkeys set compteur = $2, utilise = now() where id = $1", [reponse.id, newCounter]);
+    return true;
+  }
+
   app.post("/passkey/options", async (c) => {
     if (!limiter.hit(`pk:${ip(c)}`, 60, HOUR)) return err(c, 429, "Trop d'essais. Réessayez dans une heure.");
-    const options = await generateAuthenticationOptions({ rpID, userVerification: "preferred" });
+    const options = await generateAuthenticationOptions({ rpID, userVerification: "required" });
     await db.query("insert into defis (defi, expire) values ($1, now() + interval '5 minutes')", [options.challenge]);
     return c.json(options);
   });
@@ -293,33 +350,12 @@ export function api(cfg: ApiConfig): Hono<Env> {
       [reponse.id],
     );
     if (!pk) return err(c, 404, "Cette passkey ne correspond à aucun compte : connectez-vous avec un code par e-mail.");
-    let newCounter: number;
-    try {
-      const v = await verifyAuthenticationResponse({
-        response: reponse,
-        expectedChallenge: defi!,
-        expectedOrigin: origin,
-        expectedRPID: rpID,
-        credential: {
-          id: reponse.id,
-          publicKey: Buffer.from(pk.cle, "base64url"),
-          counter: pk.compteur,
-          transports: pk.transports ? pk.transports.split(",") : [],
-        },
-        requireUserVerification: false,
-      });
-      if (!v.verified) throw new Error("non vérifiée");
-      newCounter = v.authenticationInfo.newCounter;
-    } catch (e) {
-      console.error(e);
-      return err(c, 400, "La passkey n'a pas pu être vérifiée.");
-    }
-    await db.query("update passkeys set compteur = $2, utilise = now() where id = $1", [reponse.id, newCounter]);
+    if (!(await verifiePasskey(reponse, defi!, pk))) return err(c, 400, PASSKEY_REFUSEE);
     await startSession(c, pk.compte, b.appareil);
     return c.json(await compteOf(pk.compte));
   });
 
-  app.post("/passkey/ajout/options", auth, async (c) => {
+  app.post("/passkey/ajout/options", auth, preuve, async (c) => {
     const compte = (await compteOf(c.get("compte")))!;
     const existing = await db.query<{ id: string; transports: string }>(
       "select id, transports from passkeys where compte = $1",
@@ -332,7 +368,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
       userDisplayName: compte.email,
       userID: new TextEncoder().encode(compte.id),
       excludeCredentials: existing.map((p) => ({ id: p.id, transports: p.transports ? p.transports.split(",") : [] })),
-      authenticatorSelection: { residentKey: "required", userVerification: "preferred" },
+      authenticatorSelection: { residentKey: "required", userVerification: "required" },
     });
     await db.query("insert into defis (defi, compte, expire) values ($1, $2, now() + interval '5 minutes')", [
       options.challenge,
@@ -341,7 +377,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     return c.json(options);
   });
 
-  app.post("/passkey/ajout", auth, async (c) => {
+  app.post("/passkey/ajout", auth, preuve, async (c) => {
     const b = await body(c);
     const reponse = b.reponse as RegistrationResponseJSON | undefined;
     const nom = nomAppareil(b.nom);
@@ -353,19 +389,20 @@ export function api(cfg: ApiConfig): Hono<Env> {
         ])
       : [];
     if (!ok || !reponse) return err(c, 400, "La demande a expiré : recommencez.");
+    let ajoutee: unknown[];
     try {
       const v = await verifyRegistrationResponse({
         response: reponse,
         expectedChallenge: defi!,
         expectedOrigin: origin,
         expectedRPID: rpID,
-        requireUserVerification: false,
+        requireUserVerification: true,
       });
       if (!v.verified) throw new Error("non vérifiée");
       const cred = v.registrationInfo.credential;
-      await db.query(
+      ajoutee = await db.query(
         `insert into passkeys (id, compte, cle, compteur, transports, nom) values ($1, $2, $3, $4, $5, $6)
-         on conflict (id) do nothing`,
+         on conflict (id) do nothing returning id`,
         [
           cred.id,
           c.get("compte"),
@@ -379,6 +416,9 @@ export function api(cfg: ApiConfig): Hono<Env> {
       console.error(e);
       return err(c, 400, "La passkey n'a pas pu être enregistrée.");
     }
+    // Sans le nom donné par la page, qui n'a rien à faire dans un message reçu par la personne. L'ajout est fait : un avis
+    // qui ne part pas n'y revient pas.
+    if (ajoutee.length) await cfg.sendPasskeyAjoutee((await compteOf(c.get("compte")))!.email).catch(console.error);
     return c.json(await detail(c));
   });
 
@@ -387,14 +427,103 @@ export function api(cfg: ApiConfig): Hono<Env> {
     return c.json(await detail(c));
   });
 
+  /* ---------- Preuve récente ---------- */
+
+  const prouve = (c: Context<Env>) =>
+    db.query("update sessions set preuve = now() where hash = $1", [c.get("session")]);
+
+  /** Seulement les passkeys du compte : le navigateur ne propose pas celle d'un autre. */
+  app.post("/preuve/passkey/options", auth, debit, async (c) => {
+    const compte = c.get("compte");
+    const cles = await db.query<{ id: string; transports: string }>(
+      "select id, transports from passkeys where compte = $1",
+      [compte],
+    );
+    if (!cles.length) return err(c, 400, "Votre compte n'a pas de passkey : demandez un code par e-mail.");
+    const options = await generateAuthenticationOptions({
+      rpID,
+      userVerification: "required",
+      allowCredentials: cles.map((p) => ({ id: p.id, transports: p.transports ? p.transports.split(",") : [] })),
+    });
+    await db.query("insert into defis (defi, compte, expire) values ($1, $2, now() + interval '5 minutes')", [
+      options.challenge,
+      compte,
+    ]);
+    return c.json(options);
+  });
+
+  app.post("/preuve/passkey", auth, async (c) => {
+    const compte = c.get("compte");
+    const reponse = (await body(c)).reponse as AuthenticationResponseJSON | undefined;
+    const defi = challengeOf(reponse);
+    const [ok] = defi
+      ? await db.query("delete from defis where defi = $1 and compte = $2 and expire > now() returning defi", [
+          defi,
+          compte,
+        ])
+      : [];
+    if (!ok || !reponse) return err(c, 400, "La demande a expiré : recommencez.");
+    const [pk] = await db.query<{ cle: string; compteur: number; transports: string }>(
+      "select cle, compteur, transports from passkeys where id = $1 and compte = $2",
+      [reponse.id, compte],
+    );
+    if (!pk || !(await verifiePasskey(reponse, defi!, pk)))
+      return err(c, 400, "La passkey n'a pas pu être vérifiée : demandez un code par e-mail.");
+    await prouve(c);
+    return c.body(null, 204);
+  });
+
+  /** Le code part à l'adresse du compte. À part des codes de connexion : l'un ne sert pas à l'autre et ne le remplace pas. */
+  app.post("/preuve/code", auth, async (c) => {
+    const compte = c.get("compte");
+    if (!limiter.hit(`preuve:${compte}`, CODES_PREUVE_PAR_COMPTE, HOUR))
+      return err(c, 429, "Trop de codes demandés. Réessayez dans une heure.");
+    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    await db.query(
+      `insert into codes_preuve (compte, hash, expire, essais)
+       values ($1, $2, now() + interval '${CODE_MINUTES} minutes', 0)
+       on conflict (compte) do update set hash = excluded.hash, expire = excluded.expire, essais = 0`,
+      [compte, codeHash(`preuve:${compte}`, code).toString("hex")],
+    );
+    try {
+      await cfg.sendCodePreuve((await compteOf(compte))!.email, code);
+    } catch (e) {
+      console.error(e);
+      return err(c, 502, "L'e-mail n'a pas pu partir. Réessayez dans un instant.");
+    }
+    return c.body(null, 204);
+  });
+
+  app.post("/preuve/code/verifier", auth, async (c) => {
+    const b = await body(c);
+    const code = typeof b.code === "string" ? b.code.replace(/\s/g, "") : "";
+    if (!/^\d{6}$/.test(code)) return err(c, 400, "Le code a 6 chiffres.");
+    const compte = c.get("compte");
+    const [row] = await db.query<{ hash: string; essais: number }>(
+      "update codes_preuve set essais = essais + 1 where compte = $1 and expire > now() returning hash, essais",
+      [compte],
+    );
+    if (!row) return err(c, 400, "Ce code a expiré : demandez-en un nouveau.");
+    if (row.essais > CODE_TRIES) {
+      await db.query("delete from codes_preuve where compte = $1", [compte]);
+      return err(c, 400, "Trop d'essais : demandez un nouveau code.");
+    }
+    if (!timingSafeEqual(Buffer.from(row.hash, "hex"), codeHash(`preuve:${compte}`, code)))
+      return err(c, 400, "Code incorrect.");
+    await db.query("delete from codes_preuve where compte = $1", [compte]);
+    await prouve(c);
+    return c.body(null, 204);
+  });
+
   /* ---------- Compte ---------- */
 
   /**
    * Changer l'adresse : un code part à la nouvelle, sans dire si elle a déjà un compte, puis `PUT /compte/email` la
    * prend. Le code ne vaut que pour ce compte et cette adresse, et une adresse déjà prise n'est dite qu'à qui prouve
-   * qu'elle est à lui.
+   * qu'elle est à lui. L'adresse ouvre le compte : la demande exige une preuve récente. Pas `PUT`, qui ne vaut que pour
+   * une demande faite ainsi, et laisse les 10 minutes du code pour aller lire ses messages.
    */
-  app.post("/compte/email/code", auth, async (c) => {
+  app.post("/compte/email/code", auth, preuve, async (c) => {
     const email = cleanEmail((await body(c)).email);
     if (!email) return err(c, 400, "Cette adresse e-mail n'est pas valable.");
     const compte = c.get("compte");
@@ -493,7 +622,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     return c.json(await detail(c));
   });
 
-  app.delete("/compte", auth, async (c) => {
+  app.delete("/compte", auth, preuve, async (c) => {
     await db.query("delete from comptes where id = $1", [c.get("compte")]);
     deleteCookie(c, COOKIE, { path: "/api" });
     return c.body(null, 204);
@@ -512,7 +641,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     );
     // Sans l'empreinte, qui ne sort jamais.
     const sessions = await db.query(
-      "select id, appareil, cree, utilise, expire from sessions where compte = $1 order by cree",
+      "select id, appareil, cree, utilise, expire, preuve from sessions where compte = $1 order by cree",
       [id],
     );
     const projets = await db.query<{ donnees: Project }>(

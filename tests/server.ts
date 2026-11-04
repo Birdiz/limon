@@ -4,13 +4,18 @@ import { migrate, pgliteDb, type Db } from "../server/db";
 
 export const ORIGIN = "https://quart-de-tour.fr";
 
-/** Serveur de test sur PGlite en mémoire ; les codes envoyés restent dans `codes` et `codesAdresse`, les avis dans `avis`. */
+/**
+ * Serveur de test sur PGlite en mémoire ; les codes envoyés restent dans `codes`, `codesAdresse` et `codesPreuve`, les
+ * avis dans `avis` et `ajouts`.
+ */
 export async function testServer() {
   const db: Db = await pgliteDb();
   await migrate(db);
   const codes = new Map<string, string>();
   const codesAdresse = new Map<string, string>();
   const avis: string[] = [];
+  const codesPreuve = new Map<string, string>();
+  const ajouts: string[] = [];
   const make = () =>
     api({
       db,
@@ -18,12 +23,16 @@ export async function testServer() {
       sendCode: async (email, code) => void codes.set(email, code),
       sendCodeAdresse: async (email, code) => void codesAdresse.set(email, code),
       sendAdresseChangee: async (ancienne) => void avis.push(ancienne),
+      sendCodePreuve: async (email, code) => void codesPreuve.set(email, code),
+      sendPasskeyAjoutee: async (email) => void ajouts.push(email),
     });
   const s = {
     db,
     codes,
     codesAdresse,
     avis,
+    codesPreuve,
+    ajouts,
     app: make(),
     /** Base vide et serveur neuf, limites de débit comprises. */
     async reset() {
@@ -32,6 +41,8 @@ export async function testServer() {
       codes.clear();
       codesAdresse.clear();
       avis.length = 0;
+      codesPreuve.clear();
+      ajouts.length = 0;
       s.app = make();
     },
   };

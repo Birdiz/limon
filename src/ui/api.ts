@@ -15,6 +15,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Le geste demande de prouver d'abord que c'est bien la personne : une passkey ou un code par e-mail. */
+export class ProofNeeded extends ApiError {}
+
 /** Le serveur de Quart de tour, sur la même adresse que la page. */
 export class Api {
   constructor(private f: typeof fetch = (...a) => fetch(...a)) {}
@@ -27,8 +30,9 @@ export class Api {
     });
     if (res.status === 401) throw new NotSignedIn();
     if (!res.ok) {
-      const r = (await res.json().catch(() => null)) as { erreur?: string } | null;
-      throw new ApiError(r?.erreur ?? "Le serveur ne répond pas. Réessayez dans un instant.", res.status);
+      const r = (await res.json().catch(() => null)) as { erreur?: string; preuve?: boolean } | null;
+      const message = r?.erreur ?? "Le serveur ne répond pas. Réessayez dans un instant.";
+      throw r?.preuve ? new ProofNeeded(message, res.status) : new ApiError(message, res.status);
     }
     return (res.status === 204 ? undefined : await res.json()) as T;
   }
@@ -42,6 +46,11 @@ export class Api {
   passkeyAddOptions = <T>() => this.call<T>("POST", "passkey/ajout/options", {});
   passkeyAdd = (reponse: unknown, nom: string) => this.call<CompteDetail>("POST", "passkey/ajout", { reponse, nom });
   passkeyRemove = (id: string) => this.call<CompteDetail>("DELETE", `passkeys/${encodeURIComponent(id)}`);
+  proofPasskeyOptions = <T>() => this.call<T>("POST", "preuve/passkey/options", {});
+  proofPasskey = (reponse: unknown) => this.call<undefined>("POST", "preuve/passkey", { reponse });
+  /** Un code part à l'adresse du compte. */
+  sendProofCode = () => this.call<undefined>("POST", "preuve/code", {});
+  checkProofCode = (code: string) => this.call<undefined>("POST", "preuve/code/verifier", { code });
   account = () => this.call<CompteDetail>("GET", "compte");
   /** Un code part à la nouvelle adresse ; elle n'est prise qu'avec lui. */
   sendEmailCode = (email: string) => this.call<undefined>("POST", "compte/email/code", { email });
