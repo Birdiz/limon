@@ -125,6 +125,13 @@ const MAX_TEXTE = 2000;
 const MAX_LIGNES = 100;
 /** Versions remises gardées pour un escalier. */
 const MAX_VERSIONS = 50;
+/**
+ * Octets d'un escalier dans un compte, versions remises comprises. Une version pèse 4 ko pour un devis courant, 23 ko
+ * avec 30 lignes libres, 110 ko remplie jusqu'aux bornes : 50 versions du premier tiennent, une quarantaine du deuxième.
+ */
+export const MAX_OCTETS = 1 << 20;
+/** Laissés libres à la remise : les réglages et le nom de l'escalier, et de quoi reprendre son devis, même rempli. */
+const MARGE_OCTETS = 64 << 10;
 const MAX_MONTANT = 1e7;
 const texte = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const nombre = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= MAX_MONTANT ? v : null);
@@ -617,7 +624,7 @@ export function remettre(
     client: d.client,
     saisie: d.saisie,
   });
-  return { ...d, remis: [...d.remis, r].slice(-MAX_VERSIONS), rouvert: false };
+  return { ...d, remis: [...d.remis, r], rouvert: false };
 }
 
 /** Réponse du client notée sur une version ; « remis » efface une réponse notée par erreur. */
@@ -626,6 +633,14 @@ export function noterReponse(d: DevisProjet, version: number, etat: EtatRemis, n
     ...d,
     remis: d.remis.map((r) => (r.version === version ? { ...r, etat, etatLe: etat === "remis" ? 0 : now } : r)),
   };
+}
+
+const octets = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length;
+
+/** Une version de plus tient dans l'escalier : la remise n'efface aucune version, et le compte ne la refusera pas. */
+function placePourRemettre(D: Devis, d: DevisProjet, T: Tarifs, E: Entreprise): boolean {
+  const version = { chiffrage: D, tarifs: T, entreprise: E, client: d.client, saisie: d.saisie };
+  return d.remis.length < MAX_VERSIONS && octets(d) + octets(version) + MARGE_OCTETS <= MAX_OCTETS;
 }
 
 /** Ce qui empêche de remettre le devis au client ; vide quand il peut partir. */
@@ -637,6 +652,10 @@ export function bloquants(D: Devis, d: DevisProjet, T: Tarifs, E: Entreprise): s
   if (!d.client.adresse) out.push("l'adresse du client");
   if (!E.nom || !E.adresse) out.push("le nom et l'adresse de votre entreprise (Mon atelier)");
   if (T.validite === null) out.push("la durée de validité des devis (Mon atelier)");
+  if (!placePourRemettre(D, d, T, E))
+    out.push(
+      "de la place pour une version de plus (cet escalier en garde le maximum, aucune n'est effacée : faites ce devis sur un nouvel escalier)",
+    );
   return out;
 }
 

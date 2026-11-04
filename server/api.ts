@@ -21,6 +21,7 @@ import {
   type AtelierDates,
   type AtelierDefauts,
 } from "../src/core/atelier";
+import { MAX_OCTETS } from "../src/core/devis";
 import type { Entreprise, Tarifs } from "../src/core/tarifs";
 import { fromNewerVersion, isProjectId, sanitizeProject, type Project } from "../src/core/project";
 import { sansControles } from "../src/core/texte";
@@ -56,6 +57,9 @@ const SCHEMA_PLUS_HAUT =
   "Il a été changé sur un autre appareil, avec une version plus récente de l'outil : votre compte garde celle-là.";
 const SCHEMA_INCONNU = "Il vient d'une version de l'outil que votre compte ne connaît pas encore.";
 const COMPTE_PLEIN = `Votre compte garde au plus ${MAX_PROJETS} escaliers, supprimés compris : celui-ci n'y entre plus.`;
+const TROP_LOURD = "Il est trop lourd pour votre compte, avec les versions remises de son devis. Aucune n'est perdue.";
+const PAS_ARRIVE =
+  "Cet escalier n'a pas encore rejoint votre compte, qui donne les numéros. Réessayez dans un instant : le brouillon reste enregistré.";
 
 /**
  * Ce qu'un envoi sans numéro de schéma contient vraiment : `sanitizeProject` a rempli le reste, qu'une version de
@@ -436,7 +440,9 @@ export function api(cfg: ApiConfig): Hono<Env> {
       if (!p) return ILLISIBLE;
       if (!validDate(p.modifie)) return DATE_REFUSEE;
       p.nom = sansControles(p.nom.slice(0, 80));
-      [modifie, supprime, donnees, schema] = [p.modifie, false, JSON.stringify(p), p.schema];
+      const json = JSON.stringify(p);
+      if (Buffer.byteLength(json) > MAX_OCTETS) return TROP_LOURD;
+      [modifie, supprime, donnees, schema] = [p.modifie, false, json, p.schema];
       if (!schema) partie = JSON.stringify(sent(raw!, p));
     }
     try {
@@ -563,11 +569,12 @@ export function api(cfg: ApiConfig): Hono<Env> {
 
   /**
    * Numéro du devis d'un escalier, donné à sa première remise au client : le suivant de l'année pour le compte,
-   * sans trou. Redemandé (nouvelle version, envoi répété après une coupure), c'est le même.
+   * sans trou. Redemandé (nouvelle version, envoi répété après une coupure), c'est le même, même l'escalier supprimé
+   * depuis. Un premier numéro demande que l'escalier soit dans le compte : la page l'y envoie avant de le demander.
    */
-  app.post("/devis/numero", auth, async (c) => {
+  app.post("/devis/numero", auth, debit, async (c) => {
     const projet = (await body(c)).projet;
-    if (typeof projet !== "string" || !projet || projet.length > 100) return err(c, 400, "Demande mal formée.");
+    if (!isProjectId(projet)) return err(c, 400, "Demande mal formée.");
     const compte = c.get("compte");
     for (let essai = 0; essai < 5; essai++) {
       const [n] = await db.query<{ annee: number; rang: number }>(
@@ -575,6 +582,11 @@ export function api(cfg: ApiConfig): Hono<Env> {
         [compte, projet],
       );
       if (n) return c.json({ numero: `${n.annee}-${String(n.rang).padStart(4, "0")}` });
+      const [la] = await db.query("select 1 from projets where compte = $1 and id = $2 and not supprime", [
+        compte,
+        projet,
+      ]);
+      if (!la) return err(c, 409, PAS_ARRIVE);
       // Deux demandes en même temps pour le même rang : l'une n'insère rien et recommence.
       await db.query(
         `insert into devis_numeros (compte, projet, annee, rang)

@@ -12,7 +12,7 @@ const DEBOUNCE = 3000;
 const KEEPALIVE_MAX = 60_000;
 /** Éléments par envoi, comme la lecture. */
 const LOT_MAX = 500;
-/** Octets par envoi : le serveur en accepte 4 Mo, et un projet plein de devis pèse près de 60 ko. */
+/** Octets par envoi : le serveur en accepte 4 Mo, et un projet en pèse 1 au plus, ses versions remises comprises. */
 const LOT_OCTETS = 3 << 20;
 
 interface SyncState {
