@@ -1,6 +1,6 @@
 import type { Params } from "../core/params";
 import { planShapes, type PlanShape } from "../core/plan-shapes";
-import { newProject, parseProjectFile, type Mode, type Project } from "../core/project";
+import { hasClient, newProject, parseProjectFile, type Mode, type Project } from "../core/project";
 import { compute } from "../core/stair";
 import { COTE_LABEL, FORME_LABEL } from "../core/summary";
 import type { Pt } from "../core/vec";
@@ -76,6 +76,9 @@ function thumbSVG(p: Params): string {
 export class Home {
   private msg = byId("pjMsg");
   private nom = byId<HTMLInputElement>("homeNom");
+  private ask = byId("pjAsk");
+  /** Escalier dont la copie attend la réponse sur le client. */
+  private asked: string | null = null;
   private panel: Panel = "escaliers";
   /** Vignettes déjà dessinées, par escalier et date de modification. */
   private thumbs = new Map<string, string>();
@@ -112,6 +115,9 @@ export class Home {
       if (f) void this.importFile(f);
     });
     byId("pjExport").addEventListener("click", () => this.exportCurrent());
+    byId("pjAvec").addEventListener("click", () => this.keepCopy(true));
+    byId("pjSeul").addEventListener("click", () => this.keepCopy(false));
+    byId("pjNon").addEventListener("click", () => this.closeAsk(true));
   }
 
   get visible(): boolean {
@@ -135,6 +141,7 @@ export class Home {
 
   hide(): void {
     if (!this.visible) return;
+    this.closeAsk();
     byId("home").hidden = true;
     document.body.classList.remove("home-on");
     // L'escalier s'ouvre en haut, pas à la hauteur de sa carte.
@@ -148,6 +155,8 @@ export class Home {
 
   private async refresh(): Promise<void> {
     const cur = this.host.current();
+    // La réponse ne vaudrait pas pour un autre escalier, ni pour un client effacé entre-temps.
+    if (cur?.id !== this.asked || !hasClient(cur)) this.closeAsk();
     const back = byId("homeBack");
     back.hidden = !cur;
     if (cur) back.textContent = `Revenir à « ${cur.nom} »`;
@@ -245,7 +254,20 @@ export class Home {
   }
 
   private async importFile(f: File): Promise<void> {
-    const r = parseProjectFile(await f.text(), newId());
+    let text: string;
+    try {
+      text = await f.text();
+    } catch {
+      // Parti entre le choix et la lecture : clé retirée, fichier déplacé ou effacé.
+      flash(
+        this.msg,
+        "Ce fichier n'a pas pu être lu. Vérifiez qu'il est toujours à sa place, puis recommencez.",
+        true,
+        10000,
+      );
+      return;
+    }
+    const r = parseProjectFile(text, newId());
     if ("erreur" in r) {
       flash(this.msg, r.erreur, true);
       return;
@@ -265,7 +287,32 @@ export class Home {
   private exportCurrent(): void {
     const p = this.host.current();
     if (!p) return;
-    downloadProject(p);
-    flash(this.msg, "Copie enregistrée");
+    if (!hasClient(p)) {
+      downloadProject(p);
+      flash(this.msg, "Copie enregistrée");
+      return;
+    }
+    this.asked = p.id;
+    byId("pjAskQ").textContent =
+      `La copie de « ${p.nom} » peut emporter le nom du client, son adresse et les prix du devis.`;
+    this.ask.hidden = false;
+    byId("pjAvec").focus();
+  }
+
+  private keepCopy(avecDevis: boolean): void {
+    this.closeAsk(true);
+    const p = this.host.current();
+    if (!p) return;
+    downloadProject(p, avecDevis);
+    flash(
+      this.msg,
+      avecDevis ? "Copie enregistrée, avec le devis et le client" : "Copie enregistrée, sans le devis ni le client",
+    );
+  }
+
+  private closeAsk(refocus = false): void {
+    this.asked = null;
+    this.ask.hidden = true;
+    if (refocus) byId("pjExport").focus();
   }
 }
