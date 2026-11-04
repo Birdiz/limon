@@ -34,6 +34,7 @@ Un seul devis par escalier, `Project.devis` (`DevisProjet` : client et `Saisie`)
 - Accepté ou refusé enregistré (`noterReponse`), expiré lu à la date (`etatRemis`, validité des tarifs).
 - Numéro donné par le serveur à la remise (`POST /api/devis/numero`, table `devis_numeros`), le même pour toutes les versions d'un escalier, suite par compte et par année (2026-0012). Un premier numéro demande que l'escalier soit dans le compte, sinon 409 dit à l'écran : `numero` (`src/main.ts`) lance d'abord un échange, pour celui fait hors ligne. Remettre demande un compte et le réseau, le brouillon marche hors ligne.
 - Poids : 50 versions (`MAX_VERSIONS`) et 1 Mo (`MAX_OCTETS`) par escalier. Une version pèse 4 ko pour un devis courant, 23 ko avec 30 lignes libres, 110 ko remplie jusqu'aux bornes. `bloquants` arrête la remise avant, en gardant `MARGE_OCTETS` pour reprendre le devis ensuite : aucune version n'est jamais effacée. La suite se fait sur un nouvel escalier, « Dupliquer » gardant les versions.
+- Session perdue : l'onglet ne montre qu'un message et « Me connecter », le devis et le client restant cachés jusqu'à la reconnexion (`clientsCaches`, voir `serveur-compte`).
 - Bloquants (`bloquants`) et mentions manquantes (`mentionsManquantes`, simple avertissement).
 - Acompte vide par défaut.
 

@@ -1,4 +1,5 @@
 import type { Compte, CompteDetail } from "../core/account";
+import type { Project } from "../core/project";
 import { ApiError, NotSignedIn, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
 import type { RefusVu, SyncStatus, SyncStore } from "./sync";
@@ -58,6 +59,15 @@ const refusedItem = (r: RefusVu) =>
     : `<li><div><b>${esc(r.nom)}</b><small>${esc(r.raison)} Il reste sur cet appareil.</small></div>` +
       `<button class="btn" type="button" data-copie="${esc(r.id)}">Garder une copie</button></li>`;
 
+/** Suppression du compte : ce que contient « Effacer aussi de cet appareil ». */
+function wipeWords(all: Project[]): string {
+  const several = all.length > 1;
+  const devis = all.some((p) => p.devis);
+  return several
+    ? `Vos ${all.length} escaliers${devis ? ", avec leurs devis et leurs clients" : ""}. Sinon, ils restent ici. Effacés, ils ne seront plus nulle part.`
+    : `Votre escalier${devis ? ", avec son devis et son client" : ""}. Sinon, il reste ici. Effacé, il ne sera plus nulle part.`;
+}
+
 type View = "login" | "offer" | "account";
 
 /**
@@ -94,7 +104,9 @@ export class AccountPanel {
       if (b) void this.run(() => this.keepCopy(b.dataset.copie!));
     });
     byId("acLogout").addEventListener("click", () => void this.run(() => this.logout()));
-    byId("acDelete").addEventListener("click", () => void this.run(() => this.deleteAccount()));
+    byId("acDelete").addEventListener("click", () => void this.run(() => this.askDelete()));
+    byId("acDeleteYes").addEventListener("click", () => void this.run(() => this.deleteAccount()));
+    byId("acDeleteNo").addEventListener("click", () => (byId("acDeleteBox").hidden = true));
     store.onStatus(() => void this.refreshLine());
     void this.refreshLine();
   }
@@ -112,6 +124,8 @@ export class AccountPanel {
       btn.className = "btn hbtn acbtn guest";
       btn.innerHTML = `${PERSON}<span class="lbl-long">Ouvrir l'outil</span><span class="lbl-short">Compte</span>`;
       btn.removeAttribute("aria-label");
+      // Déconnecté pendant que le compte était à l'écran : plus rien à y montrer.
+      if (!byId("acAccount").hidden || !byId("acOffer").hidden) this.showLogin();
       return;
     }
     const s = st.pending > 1 ? "s" : "";
@@ -149,6 +163,7 @@ export class AccountPanel {
   /** L'onglet s'affiche : connexion, ou le compte. */
   async show(): Promise<void> {
     this.msg.hidden = true;
+    byId("acDeleteBox").hidden = true;
     if (this.store.account()) await this.run(() => this.showAccount());
     else this.showLogin();
   }
@@ -164,7 +179,7 @@ export class AccountPanel {
     try {
       await action();
     } catch (e) {
-      if (e instanceof NotSignedIn) this.store.sessionLost();
+      if (e instanceof NotSignedIn) await this.store.sessionLost();
       const m = problem(e);
       if (m) flash(this.msg, m, true, 6000);
     }
@@ -172,6 +187,7 @@ export class AccountPanel {
 
   private showLogin(): void {
     this.view("login");
+    byId("acDeleteBox").hidden = true;
     // Déjà venu avec un compte : se connecter passe avant créer.
     const known = this.store.known();
     byId("acIntro").textContent = known
@@ -286,17 +302,19 @@ export class AccountPanel {
     )
       return;
     await this.store.signOut();
-    this.showLogin();
+  }
+
+  /** « Supprimer mon compte » : dit ce qui part, et propose d'effacer aussi les escaliers de cet appareil. */
+  private async askDelete(): Promise<void> {
+    const all = await this.store.list();
+    byId("acWipeBox").hidden = !all.length;
+    byId<HTMLInputElement>("acWipe").checked = false;
+    byId("acWipeWhat").textContent = wipeWords(all);
+    byId("acDeleteBox").hidden = false;
+    byId("acDeleteNo").focus();
   }
 
   private async deleteAccount(): Promise<void> {
-    if (
-      !confirm(
-        "Supprimer votre compte ? Votre adresse et vos escaliers en ligne seront effacés. Les escaliers restent sur cet appareil, mais plus sur les autres.",
-      )
-    )
-      return;
-    await this.store.deleteAccount();
-    this.showLogin();
+    await this.store.deleteAccount(byId<HTMLInputElement>("acWipe").checked);
   }
 }

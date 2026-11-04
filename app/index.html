@@ -231,6 +231,22 @@
             ><button class="btn" id="acLogout" type="button">Se déconnecter</button
             ><button class="btn danger" id="acDelete" type="button">Supprimer mon compte</button>
           </div>
+          <div class="acdelete" id="acDeleteBox" hidden>
+            <h3>Supprimer mon compte</h3>
+            <p>
+              Votre adresse, vos escaliers en ligne et le profil de votre atelier, avec vos tarifs et la fiche de votre
+              entreprise, seront effacés. Le profil de l'atelier quitte aussi cet appareil. Vos autres appareils gardent
+              ce qu'ils ont déjà.
+            </p>
+            <label class="adv" id="acWipeBox"
+              ><span><b>Effacer aussi de cet appareil</b><small id="acWipeWhat"></small></span
+              ><input type="checkbox" role="switch" id="acWipe"
+            /></label>
+            <div class="actions">
+              <button class="btn danger" id="acDeleteYes" type="button">Supprimer définitivement</button
+              ><button class="btn" id="acDeleteNo" type="button">Garder mon compte</button>
+            </div>
+          </div>
         </div>
         <p class="copied" id="acMsg" role="status" hidden></p>
         <label class="adv"
@@ -281,10 +297,13 @@
             par un accord de traitement des données. Les codes de connexion partent par Brevo, en France.
           </p>
           <p>
-            Les données sont gardées jusqu'à la suppression du compte, qui les efface aussitôt ; les sauvegardes de la
-            base en gardent une copie le temps de leur conservation. Vous pouvez télécharger vos données et supprimer
-            votre compte ici même. Pour toute autre demande, écrivez à l'adresse ci-dessus ; vous pouvez aussi vous
-            adresser à la CNIL.
+            Les données sont gardées jusqu'à la suppression du compte, qui les efface aussitôt en ligne ; les
+            sauvegardes de la base en gardent une copie le temps de leur conservation. Sur cet appareil, le profil de
+            votre atelier part avec le compte, et vous choisissez d'effacer aussi vos escaliers, avec leurs devis et
+            leurs clients ; vos autres appareils gardent ce qu'ils ont déjà. Si votre connexion prend fin, vos escaliers
+            restent enregistrés ici, mais leurs devis et leurs clients ne s'affichent plus tant que vous ne vous êtes
+            pas reconnecté. Vous pouvez télécharger vos données et supprimer votre compte ici même. Pour toute autre
+            demande, écrivez à l'adresse ci-dessus ; vous pouvez aussi vous adresser à la CNIL.
           </p>
         </details>
       </div>

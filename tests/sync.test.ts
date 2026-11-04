@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { atelierDefauts, newAtelier, type AtelierDefauts } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
+import { newDevis } from "../src/core/devis";
 import { edited, newProject, parseProjectFile, projectFile, SCHEMA, withEtat, type Project } from "../src/core/project";
 import { compute } from "../src/core/stair";
 import { AtelierStore } from "../src/ui/atelier";
@@ -69,6 +70,11 @@ function device(storage = memory(), now: () => number = Date.now) {
 const project = (id: string, nom: string, modifie: number): Project => ({
   ...newProject(id, nom, "complet", modifie),
   modifie,
+});
+
+const avecClient = (id: string, modifie: number): Project => ({
+  ...project(id, "Dupont", modifie),
+  devis: { ...newDevis(), client: { nom: "M. Martin", adresse: "1 rue des Lilas", chantier: "" } },
 });
 
 describe("synchronisation des projets", () => {
@@ -379,15 +385,160 @@ describe("synchronisation des projets", () => {
     expect(await b.names()).toEqual(["Dupont"]);
   });
 
-  it("compte supprimé : les projets restent sur l'appareil", async () => {
+  it("compte supprimé, sans le choix d'effacer : les projets restent, l'atelier part, le client reste visible", async () => {
     const a = device();
-    await a.store.save(project("p", "Dupont", 1));
+    await a.store.save(avecClient("p", 1));
+    a.atelier.set({ entreprise: { ...ENTREPRISE_VIDE, nom: "Menuiserie Jean" } }, 1);
     await a.signIn("jean@exemple.fr");
-    await a.store.deleteAccount();
+    await a.store.deleteAccount(false);
     expect(await a.names()).toEqual(["Dupont"]);
+    expect((await a.store.get("p"))!.devis!.client.nom).toBe("M. Martin");
+    expect(a.store.hidesClients()).toBe(false);
     expect(a.store.account()).toBeNull();
     expect(a.store.known()).toBe(false);
+    expect(a.atelier.get()).toBeNull();
+    expect(a.storage.getItem("limon-atelier")).toBeNull();
+    expect(a.storage.getItem("limon-synchro")).not.toContain("jean@exemple.fr");
     expect(await s.db.query("select * from projets")).toEqual([]);
+  });
+
+  it("compte supprimé, avec le choix d'effacer : atelier, projets et clients quittent l'appareil, envoyés ou non", async () => {
+    const a = device();
+    const vus: string[][] = [];
+    a.store.onChange((ids) => vus.push(ids));
+    await a.store.save(avecClient("p", 1));
+    a.atelier.set({ entreprise: { ...ENTREPRISE_VIDE, nom: "Menuiserie Jean" } }, 1);
+    await a.signIn("jean@exemple.fr");
+    a.online = false;
+    await a.store.save(project("q", "Pas envoyé", 2));
+    a.online = true;
+    await a.store.setCurrent("q");
+    await a.store.deleteAccount(true);
+    expect(await a.names()).toEqual([]);
+    expect(vus.at(-1)!.sort()).toEqual(["p", "q"]);
+    expect(await a.store.currentId()).toBeNull();
+    expect(a.atelier.get()).toBeNull();
+    for (const mot of ["M. Martin", "Dupont", "Menuiserie Jean", "jean@exemple.fr"])
+      for (const cle of ["limon-projets", "limon-atelier", "limon-synchro"])
+        expect(a.storage.getItem(cle) ?? "").not.toContain(mot);
+    // Rien n'a laissé de trace à envoyer.
+    expect((await a.store.status()).pending).toBe(0);
+    expect(await s.db.query("select * from projets")).toEqual([]);
+  });
+
+  it("compte supprimé, serveur qui refuse : rien ne quitte l'appareil", async () => {
+    const a = device();
+    await a.store.save(avecClient("p", 1));
+    a.atelier.set({ entreprise: { ...ENTREPRISE_VIDE, nom: "Menuiserie Jean" } }, 1);
+    await a.signIn("jean@exemple.fr");
+    a.panne = 500;
+    await expect(a.store.deleteAccount(true)).rejects.toThrow();
+    a.panne = null;
+    expect(await a.names()).toEqual(["Dupont"]);
+    expect(a.atelier.get()).not.toBeNull();
+    expect(a.store.account()).not.toBeNull();
+  });
+
+  describe("session perdue, compte intact", () => {
+    /** Un appareil connecté, avec un escalier et son client, dont la session vient de se perdre. */
+    async function perdue(storage = memory()) {
+      const a = device(storage);
+      await a.store.save(avecClient("p", 1));
+      await a.signIn("jean@exemple.fr");
+      await s.db.query("delete from sessions");
+      await a.store.sync();
+      expect(a.store.account()).toBeNull();
+      return a;
+    }
+
+    it("le client ne se voit plus sans connexion, l'escalier reste ouvrable", async () => {
+      const a = await perdue();
+      expect(a.store.hidesClients()).toBe(true);
+      expect((await a.store.get("p"))!.nom).toBe("Dupont");
+      expect((await a.store.get("p"))!.devis).toBeNull();
+      expect((await a.store.list()).map((p) => p.devis)).toEqual([null]);
+      expect(projectFile((await a.store.get("p"))!)).not.toContain("M. Martin");
+    });
+
+    it("le dit tout de suite à l'escalier ouvert, et reste caché après un rechargement", async () => {
+      const storage = memory();
+      const a = device(storage);
+      const vus: string[][] = [];
+      a.store.onChange((ids) => vus.push(ids));
+      await a.store.save(avecClient("p", 1));
+      await a.signIn("jean@exemple.fr");
+      await s.db.query("delete from sessions");
+      await a.store.sync();
+      expect(vus.at(-1)).toEqual(["p"]);
+      const recharge = device(storage);
+      expect(recharge.store.hidesClients()).toBe(true);
+      expect((await recharge.store.get("p"))!.devis).toBeNull();
+    });
+
+    it("toucher à l'escalier sans connexion ne perd pas le client, et il revient à la reprise de session", async () => {
+      const a = await perdue();
+      await a.store.save({ ...(await a.store.get("p"))!, nom: "Dupont bis", modifie: 50 });
+      expect((await a.store.get("p"))!.nom).toBe("Dupont bis");
+      expect((await a.store.get("p"))!.devis).toBeNull();
+      expect(a.storage.getItem("limon-projets")).toContain("M. Martin");
+
+      const vus: string[][] = [];
+      a.store.onChange((ids) => vus.push(ids));
+      await a.signIn("jean@exemple.fr");
+      expect(a.store.hidesClients()).toBe(false);
+      expect(vus[0]).toEqual(["p"]);
+      expect((await a.store.get("p"))!).toMatchObject({ nom: "Dupont bis", devis: { client: { nom: "M. Martin" } } });
+      // Et le compte l'a reçu entier : rien n'a été écrasé par la version cachée.
+      const b = device();
+      await b.signIn("jean@exemple.fr");
+      expect((await b.store.get("p"))!).toMatchObject({ nom: "Dupont bis", devis: { client: { nom: "M. Martin" } } });
+    });
+
+    it("dupliqué sans connexion : la copie n'emporte pas le client", async () => {
+      const a = await perdue();
+      await a.store.save({ ...(await a.store.get("p"))!, id: "copie", modifie: 50 });
+      await a.signIn("jean@exemple.fr");
+      expect((await a.store.get("copie"))!.devis).toBeNull();
+      expect((await a.store.get("p"))!.devis!.client.nom).toBe("M. Martin");
+    });
+
+    it("un fichier ouvert sans connexion garde son client, qui se cache comme les autres", async () => {
+      const a = await perdue();
+      await a.store.save(avecClient("fichier", 50));
+      expect((await a.store.get("fichier"))!.devis).toBeNull();
+      await a.signIn("jean@exemple.fr");
+      expect((await a.store.get("fichier"))!.devis!.client.nom).toBe("M. Martin");
+    });
+
+    it("la reprise à une autre adresse : ce qui reste sur l'appareil se revoit", async () => {
+      const a = await perdue();
+      await a.store.save(avecClient("q", 50));
+      await a.signIn("marie@exemple.fr");
+      expect(a.store.hidesClients()).toBe(false);
+      expect(await a.store.get("p")).toBeNull();
+      expect((await a.store.get("q"))!.devis!.client.nom).toBe("M. Martin");
+    });
+
+    it("sans jamais avoir eu de compte, le client se voit", async () => {
+      const a = device();
+      await a.store.save(avecClient("p", 1));
+      expect(a.store.hidesClients()).toBe(false);
+      expect((await a.store.get("p"))!.devis!.client.nom).toBe("M. Martin");
+    });
+  });
+
+  it("déconnexion : le client, l'atelier et l'e-mail quittent l'appareil, sans rien laisser de caché", async () => {
+    const a = device();
+    await a.store.save(avecClient("p", 1));
+    a.atelier.set({ entreprise: { ...ENTREPRISE_VIDE, nom: "Menuiserie Jean" } }, 1);
+    await a.signIn("jean@exemple.fr");
+    await a.store.signOut();
+    expect(a.store.hidesClients()).toBe(false);
+    expect(await a.names()).toEqual([]);
+    expect(a.atelier.get()).toBeNull();
+    for (const mot of ["M. Martin", "Menuiserie Jean", "jean@exemple.fr"])
+      for (const cle of ["limon-projets", "limon-atelier", "limon-synchro"])
+        expect(a.storage.getItem(cle) ?? "").not.toContain(mot);
   });
 
   it("après une déconnexion, l'appareil se souvient qu'un compte existe", async () => {

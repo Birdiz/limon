@@ -143,16 +143,18 @@ export class SyncStore implements ProjectStore {
     void this.sync();
   }
 
-  list(): Promise<Project[]> {
-    return this.local.list();
+  async list(): Promise<Project[]> {
+    return (await this.local.list()).map((p) => this.shown(p));
   }
 
-  get(id: string): Promise<Project | null> {
-    return this.local.get(id);
+  async get(id: string): Promise<Project | null> {
+    const p = await this.local.get(id);
+    return p && this.shown(p);
   }
 
   async save(p: Project): Promise<void> {
-    await this.local.save(p);
+    // Sans session, la page n'a vu que l'escalier : son devis reste celui de l'appareil.
+    await this.local.save(this.hidesClients() ? { ...p, devis: (await this.local.get(p.id))?.devis ?? p.devis } : p);
     if (this.state.compte) this.schedule();
   }
 
@@ -202,6 +204,21 @@ export class SyncStore implements ProjectStore {
     return this.state.connu;
   }
 
+  /** Session perdue : les escaliers restent ouvrables, leurs devis et leurs clients attendent la reconnexion. */
+  hidesClients(): boolean {
+    return !this.state.compte && !!this.state.dernier;
+  }
+
+  /** Le projet tel que la page peut le voir. */
+  private shown(p: Project): Project {
+    return this.hidesClients() ? { ...p, devis: null } : p;
+  }
+
+  /** Tous les projets de l'appareil, quand ce qu'on en voit change d'un coup. */
+  private async allIds(): Promise<string[]> {
+    return (await this.local.list()).map((p) => p.id);
+  }
+
   async status(): Promise<SyncStatus> {
     return {
       compte: this.state.compte,
@@ -228,6 +245,7 @@ export class SyncStore implements ProjectStore {
 
   /** Connexion réussie : les projets de l'appareil montent dans le compte, ceux du compte descendent. */
   async signIn(compte: Compte): Promise<void> {
+    const hidden = this.hidesClients();
     let changed: string[] = [];
     if (this.state.dernier && this.state.dernier !== compte.email) {
       // Autre compte que le précédent : les projets de celui-ci, à l'abri dans son compte, quittent l'appareil.
@@ -243,7 +261,7 @@ export class SyncStore implements ProjectStore {
     this.state.dernier = compte.email;
     this.state.connu = true;
     this.persist();
-    this.emit(changed);
+    this.emit(hidden ? [...new Set([...changed, ...(await this.allIds())])] : changed);
     await this.sync();
   }
 
@@ -283,17 +301,25 @@ export class SyncStore implements ProjectStore {
     return removed;
   }
 
-  /** Compte supprimé : les projets restent sur cet appareil, comme avant d'avoir un compte. */
-  async deleteAccount(): Promise<void> {
+  /**
+   * Compte supprimé : le profil de l'atelier quitte l'appareil. Les projets y restent, comme avant d'avoir un compte,
+   * sauf si l'artisan choisit de les effacer aussi : tous, envoyés ou non, ils ne seront alors plus nulle part.
+   */
+  async deleteAccount(effacer: boolean): Promise<void> {
     await this.api.deleteAccount();
+    const removed = effacer ? await this.allIds() : [];
+    for (const id of removed) await this.local.remove(id);
+    this.emit(removed);
+    this.atelier?.clear();
     this.reset(false);
   }
 
-  /** La session a expiré ou le compte n'existe plus. */
-  sessionLost(): void {
+  /** La session a expiré ou le compte n'existe plus : les clients se cachent, l'escalier ouvert compris. */
+  async sessionLost(): Promise<void> {
     if (!this.state.compte) return;
     this.state.compte = null;
     this.persist();
+    this.emit(await this.allIds());
     this.emitStatus();
   }
 
@@ -388,7 +414,7 @@ export class SyncStore implements ProjectStore {
       // Un projet absent de l'index n'a jamais atteint ce compte (ou le compte a été recréé) : il part au tour suivant.
       if (!changes.length && (await this.pending()).length) this.again = true;
     } catch (e) {
-      if (e instanceof NotSignedIn) this.state.compte = null;
+      if (e instanceof NotSignedIn) await this.sessionLost();
       // Le serveur a répondu : ce n'est pas le réseau.
       else if (e instanceof ApiError) [this.offline, this.erreur] = [false, e.message];
       else [this.offline, this.erreur] = [true, null];
