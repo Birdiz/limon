@@ -23,10 +23,22 @@ Session : cookie `limon-session` (`HttpOnly`, `Path=/api`). 90 jours sans usage 
 
 **Limites de débit** (`nouvellesLimites`, `server/api.ts`) : en mémoire, un seul serveur, à zéro à chaque redémarrage. Une table par limite, aucune ne pousse dehors les clés d'une autre.
 
-- **Par adresse IP** : 20 codes, 60 vérifications de code (un code mal formé ne compte pas), 60 demandes de passkey par heure. **Par e-mail** : 3 codes de connexion et 3 de changement d'adresse par heure. **Par compte** : voir la preuve récente et le changement d'adresse, et `MAX_ENVOIS` par minute et par route.
+- **Par adresse IP** : 20 codes, 60 vérifications de code (un code mal formé ne compte pas), 60 demandes de passkey par heure. **Par adresse IP et e-mail** : voir le code de connexion. **Par e-mail** : 20 codes de connexion et 20 de changement d'adresse par heure (`CODES_PAR_EMAIL`), la protection de la boîte. **Par compte** : voir la preuve récente et le changement d'adresse, et `MAX_ENVOIS` par minute et par route.
 - **Plafond** : 10 000 clés par table (`MAX_CLES`), 320 caractères par clé. Table pleine, la clé la plus ancienne qui n'est pas à sa limite sort, et perd son compte ; une clé à sa limite ne sort jamais avant la fin de sa fenêtre ; toutes à leur limite, une clé neuve est refusée.
 - **Balayage** : chaque minute (`server/main.ts`), qui ne parcourt que ce qui a expiré. Une adresse IP ou un e-mail ne reste donc pas plus d'une minute après sa fenêtre. Le serveur de développement ne balaie pas : seul le plafond y joue.
-- **Plafond des codes** : `CODES_PAR_HEURE` (100) pour tous les envois de code, à faire passer par `refusCode` sur tout nouveau chemin. Regardé d'abord et compté en dernier : un refus n'use rien. Les avis et les avertissements n'y comptent pas. Atteint, seuls les envois s'arrêtent : passkeys et codes déjà partis marchent encore.
+- **Plafond des codes** : `CODES_PAR_HEURE` (100) pour tous les envois de code, à faire passer par `refusCode` sur tout nouveau chemin. Regardé d'abord et compté en dernier, et les limites de la personne regardées avant d'être comptées : un refus n'use rien. Les avis et les avertissements n'y comptent pas. Atteint, seuls les envois s'arrêtent : passkeys et codes déjà partis marchent encore.
+
+**Code de connexion** : demandes et essais se comptent par adresse IP et e-mail, avec un plafond par e-mail au-dessus.
+
+- **Demandes** : 3 par heure par adresse IP et e-mail (`CODES_PAR_IP_EMAIL`), jusqu'au plafond de la boîte. Une ligne par code dans `codes` : un code demandé ne remplace pas le précédent, un essai est comparé aux 3 derniers encore valables (`CODES_VALABLES`). Les plus anciens ne comptent plus, et sont retirés par la connexion ou la purge.
+- **Essais** : 5 par heure par adresse IP et e-mail (`CODE_TRIES`), 30 par heure sur l'e-mail, toutes adresses confondues (`ESSAIS_PAR_EMAIL`). Un essai faux n'efface aucun code. Le plafond de l'e-mail refuse tout, bon code compris, et n'use alors pas les essais de la personne.
+- **Deux valeurs liées** : `ESSAIS_PAR_EMAIL` et `CODES_VALABLES` font à elles deux ce que vaut un code à 6 chiffres. À revoir ensemble, jamais l'une sans l'autre. Les autres limites ne font que répartir.
+- **Comptés en mémoire** : le sel des codes meurt avec le processus, les compteurs aussi, donc un redémarrage ne rend d'essais sur aucun code. Comptés seulement là où un code attend : `CODES_PAR_HEURE` borne le nombre d'e-mails, et ces deux tables ne se remplissent pas.
+- **Une connexion** retire tous les codes de l'adresse, un code ne servant qu'une fois.
+
+Limites : les plafonds par e-mail atteints, le code par e-mail attend jusqu'à une heure, pour demander comme pour essayer, et les passkeys restent. Un code encore valable d'un autre appareil tombe avec la connexion.
+
+`/preuve/code` et `/compte/email/code` gardent un seul code par compte et 5 essais : seule une session du compte y touche.
 
 **Preuve récente** (`preuve`, `server/api.ts`) : une session ne suffit pas pour les gestes qui engagent le compte. `sessions.preuve` date la connexion, ou la dernière preuve de cet appareil ; plus de 5 minutes (`PREUVE_MINUTES`) ou nulle (session d'avant) : 403 avec `preuve: true`.
 
@@ -43,7 +55,7 @@ Limites : une passkey créée sans vérification (clé matérielle sans code, du
 - **Code à part** : table `changements_adresse`, une ligne par compte, 10 minutes et 5 essais comme à la connexion. Il ne vaut que pour ce compte et cette adresse. Il n'ouvre pas de session, un code de connexion ne change pas l'adresse, et l'un ne remplace pas l'autre.
 - **Adresse déjà prise** : la demande de code répond pareil, comme `POST /code`, et le refus (409) ne vient qu'après le bon code : seul qui reçoit les messages de cette adresse apprend qu'elle a un compte. L'unicité de la base tranche, sans lecture avant, même si un compte s'y crée au même instant.
 - **Avis** : l'ancienne adresse en reçoit un (`brevoAdresseChangee`), sans la nouvelle, car une adresse qu'on corrige n'est parfois plus à la personne. Il dit à qui écrire si ce n'est pas elle. Un avis qui ne part pas va au journal et ne défait rien.
-- **Limites de débit** : 5 codes par heure par compte, compté d'abord pour qu'un compte à sa limite n'use pas celle de l'adresse, et 3 par adresse, à part de ceux de connexion. `essai` retombe à nul : l'échec d'envoi noté était celui de l'ancienne.
+- **Limites de débit** : 5 codes par heure par compte, et le plafond de la boîte par adresse, à part de ceux de connexion. `essai` retombe à nul : l'échec d'envoi noté était celui de l'ancienne.
 
 Limites : la demande exige une preuve récente, l'adresse ouvrant le compte. Qui a perdu l'ancienne adresse sans avoir de passkey ne peut donc plus la corriger seul, sauf juste après une connexion : il écrit à l'éditeur. L'ancienne adresse redevient libre : un code demandé à elle crée un autre compte, vide. Le trousseau de l'appareil garde l'ancienne adresse comme nom de la passkey, qui marche toujours. Un autre appareil connecté montre l'ancienne adresse, et l'initiale dans son en-tête, jusqu'à ce qu'il ouvre Mon compte.
 

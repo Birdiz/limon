@@ -63,14 +63,21 @@ const SESSION_DAYS = 90;
 const SESSION_MAX_DAYS = 365;
 const CODE_MINUTES = 10;
 const CODE_TRIES = 5;
-/** Codes de changement d'adresse par heure : une adresse reçoit peu, un compte peut se tromper en la tapant. */
-const CODES_ADRESSE_PAR_ADRESSE = 3;
+/** Codes de connexion par heure, pour une adresse IP et un e-mail : qui ne reçoit rien réessaie, sans plus. */
+const CODES_PAR_IP_EMAIL = 3;
+/** Codes par heure à un même e-mail, d'où qu'ils viennent : la protection de sa boîte, pas une limite pour la personne. */
+export const CODES_PAR_EMAIL = 20;
+/** Codes de connexion valables à la fois pour un e-mail : les plus récents, chacun multiplie les chances d'un essai. */
+export const CODES_VALABLES = 3;
+/** Essais par heure sur un e-mail, d'où qu'ils viennent : avec `CODES_VALABLES`, ce plafond borne ce qu'on peut deviner. */
+export const ESSAIS_PAR_EMAIL = 30;
+/** Codes de changement d'adresse par heure : un compte peut se tromper en la tapant. */
 const CODES_ADRESSE_PAR_COMPTE = 5;
 /** Codes de preuve par heure et par compte : chacun arrive dans la boîte de la personne. */
 const CODES_PREUVE_PAR_COMPTE = 5;
 /** Codes par heure, tous envois et toutes personnes confondus. Un compte en demande rarement : passkey, session longue. */
 export const CODES_PAR_HEURE = 100;
-/** Vérifications de code par heure et par adresse IP : 5 essais pour chacun de quelques codes, un atelier à plusieurs. */
+/** Vérifications de code par heure et par adresse IP : 5 essais pour chacune de quelques personnes, un atelier à plusieurs. */
 export const VERIFICATIONS_PAR_IP = 60;
 /** Une connexion, une passkey ou un code de moins de cette durée permet les gestes qui engagent le compte. */
 const PREUVE_MINUTES = 5;
@@ -91,6 +98,8 @@ const LONGUEUR_CLE = 320;
 /** Lu par un onglet ouvert depuis avant la preuve, qui ne sait pas la demander : se reconnecter en est une. */
 const PREUVE_DEMANDEE = `Par sécurité, ce geste demande une connexion de moins de ${PREUVE_MINUTES} minutes : déconnectez-vous, puis reconnectez-vous.`;
 const TROP_DE_CODES = "Trop de codes demandés. Réessayez dans une heure.";
+const TROP_D_ESSAIS = "Trop d'essais. Réessayez dans une heure.";
+const ESSAIS_EPUISES = "Trop d'essais sur cette adresse e-mail, pas forcément les vôtres. Réessayez dans une heure.";
 const CODES_EPUISES =
   "Trop de codes sont partis cette heure-ci, pour tout le monde et pas seulement pour vous. Réessayez dans une heure.";
 const PASSKEY_REFUSEE = "La passkey n'a pas pu être vérifiée : connectez-vous avec un code par e-mail.";
@@ -183,10 +192,13 @@ export class Limiter {
 export function nouvellesLimites() {
   return {
     codesParIp: new Limiter(20, HOUR),
+    codesParIpEmail: new Limiter(CODES_PAR_IP_EMAIL, HOUR),
     verificationsParIp: new Limiter(VERIFICATIONS_PAR_IP, HOUR),
+    essaisParIpEmail: new Limiter(CODE_TRIES, HOUR),
+    essaisParEmail: new Limiter(ESSAIS_PAR_EMAIL, HOUR),
     passkeysParIp: new Limiter(60, HOUR),
-    codesParEmail: new Limiter(3, HOUR),
-    codesAdresseParEmail: new Limiter(CODES_ADRESSE_PAR_ADRESSE, HOUR),
+    codesParEmail: new Limiter(CODES_PAR_EMAIL, HOUR),
+    codesAdresseParEmail: new Limiter(CODES_PAR_EMAIL, HOUR),
     codesAdresseParCompte: new Limiter(CODES_ADRESSE_PAR_COMPTE, HOUR),
     codesPreuveParCompte: new Limiter(CODES_PREUVE_PAR_COMPTE, HOUR),
     envoisParCompte: new Limiter(MAX_ENVOIS, 60_000),
@@ -324,10 +336,11 @@ export function api(cfg: ApiConfig): Hono<Env> {
 
   /**
    * Le refus à rendre avant d'envoyer un code, ou null si le code peut partir. Le plafond commun est regardé d'abord et
-   * compté en dernier : une demande refusée n'use ni la limite de la personne, ni le plafond de tout le monde.
+   * compté en dernier : une demande refusée n'use ni les limites de la personne, ni le plafond de tout le monde.
    */
   function refusCode(c: Context, ...siennes: [Limiter, string][]) {
     if (limites.codesEnvoyes.atteinte(TOUS)) return err(c, 429, CODES_EPUISES);
+    if (siennes.some(([limite, cle]) => limite.atteinte(cle))) return err(c, 429, TROP_DE_CODES);
     if (!siennes.every(([limite, cle]) => limite.hit(cle))) return err(c, 429, TROP_DE_CODES);
     limites.codesEnvoyes.hit(TOUS);
     return null;
@@ -343,12 +356,16 @@ export function api(cfg: ApiConfig): Hono<Env> {
   app.post("/code", async (c) => {
     const email = cleanEmail((await body(c)).email);
     if (!email) return err(c, 400, "Cette adresse e-mail n'est pas valable.");
-    const refus = refusCode(c, [limites.codesParIp, ip(c)], [limites.codesParEmail, email]);
+    const refus = refusCode(
+      c,
+      [limites.codesParIpEmail, `${ip(c)}:${email}`],
+      [limites.codesParIp, ip(c)],
+      [limites.codesParEmail, email],
+    );
     if (refus) return refus;
     const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
     await db.query(
-      `insert into codes (email, hash, expire, essais) values ($1, $2, now() + interval '${CODE_MINUTES} minutes', 0)
-       on conflict (email) do update set hash = excluded.hash, expire = excluded.expire, essais = 0`,
+      `insert into codes (email, hash, expire) values ($1, $2, now() + interval '${CODE_MINUTES} minutes')`,
       [email, codeHash(email, code).toString("hex")],
     );
     try {
@@ -366,17 +383,23 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const email = cleanEmail(b.email);
     const code = typeof b.code === "string" ? b.code.replace(/\s/g, "") : "";
     if (!email || !/^\d{6}$/.test(code)) return err(c, 400, "Le code a 6 chiffres.");
-    if (!limites.verificationsParIp.hit(ip(c))) return err(c, 429, "Trop d'essais. Réessayez dans une heure.");
-    const [row] = await db.query<{ hash: string; essais: number }>(
-      "update codes set essais = essais + 1 where email = $1 and expire > now() returning hash, essais",
+    if (!limites.verificationsParIp.hit(ip(c))) return err(c, 429, TROP_D_ESSAIS);
+    const valables = await db.query<{ hash: string }>(
+      `select hash from codes where email = $1 and expire > now() order by id desc limit ${CODES_VALABLES}`,
       [email],
     );
-    if (!row) return err(c, 400, "Ce code a expiré : demandez-en un nouveau.");
-    if (row.essais > CODE_TRIES) {
-      await db.query("delete from codes where email = $1", [email]);
-      return err(c, 400, "Trop d'essais : demandez un nouveau code.");
-    }
-    if (!timingSafeEqual(Buffer.from(row.hash, "hex"), codeHash(email, code))) return err(c, 400, "Code incorrect.");
+    if (!valables.length) return err(c, 400, "Ce code a expiré : demandez-en un nouveau.");
+    // Comptés seulement là où un code attend, donc pour peu d'e-mails : ces tables ne se remplissent pas. Le plafond de
+    // l'e-mail est regardé d'abord : pendant qu'il est atteint, la personne n'use pas ses propres essais.
+    if (limites.essaisParEmail.atteinte(email)) return err(c, 429, ESSAIS_EPUISES);
+    if (!limites.essaisParIpEmail.hit(`${ip(c)}:${email}`)) return err(c, 429, TROP_D_ESSAIS);
+    if (!limites.essaisParEmail.hit(email)) return err(c, 429, ESSAIS_EPUISES);
+    const attendu = codeHash(email, code);
+    const bon = valables.find((v) => timingSafeEqual(Buffer.from(v.hash, "hex"), attendu));
+    if (!bon) return err(c, 400, "Code incorrect.");
+    // Un code ne sert qu'une fois, même demandé deux fois au même instant ; les autres tombent avec la connexion.
+    const [pris] = await db.query("delete from codes where email = $1 and hash = $2 returning id", [email, bon.hash]);
+    if (!pris) return err(c, 400, "Ce code a expiré : demandez-en un nouveau.");
     await db.query("delete from codes where email = $1", [email]);
     await db.query("insert into comptes (id, email) values ($1, $2) on conflict (email) do nothing", [
       randomUUID(),
