@@ -48,6 +48,8 @@ export interface ApiConfig {
   sendAdresseChangee: SendAdresseChangee;
   /** Code envoyé à l'adresse du compte, pour prouver que c'est bien la personne avant un geste qui l'engage. */
   sendCodePreuve: SendCode;
+  /** Tables des limites de débit, pour qui doit les balayer ; neuves sinon. */
+  limites?: Limites;
   /** Avis à l'adresse du compte, une passkey ajoutée. */
   sendPasskeyAjoutee: SendPasskeyAjoutee;
 }
@@ -66,6 +68,10 @@ const CODES_ADRESSE_PAR_ADRESSE = 3;
 const CODES_ADRESSE_PAR_COMPTE = 5;
 /** Codes de preuve par heure et par compte : chacun arrive dans la boîte de la personne. */
 const CODES_PREUVE_PAR_COMPTE = 5;
+/** Codes par heure, tous envois et toutes personnes confondus. Un compte en demande rarement : passkey, session longue. */
+export const CODES_PAR_HEURE = 100;
+/** Vérifications de code par heure et par adresse IP : 5 essais pour chacun de quelques codes, un atelier à plusieurs. */
+export const VERIFICATIONS_PAR_IP = 60;
 /** Une connexion, une passkey ou un code de moins de cette durée permet les gestes qui engagent le compte. */
 const PREUVE_MINUTES = 5;
 const HOUR = 3_600_000;
@@ -77,9 +83,16 @@ const MAX_PROJETS = 2000;
 const MAX_AVANCE = 732 * 24 * HOUR;
 /** Envois ou lectures par minute, par compte et par route : largement au-dessus d'un échange toutes les 3 s. */
 const MAX_ENVOIS = 120;
+/** Clés gardées par limite. */
+const MAX_CLES = 10_000;
+/** Longueur gardée d'une clé, assez pour une adresse e-mail : la mémoire d'une table reste bornée. */
+const LONGUEUR_CLE = 320;
 
 /** Lu par un onglet ouvert depuis avant la preuve, qui ne sait pas la demander : se reconnecter en est une. */
 const PREUVE_DEMANDEE = `Par sécurité, ce geste demande une connexion de moins de ${PREUVE_MINUTES} minutes : déconnectez-vous, puis reconnectez-vous.`;
+const TROP_DE_CODES = "Trop de codes demandés. Réessayez dans une heure.";
+const CODES_EPUISES =
+  "Trop de codes sont partis cette heure-ci, pour tout le monde et pas seulement pour vous. Réessayez dans une heure.";
 const PASSKEY_REFUSEE = "La passkey n'a pas pu être vérifiée : connectez-vous avec un code par e-mail.";
 const ILLISIBLE = "Cet escalier ne peut pas être relu.";
 const SCHEMA_PLUS_HAUT =
@@ -108,20 +121,80 @@ function sent(raw: Record<string, unknown>, p: Project): Partial<Project> {
   return out;
 }
 
-/** Compteur d'essais en mémoire : un seul serveur tourne, et rien n'est conservé. */
-class Limiter {
+/**
+ * Une limite : au plus `max` essais par clé dans la fenêtre, en mémoire, un seul serveur tournant, et rien n'est
+ * conservé. La table est rangée du dernier essai le plus ancien au plus récent : ce qui a expiré est toujours devant.
+ */
+export class Limiter {
   private hits = new Map<string, number[]>();
-  /** Vrai si l'essai passe ; faux au-delà de `max` dans la fenêtre. */
-  hit(key: string, max: number, windowMs: number): boolean {
+  constructor(
+    private readonly max: number,
+    private readonly windowMs: number,
+    private readonly capacite = MAX_CLES,
+  ) {}
+
+  get taille(): number {
+    return this.hits.size;
+  }
+
+  private limitee(essais: number[], now: number): boolean {
+    return essais.length >= this.max && now - essais[0]! < this.windowMs;
+  }
+
+  /** Vrai si `key` est à sa limite, sans compter d'essai. */
+  atteinte(key: string): boolean {
+    const essais = this.hits.get(key.slice(0, LONGUEUR_CLE));
+    return !!essais && this.limitee(essais, Date.now());
+  }
+
+  /** Vrai si l'essai passe ; faux au-delà de `max` dans la fenêtre, ou si la table est pleine de clés limitées. */
+  hit(key: string): boolean {
+    const cle = key.slice(0, LONGUEUR_CLE);
     const now = Date.now();
-    const recent = (this.hits.get(key) ?? []).filter((t) => now - t < windowMs);
-    if (recent.length >= max) return false;
-    recent.push(now);
-    this.hits.set(key, recent);
-    if (this.hits.size > 10_000) this.hits.clear();
+    const essais = this.hits.get(cle) ?? [];
+    if (this.limitee(essais, now)) return false;
+    this.hits.delete(cle);
+    if (this.hits.size >= this.capacite && !this.evince(now)) return false;
+    this.hits.set(cle, [...essais.filter((t) => now - t < this.windowMs), now]);
     return true;
   }
+
+  /** Fait une place en retirant la clé la plus ancienne qui n'est pas limitée : une expirée s'il y en a. */
+  private evince(now: number): boolean {
+    for (const [cle, essais] of this.hits) {
+      if (this.limitee(essais, now)) continue;
+      this.hits.delete(cle);
+      return true;
+    }
+    return false;
+  }
+
+  /** Oublie les clés expirées. Ne parcourt que celles-là. */
+  balaye(): void {
+    const now = Date.now();
+    for (const [cle, essais] of this.hits) {
+      if (now - essais.at(-1)! < this.windowMs) return;
+      this.hits.delete(cle);
+    }
+  }
 }
+
+/** Une table par limite : aucune ne peut pousser dehors les clés d'une autre. */
+export function nouvellesLimites() {
+  return {
+    codesParIp: new Limiter(20, HOUR),
+    verificationsParIp: new Limiter(VERIFICATIONS_PAR_IP, HOUR),
+    passkeysParIp: new Limiter(60, HOUR),
+    codesParEmail: new Limiter(3, HOUR),
+    codesAdresseParEmail: new Limiter(CODES_ADRESSE_PAR_ADRESSE, HOUR),
+    codesAdresseParCompte: new Limiter(CODES_ADRESSE_PAR_COMPTE, HOUR),
+    codesPreuveParCompte: new Limiter(CODES_PREUVE_PAR_COMPTE, HOUR),
+    envoisParCompte: new Limiter(MAX_ENVOIS, 60_000),
+    codesEnvoyes: new Limiter(CODES_PAR_HEURE, HOUR),
+  };
+}
+export type Limites = ReturnType<typeof nouvellesLimites>;
+export const balayeLimites = (limites: Limites) => Object.values(limites).forEach((l) => l.balaye());
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const ms = (d: unknown) => (d ? new Date(d as string).getTime() : null);
@@ -147,6 +220,9 @@ function challengeOf(r: { response?: { clientDataJSON?: unknown } } | undefined)
   }
 }
 
+/** La seule clé du plafond commun. */
+const TOUS = "tous";
+
 /** Routes /api : connexion, compte et projets. */
 export function api(cfg: ApiConfig): Hono<Env> {
   const { db, origin } = cfg;
@@ -155,7 +231,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
   // Les codes sont gardés hachés avec ce sel, propre au processus : une copie de la base ne les révèle pas.
   const pepper = randomBytes(32);
   const codeHash = (email: string, code: string) => createHmac("sha256", pepper).update(`${email}:${code}`).digest();
-  const limiter = new Limiter();
+  const limites = cfg.limites ?? nouvellesLimites();
   const ip = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "local";
 
   const app = new Hono<Env>().basePath("/api");
@@ -239,10 +315,21 @@ export function api(cfg: ApiConfig): Hono<Env> {
 
   /** Limite de débit par compte, après `auth`. */
   const debit = createMiddleware<Env>(async (c, next) => {
-    if (!limiter.hit(`${c.req.path}:${c.get("compte")}`, MAX_ENVOIS, 60_000))
+    if (!limites.envoisParCompte.hit(`${c.req.path}:${c.get("compte")}`))
       return err(c, 429, "Trop d'envois en peu de temps. Réessayez dans une minute.");
     await next();
   });
+
+  /**
+   * Le refus à rendre avant d'envoyer un code, ou null si le code peut partir. Le plafond commun est regardé d'abord et
+   * compté en dernier : une demande refusée n'use ni la limite de la personne, ni le plafond de tout le monde.
+   */
+  function refusCode(c: Context, ...siennes: [Limiter, string][]) {
+    if (limites.codesEnvoyes.atteinte(TOUS)) return err(c, 429, CODES_EPUISES);
+    if (!siennes.every(([limite, cle]) => limite.hit(cle))) return err(c, 429, TROP_DE_CODES);
+    limites.codesEnvoyes.hit(TOUS);
+    return null;
+  }
 
   app.get("/sante", async (c) => {
     await db.query("select 1");
@@ -254,8 +341,8 @@ export function api(cfg: ApiConfig): Hono<Env> {
   app.post("/code", async (c) => {
     const email = cleanEmail((await body(c)).email);
     if (!email) return err(c, 400, "Cette adresse e-mail n'est pas valable.");
-    if (!limiter.hit(`ip:${ip(c)}`, 20, HOUR) || !limiter.hit(`email:${email}`, 3, HOUR))
-      return err(c, 429, "Trop de codes demandés. Réessayez dans une heure.");
+    const refus = refusCode(c, [limites.codesParIp, ip(c)], [limites.codesParEmail, email]);
+    if (refus) return refus;
     const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
     await db.query(
       `insert into codes (email, hash, expire, essais) values ($1, $2, now() + interval '${CODE_MINUTES} minutes', 0)
@@ -277,6 +364,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const email = cleanEmail(b.email);
     const code = typeof b.code === "string" ? b.code.replace(/\s/g, "") : "";
     if (!email || !/^\d{6}$/.test(code)) return err(c, 400, "Le code a 6 chiffres.");
+    if (!limites.verificationsParIp.hit(ip(c))) return err(c, 429, "Trop d'essais. Réessayez dans une heure.");
     const [row] = await db.query<{ hash: string; essais: number }>(
       "update codes set essais = essais + 1 where email = $1 and expire > now() returning hash, essais",
       [email],
@@ -331,7 +419,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
   }
 
   app.post("/passkey/options", async (c) => {
-    if (!limiter.hit(`pk:${ip(c)}`, 60, HOUR)) return err(c, 429, "Trop d'essais. Réessayez dans une heure.");
+    if (!limites.passkeysParIp.hit(ip(c))) return err(c, 429, "Trop d'essais. Réessayez dans une heure.");
     const options = await generateAuthenticationOptions({ rpID, userVerification: "required" });
     await db.query("insert into defis (defi, expire) values ($1, now() + interval '5 minutes')", [options.challenge]);
     return c.json(options);
@@ -476,8 +564,8 @@ export function api(cfg: ApiConfig): Hono<Env> {
   /** Le code part à l'adresse du compte. À part des codes de connexion : l'un ne sert pas à l'autre et ne le remplace pas. */
   app.post("/preuve/code", auth, async (c) => {
     const compte = c.get("compte");
-    if (!limiter.hit(`preuve:${compte}`, CODES_PREUVE_PAR_COMPTE, HOUR))
-      return err(c, 429, "Trop de codes demandés. Réessayez dans une heure.");
+    const refus = refusCode(c, [limites.codesPreuveParCompte, compte]);
+    if (refus) return refus;
     const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
     await db.query(
       `insert into codes_preuve (compte, hash, expire, essais)
@@ -528,11 +616,8 @@ export function api(cfg: ApiConfig): Hono<Env> {
     if (!email) return err(c, 400, "Cette adresse e-mail n'est pas valable.");
     const compte = c.get("compte");
     if (email === (await compteOf(compte))!.email) return err(c, 400, "C'est déjà l'adresse de votre compte.");
-    if (
-      !limiter.hit(`adresse-compte:${compte}`, CODES_ADRESSE_PAR_COMPTE, HOUR) ||
-      !limiter.hit(`adresse:${email}`, CODES_ADRESSE_PAR_ADRESSE, HOUR)
-    )
-      return err(c, 429, "Trop de codes demandés. Réessayez dans une heure.");
+    const refus = refusCode(c, [limites.codesAdresseParCompte, compte], [limites.codesAdresseParEmail, email]);
+    if (refus) return refus;
     const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
     await db.query(
       `insert into changements_adresse (compte, email, hash, expire, essais)

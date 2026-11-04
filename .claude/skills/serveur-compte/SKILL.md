@@ -19,7 +19,14 @@ description: Serveur et /api (server/), base et migrations, compte, passkeys, se
 
 Sans mot de passe : passkey (SimpleWebAuthn, `@simplewebauthn/browser` chargé à part), vérification de la personne exigée partout, à la connexion comme à l'ajout (décision du propriétaire : l'outil ne les propose que là où l'appareil en a) ; code à 6 chiffres par e-mail (Brevo, `server/mail.ts`) pour créer le compte et en secours, haché avec un sel propre au processus.
 
-Session : cookie `limon-session` (`HttpOnly`, `Path=/api`). 90 jours sans usage la ferment (`SESSION_DAYS`) ; un usage la prolonge, une fois par jour au plus, sans dépasser un an après son ouverture (`SESSION_MAX_DAYS`), et le cookie ne promet que ce qui reste. Requêtes qui modifient : origine du site exigée. Limites de débit en mémoire (un seul serveur).
+Session : cookie `limon-session` (`HttpOnly`, `Path=/api`). 90 jours sans usage la ferment (`SESSION_DAYS`) ; un usage la prolonge, une fois par jour au plus, sans dépasser un an après son ouverture (`SESSION_MAX_DAYS`), et le cookie ne promet que ce qui reste. Requêtes qui modifient : origine du site exigée.
+
+**Limites de débit** (`nouvellesLimites`, `server/api.ts`) : en mémoire, un seul serveur, à zéro à chaque redémarrage. Une table par limite, aucune ne pousse dehors les clés d'une autre.
+
+- **Par adresse IP** : 20 codes, 60 vérifications de code (un code mal formé ne compte pas), 60 demandes de passkey par heure. **Par e-mail** : 3 codes de connexion et 3 de changement d'adresse par heure. **Par compte** : voir la preuve récente et le changement d'adresse, et `MAX_ENVOIS` par minute et par route.
+- **Plafond** : 10 000 clés par table (`MAX_CLES`), 320 caractères par clé. Table pleine, la clé la plus ancienne qui n'est pas à sa limite sort, et perd son compte ; une clé à sa limite ne sort jamais avant la fin de sa fenêtre ; toutes à leur limite, une clé neuve est refusée.
+- **Balayage** : chaque minute (`server/main.ts`), qui ne parcourt que ce qui a expiré. Une adresse IP ou un e-mail ne reste donc pas plus d'une minute après sa fenêtre. Le serveur de développement ne balaie pas : seul le plafond y joue.
+- **Plafond des codes** : `CODES_PAR_HEURE` (100) pour tous les envois de code, à faire passer par `refusCode` sur tout nouveau chemin. Regardé d'abord et compté en dernier : un refus n'use rien. Les avis et les avertissements n'y comptent pas. Atteint, seuls les envois s'arrêtent : passkeys et codes déjà partis marchent encore.
 
 **Preuve récente** (`preuve`, `server/api.ts`) : une session ne suffit pas pour les gestes qui engagent le compte. `sessions.preuve` date la connexion, ou la dernière preuve de cet appareil ; plus de 5 minutes (`PREUVE_MINUTES`) ou nulle (session d'avant) : 403 avec `preuve: true`.
 
@@ -46,7 +53,7 @@ Limites : `utilise` n'est noté qu'une fois par jour, donc une session peut s'ar
 
 ## Données
 
-Minimales (e-mail, projets, clés publiques, empreinte des sessions, nom d'appareil, dernier usage et date de la dernière preuve ; pas d'IP conservée). `statut` du compte : `testeur` pour l'instant, l'abonnement viendra. Suppression du compte en cascade ; export des données dans Mon compte.
+Minimales (e-mail, projets, clés publiques, empreinte des sessions, nom d'appareil, dernier usage et date de la dernière preuve ; pas d'IP conservée en base, seulement en mémoire le temps des limites de débit). `statut` du compte : `testeur` pour l'instant, l'abonnement viendra. Suppression du compte en cascade ; export des données dans Mon compte.
 
 **Export** (`GET /compte/donnees`) : tout ce que le compte garde, traces de suppression et numéros de devis compris, un numéro restant après la suppression de son escalier. L'empreinte des sessions n'en sort jamais. Une colonne ou une table ajoutée fait échouer `tests/api.test.ts` tant qu'elle n'est pas rendue par la route ou écrite dans `HORS_EXPORT`, avec sa raison (dehors aujourd'hui : l'identifiant du compte répété dans chaque table, et `codes`, `changements_adresse`, `codes_preuve` et `defis`, de durée très courte).
 
