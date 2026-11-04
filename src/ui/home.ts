@@ -241,7 +241,10 @@ export class Home {
       await this.refresh();
     } else if (b.dataset.act === "del") {
       const where = this.host.signedIn() ? "de cet appareil et de votre compte" : "de cet appareil";
-      if (!confirm(`Supprimer « ${p.nom} » ? L'escalier sera effacé ${where}.`)) return;
+      // Un devis remis est un document que le client a en main : la question le nomme.
+      const numeros = [...new Set(p.devis?.remis.map((r) => r.numero))].join(", ");
+      const remis = numeros ? ` Il porte un devis déjà remis au client (${numeros}), effacé avec lui.` : "";
+      if (!confirm(`Supprimer « ${p.nom} » ? L'escalier sera effacé ${where}.${remis}`)) return;
       await this.store.remove(p.id);
       // L'escalier ouvert supprimé : l'accueil reste affiché, sans escalier derrière.
       if (p.id === this.host.current()?.id) {
