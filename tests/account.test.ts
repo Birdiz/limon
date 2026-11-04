@@ -4,6 +4,7 @@ import path from "node:path";
 import * as webauthn from "@simplewebauthn/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Changement, CompteDetail, Passkey } from "../src/core/account";
+import { newDevis } from "../src/core/devis";
 import { newProject } from "../src/core/project";
 import { AccountPanel } from "../src/ui/account";
 import { Api } from "../src/ui/api";
@@ -324,12 +325,41 @@ describe("compte affiché", () => {
   });
 });
 
-describe("session perdue, défaut connu", () => {
-  // Défaut signalé dans la PR : le compte a quitté l'appareil et l'écran dit encore « Connecté avec… » ; seul un nouveau
-  // passage sur l'onglet montre la connexion. `it.fails` passera au rouge le jour de la correction : retirer alors `.fails`.
-  it.fails("revient à la connexion", async () => {
+describe("session perdue", () => {
+  it("revient à la connexion, sans plus dire « Connecté avec… »", async () => {
     await connecte({ "GET compte": () => new Response(null, { status: 401 }) });
     expect(vue()).toEqual(["acLogin"]);
+    expect(msg().textContent).toBe("Vous n'êtes plus connecté.");
+  });
+
+  it("découverte par un échange en arrière-plan, le compte à l'écran : revient aussi à la connexion", async () => {
+    let perdue = false;
+    const { store } = await connecte({
+      "GET projets": () => (perdue ? new Response(null, { status: 401 }) : json([])),
+    });
+    expect(vue()).toEqual(["acAccount"]);
+    perdue = true;
+    await store.sync();
+    await vi.waitFor(() => expect(vue()).toEqual(["acLogin"]));
+    expect(store.account()).toBeNull();
+  });
+
+  it("l'offre de passkey à l'écran : revient à la connexion", async () => {
+    vi.mocked(webauthn.platformAuthenticatorIsAvailable).mockResolvedValue(true);
+    await auCode({
+      "POST code/verifier": () => json(COMPTE),
+      "POST passkey/ajout/options": () => new Response(null, { status: 401 }),
+    });
+    soumettre("acCodeForm");
+    await vi.waitFor(() => expect(vue()).toEqual(["acOffer"]));
+    el("acOfferYes").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acLogin"]));
+  });
+
+  it("sans compte à l'écran, ne lance pas la connexion au chargement de la page", async () => {
+    monter();
+    await settled();
+    expect(webauthn.browserSupportsWebAuthnAutofill).not.toHaveBeenCalled();
   });
 });
 
@@ -464,32 +494,91 @@ describe("se déconnecter", () => {
 });
 
 describe("supprimer le compte", () => {
-  it("demande d'abord, et ne fait rien sans accord", async () => {
-    const { store, routes } = await connecte();
-    vi.mocked(confirm).mockReturnValueOnce(false);
+  const demander = async () => {
     el("acDelete").click();
-    await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(el("acDeleteBox").hidden).toBe(false));
+  };
+  const avecClient = (id: string) => ({
+    ...newProject(id, "Dupont", "complet", 1),
+    devis: { ...newDevis(), client: { nom: "M. Martin", adresse: "1 rue des Lilas", chantier: "" } },
+  });
+
+  it("demande d'abord, et « Garder mon compte » ne fait rien", async () => {
+    const { store, routes } = await connecte();
+    await demander();
+    expect(routes()).not.toContain("DELETE compte");
+    el("acDeleteNo").click();
     await settled();
+    expect(el("acDeleteBox").hidden).toBe(true);
     expect(routes()).not.toContain("DELETE compte");
     expect(store.account()).toEqual(COMPTE);
   });
 
-  it("revient à la connexion, et les escaliers restent sur l'appareil", async () => {
+  it("dit ce qui est effacé, et ce que contient « Effacer aussi de cet appareil »", async () => {
+    const { store } = await connecte();
+    await store.save(newProject("a", "Dupont", "complet", 1));
+    await store.save(avecClient("b"));
+    await demander();
+    expect(el("acDeleteBox").textContent).toContain("profil de votre atelier");
+    expect(el("acDeleteBox").textContent).toContain("tarifs");
+    expect(el("acDeleteBox").textContent).toContain("Effacer aussi de cet appareil");
+    expect(el("acWipeWhat").textContent).toContain("Vos 2 escaliers, avec leurs devis et leurs clients");
+    expect(el<HTMLInputElement>("acWipe").checked).toBe(false);
+  });
+
+  it("un seul escalier, sans devis : ne parle ni de plusieurs, ni de clients", async () => {
+    const { store } = await connecte();
+    await store.save(newProject("a", "Dupont", "complet", 1));
+    await demander();
+    expect(el("acWipeWhat").textContent).toMatch(/^Votre escalier\. Sinon, il reste ici/);
+  });
+
+  it("aucun escalier sur l'appareil : le choix n'est pas proposé, et le compte part quand même", async () => {
+    const { routes } = await connecte();
+    await demander();
+    expect(el("acWipeBox").hidden).toBe(true);
+    el("acDeleteYes").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acLogin"]));
+    expect(routes()).toContain("DELETE compte");
+  });
+
+  it("sans le choix : revient à la connexion, et les escaliers restent sur l'appareil", async () => {
     const { store, routes } = await connecte();
     await store.save(newProject("a", "Dupont", "complet", 1));
     await store.sync();
-    el("acDelete").click();
+    await demander();
+    el("acDeleteYes").click();
     await vi.waitFor(() => expect(vue()).toEqual(["acLogin"]));
     expect(routes()).toContain("DELETE compte");
     expect(store.account()).toBeNull();
     expect(await store.get("a")).not.toBeNull();
+    expect(el("acDeleteBox").hidden).toBe(true);
   });
 
-  it("un refus du serveur est dit, et le compte reste", async () => {
+  it("avec le choix : les escaliers quittent l'appareil, envoyés ou non", async () => {
+    const { store, routes } = await connecte({
+      "PUT projets": () => json({ index: [], refus: [{ id: "b", raison: "Sa date est impossible." }] }),
+    });
+    await store.save(newProject("a", "Dupont", "complet", 1));
+    await store.save(avecClient("b"));
+    await store.sync();
+    await demander();
+    el<HTMLInputElement>("acWipe").checked = true;
+    el("acDeleteYes").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acLogin"]));
+    expect(routes()).toContain("DELETE compte");
+    expect(await store.list()).toEqual([]);
+  });
+
+  it("un refus du serveur est dit, et le compte comme les escaliers restent", async () => {
     const { store } = await connecte({ "DELETE compte": refus(500, "Base indisponible.") });
-    el("acDelete").click();
+    await store.save(newProject("a", "Dupont", "complet", 1));
+    await demander();
+    el<HTMLInputElement>("acWipe").checked = true;
+    el("acDeleteYes").click();
     await vi.waitFor(() => expect(msg().textContent).toBe("Base indisponible."));
     expect(store.account()).toEqual(COMPTE);
+    expect(await store.get("a")).not.toBeNull();
     expect(vue()).toEqual(["acAccount"]);
   });
 });

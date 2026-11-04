@@ -101,6 +101,12 @@ describe("devis enregistré avec l'escalier", () => {
   });
 });
 
+/** Session perdue, vue de l'onglet. */
+let caches = false;
+afterEach(() => {
+  caches = false;
+});
+
 describe("onglet Devis", () => {
   let project: Project;
   let R: Stair | null;
@@ -129,6 +135,7 @@ describe("onglet Devis", () => {
       stair: () => R,
       tarifs: () => tarifs,
       entreprise: () => entreprise,
+      clientsCaches: () => caches,
       saved: (d) => {
         project = withDevis(project, d, project.modifie + 1);
         view.refresh();
@@ -271,6 +278,7 @@ describe("remise au client", () => {
       stair: () => R,
       tarifs: () => T,
       entreprise: () => entreprise,
+      clientsCaches: () => caches,
       saved: (d) => {
         project = withDevis(project, d, project.modifie + 1);
         view.refresh();
@@ -396,6 +404,25 @@ describe("remise au client", () => {
     $<HTMLButtonElement>("#dvAnnuler").click();
     expect(project.devis!.client.nom).toBe("Dupont");
     expect($("#dvChip").textContent).toBe("Remis au client");
+  });
+
+  it("session perdue : ni client ni devis à l'écran, seulement de quoi se reconnecter, puis tout revient", () => {
+    const devis = project.devis;
+    project = { ...project, devis: null };
+    caches = true;
+    view.refresh();
+    expect($("#devisView").classList.contains("cache")).toBe(true);
+    expect($<HTMLInputElement>("#dvNom").value).toBe("");
+    expect($("#dvMsgTxt").textContent).toContain("cachés jusqu'à votre reconnexion");
+    $<HTMLButtonElement>("#dvCompte").click();
+    expect(compte).toBe(1);
+
+    project = { ...project, devis };
+    caches = false;
+    view.refresh();
+    expect($("#devisView").classList.contains("cache")).toBe(false);
+    expect($("#dvMsg").hidden).toBe(true);
+    expect($<HTMLInputElement>("#dvNom").value).toBe("Dupont");
   });
 
   it("demande un compte, ou le réseau, et garde le brouillon", async () => {

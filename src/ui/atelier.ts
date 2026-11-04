@@ -60,7 +60,7 @@ export class AtelierStore {
     this.put(a);
   }
 
-  /** Le profil quitte l'appareil : déconnexion, ou connexion à un autre compte. */
+  /** Le profil quitte l'appareil : déconnexion, connexion à un autre compte, ou compte supprimé. */
   clear(): void {
     this.a = null;
     write(this.storage, ATELIER_KEY, null);
