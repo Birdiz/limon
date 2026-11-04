@@ -8,7 +8,7 @@ Calcul et dessin d'escaliers en bois pour menuisiers, sur le web (https://quart-
 - **Trémie et échappée** : contrôle de la hauteur libre sous le plancher (alerte sous 2 000 mm, erreur sous 1 900 mm) et trémie minimale.
 - **Corrections chiffrées** : quand une règle n'est pas tenue, l'outil propose la valeur qui la rétablit (reculement ou longueur côté départ, marches balancées, hauteur de limon, trémie), applicable d'un clic.
 - **Débit** : alerte quand une pièce dépasse les plateaux disponibles, volume brut et poids selon l'essence.
-- **Compte facultatif** : connexion par Face ID ou l'empreinte (passkey), code à 6 chiffres par e-mail pour créer le compte et en secours. Les projets suivent l'artisan d'un appareil à l'autre et restent utilisables sans réseau.
+- **Compte facultatif** : connexion par Face ID ou l'empreinte (passkey), code à 8 chiffres par e-mail pour créer le compte et en secours. Les projets suivent l'artisan d'un appareil à l'autre et restent utilisables sans réseau.
 - **Lien de projet et fiche PDF** : les réglages qui diffèrent de l'exemple vont dans l'adresse de la page (après le `#`) ; la fiche PDF téléchargée réunit les cotes, les contrôles, le plan, la vue 3D, la fiche des marches et la liste de débit.
 - **Plan et 3D** : plan coté en SVG, vue 3D Three.js avec limons, poteau, marches et contremarches.
 - **Export CNC** : zip contenant `marches.dxf`, `limons.dxf`, `contremarches.dxf` (si l'escalier en a), `poteau.dxf` (quart tournant), `garde-corps.dxf` (s'il y en a un), la fiche des marches en CSV et une notice.
