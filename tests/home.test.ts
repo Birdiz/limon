@@ -2,10 +2,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { newDevis } from "../src/core/devis";
+import { newDevis, remettre, type Devis } from "../src/core/devis";
 import { DEFAULTS } from "../src/core/params";
 import { newProject, projectFile, withEtat, type Project } from "../src/core/project";
 import { compute } from "../src/core/stair";
+import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { Home, type HomeHost } from "../src/ui/home";
 import { LocalStore, type KeyValue, type ProjectStore } from "../src/ui/store";
 
@@ -282,6 +283,33 @@ describe("gestes de l'accueil, sur un vrai magasin en mémoire", () => {
       await settled();
       expect(await noms()).toEqual(["Dupont"]);
       expect(el("homeDraft").children).toHaveLength(1);
+    });
+
+    it("nomme le devis déjà remis au client qui part avec l'escalier", async () => {
+      const version = {
+        numero: "2026-0012",
+        nom: "Dupont",
+        params: DEFAULTS,
+        tarifs: TARIFS_VIDES,
+        entreprise: ENTREPRISE_VIDE,
+        chiffrage: {} as Devis,
+      };
+      const d1 = remettre(newDevis(), version, 1);
+      const remis = { ...dupont(), devis: remettre({ ...d1, rouvert: true }, version, 2) };
+      await ouvrir({}, remis, { ...martin(), devis: newDevis() });
+
+      bouton("del", "a").click();
+      await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+      const avec = vi.mocked(confirm).mock.lastCall![0]!;
+      expect(avec).toContain("2026-0012");
+      expect(avec.match(/2026-0012/g)).toHaveLength(1);
+      expect(avec).toContain("déjà remis au client");
+
+      // Un devis jamais remis ne change rien à la question.
+      vi.mocked(confirm).mockClear();
+      bouton("del", "b").click();
+      await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+      expect(vi.mocked(confirm).mock.lastCall![0]!).not.toContain("remis");
     });
 
     it("dit d'où l'escalier s'efface, selon qu'il y a un compte", async () => {
