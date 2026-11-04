@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DEFAULTS } from "../src/core/params";
 import { newProject } from "../src/core/project";
-import { LocalStore, write, type KeyValue } from "../src/ui/store";
+import { LocalStore, read, readJSON, write, type KeyValue } from "../src/ui/store";
 
 describe("projets dans le navigateur", () => {
   beforeEach(() => localStorage.clear());
@@ -30,6 +30,13 @@ describe("projets dans le navigateur", () => {
     expect(localStorage.getItem("limon-v2")).not.toBeNull();
     // Une seule fois : un second chargement relit la liste, sans recréer de projet.
     expect(await new LocalStore().list()).toEqual([p]);
+  });
+
+  it("reprend aussi une ancienne version illisible, aux réglages de l'exemple", async () => {
+    localStorage.setItem("limon-v2", "{pas du JSON");
+    const [p, ...rest] = await new LocalStore().list();
+    expect(rest).toHaveLength(0);
+    expect(p!.params).toEqual(DEFAULTS);
   });
 
   it("commence vide sans ancienne version", async () => {
@@ -179,6 +186,33 @@ function refusing(name: "QuotaExceededError" | "SecurityError") {
   };
   return d;
 }
+
+describe("lecture du JSON", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("rend la valeur telle qu'elle est écrite, sans la vérifier", () => {
+    localStorage.setItem("k", '{"a":1}');
+    expect(readJSON(localStorage, "k")).toEqual({ a: 1 });
+    localStorage.setItem("k", "5");
+    expect(readJSON(localStorage, "k")).toBe(5);
+  });
+
+  it("rend null pour une valeur illisible, absente ou un stockage indisponible", () => {
+    localStorage.setItem("k", "{pas du JSON");
+    expect(readJSON(localStorage, "k")).toBeNull();
+    expect(read(localStorage, "k")).toBe("{pas du JSON");
+    expect(readJSON(localStorage, "absente")).toBeNull();
+    expect(readJSON(null, "k")).toBeNull();
+    const bloque: KeyValue = {
+      getItem: () => {
+        throw new Error("bloqué");
+      },
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    };
+    expect(readJSON(bloque, "k")).toBeNull();
+  });
+});
 
 describe("écriture refusée", () => {
   it("write dit si l'écriture a eu lieu", () => {

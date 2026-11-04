@@ -3,7 +3,7 @@ import { joinAtelier, mergeAtelier, redatedAtelier, sameAtelier, type Atelier } 
 import { avecRemis, fromNewerVersion, sanitizeProject, stamped, type Project } from "../core/project";
 import { ApiError, NotSignedIn, type Api } from "./api";
 import type { AtelierStore } from "./atelier";
-import { browserStorage, read, write, type KeyValue, type LocalStore, type ProjectStore } from "./store";
+import { browserStorage, readJSON, write, type KeyValue, type LocalStore, type ProjectStore } from "./store";
 
 const SYNC_KEY = "limon-synchro";
 /** Délai entre la dernière modification et l'envoi. */
@@ -55,11 +55,7 @@ const EMPTY: SyncState = {
 
 /** État enregistré, par cet onglet ou un autre ; null s'il est absent ou abîmé. */
 function readState(storage: KeyValue | null): Partial<SyncState> | null {
-  try {
-    return JSON.parse(read(storage, SYNC_KEY) ?? "null") as Partial<SyncState> | null;
-  } catch {
-    return null;
-  }
+  return readJSON(storage, SYNC_KEY) as Partial<SyncState> | null;
 }
 
 /** Découpe un envoi : 500 éléments au plus, et de quoi tenir dans ce que le serveur accepte. */

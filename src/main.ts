@@ -39,7 +39,7 @@ import { Aide } from "./ui/aide";
 import { AtelierPanel, AtelierStore } from "./ui/atelier";
 import { TarifsPanel } from "./ui/tarifs";
 import { DevisView } from "./ui/devis";
-import { fmt } from "./core/format";
+import { day, fmt } from "./core/format";
 import { Home } from "./ui/home";
 import { showSketch } from "./ui/sketch";
 import { Api } from "./ui/api";
@@ -47,7 +47,7 @@ import { startPWA } from "./ui/pwa";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
 import { leaveOldHost } from "./ui/move";
-import { LocalStore, browserStorage, newId } from "./ui/store";
+import { LocalStore, browserStorage, newId, read, write } from "./ui/store";
 import { SyncStore } from "./ui/sync";
 import { Tabs } from "./ui/tabs";
 import { Undo } from "./ui/undo";
@@ -230,8 +230,6 @@ function sketches(focused = document.activeElement?.id): void {
     .forEach((fig) => showSketch(fig, params.forme, focused, params.tForme));
 }
 
-const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
-
 /** État de l'escalier ouvert : pastille de l'en-tête et bandeau au-dessus de la fiche. */
 function showEtat(): void {
   const fini = project?.etat === "fini";
@@ -362,14 +360,16 @@ byId("pjOpen").addEventListener("click", () => void home.show());
 byId("acOpen").addEventListener("click", () => void home.show("compte"));
 byId("pjNew").addEventListener("click", () => void startNew());
 
+/** Préférences de l'appareil : une écriture refusée ne dit rien à l'artisan, le choix vaut pour cette visite. */
+const prefs = browserStorage();
+
 /** Devis, en préparation : visible sur l'appareil ouvert une fois avec ?devis, masqué de nouveau avec ?devis=0. */
 const DEVIS_KEY = "limon-devis";
-try {
-  if (asked.has("devis")) localStorage.setItem(DEVIS_KEY, asked.get("devis") === "0" ? "0" : "1");
-  document.body.classList.toggle("devis", localStorage.getItem(DEVIS_KEY) === "1");
-} catch {
-  document.body.classList.toggle("devis", asked.has("devis") && asked.get("devis") !== "0");
-}
+if (asked.has("devis")) {
+  const on = asked.get("devis") !== "0";
+  write(prefs, DEVIS_KEY, on ? "1" : "0");
+  document.body.classList.toggle("devis", on);
+} else document.body.classList.toggle("devis", read(prefs, DEVIS_KEY) === "1");
 
 /** Réglages avancés : une préférence de l'appareil, réglée dans l'onglet Mon compte. */
 const ADV_KEY = "limon-avance";
@@ -378,19 +378,11 @@ function setAdvanced(on: boolean): void {
   byId<HTMLInputElement>("advToggle").checked = on;
   sketches();
 }
-try {
-  setAdvanced(localStorage.getItem(ADV_KEY) === "1");
-} catch {
-  setAdvanced(false);
-}
+setAdvanced(read(prefs, ADV_KEY) === "1");
 byId<HTMLInputElement>("advToggle").addEventListener("change", (e) => {
   const on = (e.target as HTMLInputElement).checked;
   setAdvanced(on);
-  try {
-    localStorage.setItem(ADV_KEY, on ? "1" : "0");
-  } catch {
-    // Stockage indisponible : l'option vaut pour cette visite.
-  }
+  write(prefs, ADV_KEY, on ? "1" : "0");
 });
 
 /** Une seule vue à l'écran, le plan ou la 3D, chacune avec ses deux points de vue. */
@@ -409,22 +401,14 @@ function setFavori(plan: boolean): void {
   byId("favori3d").setAttribute("aria-pressed", String(!plan));
   showVue(plan);
 }
-try {
-  setFavori(localStorage.getItem(VUE_KEY) === "plan");
-} catch {
-  setFavori(false);
-}
+setFavori(read(prefs, VUE_KEY) === "plan");
 for (const [id, plan] of [
   ["favoriPlan", true],
   ["favori3d", false],
 ] as const) {
   byId(id).addEventListener("click", () => {
     setFavori(plan);
-    try {
-      localStorage.setItem(VUE_KEY, plan ? "plan" : "3d");
-    } catch {
-      // Stockage indisponible : le choix vaut pour cette visite.
-    }
+    write(prefs, VUE_KEY, plan ? "plan" : "3d");
   });
 }
 
