@@ -976,6 +976,51 @@ describe("numéros de devis", () => {
   });
 });
 
+/** Une ligne de la base ou de l'export, relue comme du JSON : les dates y sont du texte. */
+type Ligne = Record<string, unknown>;
+const relue = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+interface Donnees {
+  compte: Ligne;
+  passkeys: Ligne[];
+  sessions: Ligne[];
+  atelier: Ligne;
+  projets: Ligne[];
+  suppressions: Ligne[];
+  numerosDevis: Ligne[];
+}
+
+/** Où l'export rend une ligne de la base, sous le nom de ses colonnes. */
+const RENDU: Record<string, (d: Donnees, l: Ligne) => Ligne | undefined> = {
+  comptes: (d) => d.compte,
+  passkeys: (d, l) => d.passkeys.find((p) => p.id === l.id),
+  sessions: (d, l) => d.sessions.find((x) => x.cree === l.cree),
+  ateliers: (d) => ({ ...d.atelier, donnees: d.atelier.defauts }),
+  projets: (d, l) => {
+    if (l.supprime) return { ...d.suppressions.find((x) => x.id === l.id), supprime: true, donnees: null };
+    const p = d.projets.find((x) => x.id === l.id);
+    return p && { id: p.id, modifie: p.modifie, supprime: false, donnees: p };
+  },
+  devis_numeros: (d, l) => d.numerosDevis.find((n) => n.projet === l.projet),
+};
+
+const DEJA_RENDU = "L'identifiant du compte, déjà rendu dans `compte`.";
+/** Ce que l'export ne rend pas, table entière ou colonne, et pourquoi. Une colonne ajoutée à la base doit être rendue
+    par la route ou écrite ici : l'export est la copie à laquelle la personne a droit (RGPD, art. 15). */
+const HORS_EXPORT: Record<string, string> = {
+  "passkeys.compte": DEJA_RENDU,
+  "sessions.compte": DEJA_RENDU,
+  "ateliers.compte": DEJA_RENDU,
+  "projets.compte": DEJA_RENDU,
+  "devis_numeros.compte": DEJA_RENDU,
+  "sessions.hash": "Empreinte du jeton de session : un secret, qui ne dit rien de la personne et ne sort jamais.",
+  codes: "Code de connexion haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
+  defis: "Défi de passkey : valable 5 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
+  purge_passage: "L'heure du dernier passage de la purge : rien sur une personne.",
+  schema_version: "Le numéro de la dernière migration : rien sur une personne.",
+};
+const raisonHors = (table: string, colonne: string) => HORS_EXPORT[table] ?? HORS_EXPORT[`${table}.${colonne}`];
+
 describe("compte", () => {
   it("donne ses données", async () => {
     const f = browser(s);
@@ -986,6 +1031,126 @@ describe("compte", () => {
     const d = (await res.json()) as { compte: { email: string }; projets: { nom: string }[] };
     expect(d.compte.email).toBe("a@exemple.fr");
     expect(d.projets.map((p) => p.nom)).toEqual(["Dupont"]);
+  });
+
+  describe("export complet", () => {
+    /** Un compte dont toutes les tables et toutes les colonnes sont remplies, à côté d'un autre compte. */
+    async function compteRempli() {
+      const f = browser(s);
+      const { id } = await login(s, f, "a@exemple.fr");
+      await s.db.query(
+        `update comptes set droits_jusqu_a = now() + interval '1 year', averti = now() - interval '2 days',
+           essai = now() - interval '3 days' where id = $1`,
+        [id],
+      );
+      await s.db.query(
+        `insert into passkeys (id, compte, cle, compteur, transports, nom, utilise)
+         values ('cle-a', $1, 'publique', 7, 'internal,hybrid', 'Mon téléphone', now())`,
+        [id],
+      );
+      const devis = { ...newDevis(), client: { nom: "Mme Martin", adresse: "1 rue Ici", chantier: "" } };
+      const changements = [
+        { id: "a", projet: { ...newProject("a", "Dupont", "complet", 3), devis } },
+        { id: "b", projet: newProject("b", "Parti", "complet", 3) },
+      ];
+      await post(f, "/api/projets", { changements }, "PUT");
+      // Le numéro d'un devis remis reste une fois l'escalier supprimé.
+      await post(f, "/api/devis/numero", { projet: "b" });
+      await post(f, "/api/projets", { changements: [{ id: "b", modifie: 20, supprime: true }] }, "PUT");
+      const atelier = {
+        ...newAtelier(atelierDefauts(DEFAULTS), 10),
+        tarifs: { ...TARIFS_VIDES, taux: 45 },
+        entreprise: { ...ENTREPRISE_VIDE, nom: "Menuiserie Exemple" },
+      };
+      await post(f, "/api/atelier", { atelier }, "PUT");
+      // Un code de connexion en cours pour cette adresse, et un autre compte.
+      await post(browser(s), "/api/code", { email: "a@exemple.fr" });
+      const g = browser(s);
+      await login(s, g, "b@exemple.fr");
+      await post(
+        g,
+        "/api/projets",
+        { changements: [{ id: "c", projet: newProject("c", "Voisin", "guide", 3) }] },
+        "PUT",
+      );
+      await post(g, "/api/projets", { changements: [{ id: "d", modifie: 30, supprime: true }] }, "PUT");
+      const res = await f("/api/compte/donnees");
+      expect(res.status).toBe(200);
+      const texte = await res.text();
+      return { id, texte, d: JSON.parse(texte) as Donnees };
+    }
+
+    it("rend chaque colonne, ou écrit pourquoi elle reste dehors", async () => {
+      const { id, d } = await compteRempli();
+      const colonnes = await s.db.query<{ table_name: string; column_name: string }>(
+        "select table_name, column_name from information_schema.columns where table_schema = 'public'",
+      );
+      const oublis = colonnes
+        .filter((c) => !raisonHors(c.table_name, c.column_name) && !RENDU[c.table_name])
+        .map((c) => `${c.table_name}.${c.column_name}`);
+      expect(oublis).toEqual([]);
+      // Une raison pour une colonne qui n'existe plus ne couvre plus rien.
+      const connues = new Set(colonnes.flatMap((c) => [c.table_name, `${c.table_name}.${c.column_name}`]));
+      expect(Object.keys(HORS_EXPORT).filter((k) => !connues.has(k))).toEqual([]);
+
+      for (const table of Object.keys(RENDU)) {
+        const lignes = relue(
+          await s.db.query<Ligne>(`select * from ${table} where ${table === "comptes" ? "id" : "compte"} = $1`, [id]),
+        );
+        expect(lignes.length, table).toBeGreaterThan(0);
+        const visees = colonnes.filter((c) => c.table_name === table && !raisonHors(table, c.column_name));
+        for (const ligne of lignes) {
+          const rendu = RENDU[table]!(d, ligne) as Ligne;
+          for (const { column_name: c } of visees) {
+            // Une colonne vide ne prouverait rien, sauf le contenu d'une trace de suppression.
+            if (!(table === "projets" && c === "donnees" && ligne.supprime))
+              expect(ligne[c], `${table}.${c} à remplir dans le test`).not.toBeNull();
+            expect(rendu?.[c], `${table}.${c}`).toEqual(ligne[c]);
+          }
+        }
+      }
+    });
+
+    it("rend les clés attendues et ne laisse aucune empreinte", async () => {
+      const { texte, d } = await compteRempli();
+      expect(Object.keys(d.compte).sort()).toEqual(
+        ["averti", "cree", "droits_jusqu_a", "email", "essai", "id", "statut", "vu"].sort(),
+      );
+      expect(d.passkeys).toEqual([
+        expect.objectContaining({ id: "cle-a", transports: "internal,hybrid", utilise: expect.any(String) }),
+      ]);
+      expect(d.sessions).toEqual([{ cree: expect.any(String), expire: expect.any(String) }]);
+      expect(d.suppressions).toEqual([{ id: "b", modifie: 20 }]);
+      expect(d.numerosDevis).toEqual([expect.objectContaining({ projet: "b", rang: 1 })]);
+      const empreintes = [
+        ...(await s.db.query<{ hash: string }>("select hash from sessions")),
+        ...(await s.db.query<{ hash: string }>("select hash from codes")),
+      ];
+      expect(empreintes.length).toBeGreaterThan(2);
+      for (const { hash } of empreintes) expect(texte).not.toContain(hash);
+      expect(texte).not.toContain('"hash"');
+    });
+
+    it("garde l'e-mail, l'atelier, les tarifs, la fiche, les projets et les clients", async () => {
+      const { d } = await compteRempli();
+      expect(d.compte.email).toBe("a@exemple.fr");
+      expect(d.atelier).toMatchObject({
+        defauts: atelierDefauts(DEFAULTS),
+        tarifs: { taux: 45 },
+        entreprise: { nom: "Menuiserie Exemple" },
+      });
+      expect(d.projets).toEqual([
+        expect.objectContaining({
+          nom: "Dupont",
+          devis: expect.objectContaining({ client: expect.objectContaining({ nom: "Mme Martin" }) }),
+        }),
+      ]);
+    });
+
+    it("ne rend rien d'un autre compte", async () => {
+      const { texte } = await compteRempli();
+      for (const autre of ["b@exemple.fr", "Voisin", '"d"']) expect(texte).not.toContain(autre);
+    });
   });
 
   it("s'efface entièrement", async () => {

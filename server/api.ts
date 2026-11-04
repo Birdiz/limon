@@ -390,26 +390,42 @@ export function api(cfg: ApiConfig): Hono<Env> {
     return c.body(null, 204);
   });
 
+  /** Tout ce que le compte garde. Une colonne ajoutée à la base entre ici ou dans `HORS_EXPORT` (`tests/api.test.ts`). */
   app.get("/compte/donnees", auth, async (c) => {
     const id = c.get("compte");
-    const [compte] = await db.query<{ email: string; cree: Date; statut: string }>(
-      "select email, cree, statut from comptes where id = $1",
+    const [compte] = await db.query(
+      "select id, email, cree, statut, droits_jusqu_a, vu, averti, essai from comptes where id = $1",
       [id],
     );
-    const passkeys = await db.query<{ nom: string; cree: Date }>("select nom, cree from passkeys where compte = $1", [
-      id,
-    ]);
+    const passkeys = await db.query(
+      "select id, nom, cle, compteur, transports, cree, utilise from passkeys where compte = $1 order by cree",
+      [id],
+    );
+    // Les dates seulement : l'empreinte ne sort jamais.
+    const sessions = await db.query("select cree, expire from sessions where compte = $1 order by cree", [id]);
     const projets = await db.query<{ donnees: Project }>(
       "select donnees from projets where compte = $1 and not supprime order by modifie desc",
+      [id],
+    );
+    const suppressions = await db.query(
+      "select id, modifie from projets where compte = $1 and supprime order by modifie desc",
+      [id],
+    );
+    // Un numéro reste après la suppression de son escalier.
+    const numerosDevis = await db.query(
+      "select projet, annee, rang, cree from devis_numeros where compte = $1 order by annee, rang",
       [id],
     );
     c.header("Content-Disposition", 'attachment; filename="quart-de-tour-donnees.json"');
     return c.json({
       format: "quart-de-tour-donnees",
-      compte: { email: compte!.email, cree: compte!.cree, statut: compte!.statut },
+      compte,
       passkeys,
+      sessions,
       atelier: await atelierOf(id),
       projets: projets.map((p) => p.donnees),
+      suppressions,
+      numerosDevis,
     });
   });
 
