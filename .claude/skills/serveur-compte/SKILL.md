@@ -65,6 +65,8 @@ Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garde
 
 **Attente** : `SyncState.serveurAtelier` retient la date reçue au dernier échange. Un profil plus récent compte dans `pending` (`atelierAttend` le dit, l'en-tête le nomme « votre atelier »), et dans la garde de `signOut`. Un refus (400 de `PUT /atelier`, date impossible) reste dit dans `erreur` et compte toujours dans `pending`, l'en-tête ne promet donc rien, même hors ligne. Seule la garde de `signOut` l'écarte (`atelierRefuse`, jusqu'à la version suivante) : refusé encore à chaque essai, il ne bloque pas la déconnexion et reste sur l'appareil, comme un escalier refusé. Limite : une connexion à une autre adresse après une session perdue l'efface, comme tout profil.
 
+**Horloge remise à l'heure** : `stamped` date chaque version après la précédente, donc un profil daté de plus de 732 jours d'avance serait refusé à chaque version. À un 400, si la date du profil est devant l'horloge de l'appareil, `redatedAtelier` ramène à maintenant ce qui dépasse, le reste gardant sa date, et le profil repart aussitôt. Une horloge encore en avance laisse le refus. Limites : la partie ramenée passe pour la plus récente, et peut remplacer ce qu'un autre appareil a changé depuis ; un escalier dans ce cas reste refusé.
+
 ## Compte à l'écran
 
 Dans l'en-tête (bouton et état de l'enregistrement, qui nomme un escalier refusé) et l'onglet Mon compte de l'accueil (`AccountPanel`, `src/ui/account.ts`), avec la liste des refus et leur « Garder une copie », la notice de confidentialité (responsable : Thomas Bouzy) et le bloc « Bientôt », qui annonce ce que l'abonnement apportera (nom et logo sur la fiche, devis, état du chantier, lien de visite, versions).

@@ -1,5 +1,5 @@
 import type { Changement, Compte, Entree, Refus } from "../core/account";
-import { joinAtelier, mergeAtelier, sameAtelier, type Atelier } from "../core/atelier";
+import { joinAtelier, mergeAtelier, redatedAtelier, sameAtelier, type Atelier } from "../core/atelier";
 import { fromNewerVersion, sanitizeProject, stamped, type Project } from "../core/project";
 import { ApiError, NotSignedIn, type Api } from "./api";
 import type { AtelierStore } from "./atelier";
@@ -114,6 +114,7 @@ export class SyncStore implements ProjectStore {
     private api: Api,
     private storage: KeyValue | null = browserStorage(),
     private atelier: AtelierStore | null = null,
+    private now: () => number = Date.now,
   ) {
     let raw: Partial<SyncState> | null;
     try {
@@ -337,7 +338,7 @@ export class SyncStore implements ProjectStore {
     return !!a && (serveurAtelier === null || a.modifie > serveurAtelier);
   }
 
-  /** Le serveur a refusé la version du profil qui attend, et la refusera encore. */
+  /** Le serveur a refusé la version du profil qui attend, et la refusera tant que l'horloge reste en avance. */
   private atelierRefused(): boolean {
     return this.atelierWaits() && this.atelier?.get()?.modifie === this.state.atelierRefuse;
   }
@@ -404,8 +405,17 @@ export class SyncStore implements ProjectStore {
     try {
       theirs = mine ? await this.api.pushAtelier(mine) : await this.api.atelierOf();
     } catch (e) {
-      // Le serveur refuse cette version, et la refusera encore : dite à l'écran, elle ne bloque pas la déconnexion.
-      if (mine && e instanceof ApiError && e.status === 400) this.state.atelierRefuse = mine.modifie;
+      if (mine && e instanceof ApiError && e.status === 400) {
+        // Une date devant l'horloge de l'appareil : celle-ci a été remise à l'heure, le profil repart sans rien à faire.
+        const cur = this.atelier.get();
+        const now = this.now();
+        if (cur && cur.modifie > now) {
+          this.atelier.adopt(redatedAtelier(cur, now));
+          return this.exchangeAtelier();
+        }
+        // L'horloge est toujours en avance : dite à l'écran, cette version ne bloque pas la déconnexion.
+        this.state.atelierRefuse = mine.modifie;
+      }
       throw e;
     }
     this.state.atelierRefuse = null;

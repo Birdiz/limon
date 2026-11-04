@@ -118,6 +118,19 @@ export function joinAtelier(mine: Atelier, compte: Atelier): Atelier {
   return { ...merged, defauts: { ...compte.defauts, ...Object.fromEntries(choisis) } };
 }
 
+/**
+ * Profil daté plus loin que `now` par une horloge en avance, remise à l'heure depuis : ce qui dépasse prend `now`,
+ * le reste garde sa date. Sans cela, `stamped` daterait encore chaque version suivante après l'impossible.
+ */
+export function redatedAtelier(a: Atelier, now: number): Atelier {
+  const date = (k: AtelierPart) => Math.min(a.dates[k], now);
+  return {
+    ...a,
+    dates: { defauts: date("defauts"), tarifs: date("tarifs"), entreprise: date("entreprise") },
+    modifie: now,
+  };
+}
+
 /** Vrai si les deux profils disent la même chose, dates comprises, dans quelque ordre que soient leurs clés. */
 export function sameAtelier(a: Atelier, b: Atelier): boolean {
   return memeTexte(sanitizeAtelier(a), sanitizeAtelier(b));

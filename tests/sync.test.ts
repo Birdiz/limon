@@ -23,7 +23,7 @@ beforeAll(async () => {
 beforeEach(() => s.reset());
 
 /** Un appareil : son stockage, son navigateur (cookie), et un réseau qu'on peut couper. */
-function device(storage = memory()) {
+function device(storage = memory(), now: () => number = Date.now) {
   const f = browser(s);
   const atelier = new AtelierStore(storage);
   const d = {
@@ -48,6 +48,7 @@ function device(storage = memory()) {
       }),
       storage,
       atelier,
+      now,
     ),
     async signIn(email: string) {
       await d.store.signIn(await login(s, f, email));
@@ -629,7 +630,9 @@ describe("refus du serveur à l'envoi", () => {
   });
 
   it("un profil de l'atelier refusé n'arrête pas les escaliers", async () => {
-    const a = await connected();
+    const a = device(memory(), () => 1e300);
+    await new LocalStore(a.storage).save(project("autre", "Autre", 1));
+    await a.signIn("jean@exemple.fr");
     a.atelier.set({ defauts: atelierDefauts(DEFAULTS) }, 1e300);
     await a.store.save(project("p", "Dupont", 10));
     await a.store.sync();
@@ -949,15 +952,29 @@ describe("synchronisation du profil de l'atelier", () => {
     expect((await a.store.status()).pending).toBe(0);
   });
 
+  /** Trois mille jours d'avance : le serveur refuse tout ce que date cette horloge. */
+  const horlogeEnAvance = () => {
+    const horloge = { avance: 3000 * 86400_000, now: () => Date.now() + horloge.avance };
+    return horloge;
+  };
+  /** Appareil connecté à un compte rempli, avec une horloge en avance et un profil daté par elle. */
+  const refuse = async (taux: number) => {
+    const horloge = horlogeEnAvance();
+    await compteRempli();
+    const d = device(memory(), horloge.now);
+    await d.signIn("jean@exemple.fr");
+    d.atelier.set({ tarifs: { ...TARIFS_VIDES, taux } }, horloge.now());
+    await d.store.sync();
+    return { d, horloge };
+  };
+
   it("un profil refusé reste dit et compte dans l'attente, et une autre version repart", async () => {
-    const a = await compteRempli();
-    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 60 } }, Date.now() + 3000 * 86400_000);
-    await a.store.sync();
+    const { d: a, horloge } = await refuse(60);
     const st = await a.store.status();
     expect(st).toMatchObject({ pending: 1, atelierAttend: true });
     expect(st.erreur).toContain("profil de l'atelier");
     // L'état survit au rechargement de la page.
-    const rouvert = device(a.storage);
+    const rouvert = device(a.storage, horloge.now);
     expect(await rouvert.store.status()).toMatchObject({ pending: 1, atelierAttend: true });
     // Hors ligne, aucune erreur à dire : l'attente seule empêche l'en-tête d'annoncer « Enregistré ».
     a.online = false;
@@ -965,14 +982,57 @@ describe("synchronisation du profil de l'atelier", () => {
     expect(await a.store.status()).toMatchObject({ pending: 1, offline: true, erreur: null });
     a.online = true;
     // Une version suivante est de nouveau à envoyer.
-    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 61 } }, Date.now());
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 61 } }, horloge.now());
     expect(await a.store.status()).toMatchObject({ pending: 1, atelierAttend: true });
   });
 
+  it("l'horloge remise à l'heure, un profil refusé rejoint le compte sans rien à faire", async () => {
+    const { d, horloge } = await refuse(77);
+    const fiche = (await new Api(d.f).atelierOf())!.dates.entreprise;
+    expect((await d.store.status()).erreur).toContain("profil de l'atelier");
+
+    horloge.avance = 0;
+    await d.store.sync();
+    expect(await d.store.status()).toMatchObject({ pending: 0, atelierAttend: false, erreur: null });
+    const compte = (await new Api(d.f).atelierOf())!;
+    expect(compte).toMatchObject({ tarifs: { taux: 77 }, entreprise: { nom: "Exemple" } });
+    expect(compte.modifie).toBeLessThanOrEqual(Date.now());
+    // Seul ce que l'horloge avait daté trop loin change de date.
+    expect(compte.dates.entreprise).toBe(fiche);
+    expect(d.atelier.get()).toEqual(compte);
+  });
+
+  it("une version datée de plus loin encore rejoint aussi le compte, une fois l'horloge remise", async () => {
+    const { d, horloge } = await refuse(77);
+    horloge.avance = 0;
+    d.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 78 } }, horloge.now());
+    await d.store.sync();
+    expect(await new Api(d.f).atelierOf()).toMatchObject({ tarifs: { taux: 78 } });
+  });
+
+  it("une horloge encore en avance ne fait pas passer le profil : il reste refusé", async () => {
+    const { d, horloge } = await refuse(77);
+    const date = d.atelier.get()!.modifie;
+    await d.store.sync();
+    expect(d.atelier.get()!.modifie).toBe(date);
+    horloge.avance /= 2;
+    await d.store.sync();
+    expect(await d.store.status()).toMatchObject({ pending: 1, atelierAttend: true });
+    expect((await d.store.status()).erreur).toContain("profil de l'atelier");
+    expect(await new Api(d.f).atelierOf()).toMatchObject({ tarifs: { taux: 45 } });
+  });
+
+  it("un profil refusé gardé à la déconnexion rejoint le compte à la connexion suivante, l'horloge remise", async () => {
+    const { d, horloge } = await refuse(77);
+    await d.store.signOut();
+    horloge.avance = 0;
+    await d.signIn("jean@exemple.fr");
+    expect(await new Api(d.f).atelierOf()).toMatchObject({ tarifs: { taux: 77 } });
+    expect(await d.store.status()).toMatchObject({ pending: 0, erreur: null });
+  });
+
   it("un profil refusé reste sur l'appareil à la déconnexion, comme un escalier refusé", async () => {
-    const a = await compteRempli();
-    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 77 } }, Date.now() + 3000 * 86400_000);
-    await a.store.sync();
+    const { d: a } = await refuse(77);
     await a.store.signOut();
     expect(a.store.account()).toBeNull();
     expect(a.atelier.get()!.tarifs.taux).toBe(77);
