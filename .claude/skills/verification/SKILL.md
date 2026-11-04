@@ -7,7 +7,7 @@ description: Vérification, CI GitHub Actions (jobs, contrôles exigés), fichie
 
 ## Fichiers de référence
 
-- `tests/__snapshots__` contient les DXF, CSV et notices de référence, identiques à l'octet près à ceux de la dernière version en un seul fichier HTML (`limon.html`, commit 8ce7f38). Un écart est une régression, sauf changement de géométrie voulu : alors `npx vitest run -u`, puis `npm run check:dxf` (0 erreur attendue pour droit, quart-g, quart-d) et relecture du diff.
+- `tests/__snapshots__` contient les DXF, CSV et notices de référence, relus à chaque changement de géométrie voulu ; à l'origine (commit 8ce7f38), identiques à l'octet près à ceux de la version en un seul fichier HTML (`limon.html`). Ils ne garantissent donc que l'égalité avec le dernier `-u` relu. Un écart est une régression, sauf changement de géométrie voulu : alors `npx vitest run -u`, puis `npm run check:dxf` (0 erreur attendue pour toutes les formes de `FORMES`) et relecture du diff.
 - `tests/__snapshots__/*-fiche.pdf` : fiches de référence (sans 3D, date fixe). `vitest -u` ne les refait pas : supprimer le fichier pour le régénérer.
 
 ## Dans le navigateur

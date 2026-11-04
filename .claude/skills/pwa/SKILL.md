@@ -18,5 +18,5 @@ description: Application installable et hors ligne, service worker (src/sw.js), 
 
 Un ancien service worker sert encore l'ancien outil à `/` jusqu'à sa mise à jour : c'est pourquoi les renvois des anciennes adresses visent `/` et non `/app/`.
 
-- `limon-escaliers.up.railway.app` sert le même site, qui part aussitôt vers quart-de-tour.fr en gardant l'ancre d'un lien de projet (`src/ui/move.ts`). Ses projets ne suivent pas : le stockage de l'ancienne adresse reste là-bas.
+- `limon-escaliers.up.railway.app` sert le même site : l'outil (`src/ui/move.ts`) et la page publique (script de `index.html`) partent aussitôt vers quart-de-tour.fr, en gardant l'ancre d'un lien de projet. Ses projets ne suivent pas : le stockage de l'ancienne adresse reste là-bas.
 - `www.quart-de-tour.fr` part de la même façon : le compte (passkeys, session, origine acceptée par `/api`) n'existe qu'à l'adresse sans www.
