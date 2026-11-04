@@ -3,7 +3,7 @@ import { day } from "../core/format";
 import type { Project } from "../core/project";
 import { ApiError, NotSignedIn, ProofNeeded, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
-import type { RefusVu, SyncStatus, SyncStore } from "./sync";
+import type { RefusVu, RetenuVu, SyncStatus, SyncStore } from "./sync";
 
 const webauthn = () => import("@simplewebauthn/browser");
 const hasWebAuthn = () => typeof window.PublicKeyCredential === "function";
@@ -52,6 +52,10 @@ const newerLine = (n: number) =>
     ? `${n} escaliers d'un autre appareil arriveront tout seuls à la prochaine mise à jour`
     : "1 escalier d'un autre appareil arrivera tout seul à la prochaine mise à jour";
 
+/** En-tête : les escaliers retenus cachés tant que la personne n'a pas répondu ; sans cette ligne, ils sembleraient perdus. */
+const retainedLine = (n: number) =>
+  n > 1 ? `${n} escaliers attendent votre réponse` : "1 escalier attend votre réponse";
+
 /** Mon compte : le refus, sa raison et la copie à garder ; une suppression n'a plus d'escalier à copier. */
 const refusedItem = (r: RefusVu) =>
   r.nom === null
@@ -75,7 +79,7 @@ const deviceItem = (a: Appareil) =>
     : `<li><div><b>${esc(a.nom)}</b><small>connecté le ${day(a.cree)} · utilisé le ${day(a.utilise)}</small></div>` +
       `<button class="btn" type="button" data-device="${esc(a.id)}">Déconnecter</button></li>`;
 
-type View = "login" | "offer" | "account" | "proof";
+type View = "login" | "offer" | "retenus" | "account" | "proof";
 
 /**
  * Compte : bouton et état de l'enregistrement dans l'en-tête, et onglet Mon compte de l'accueil : connexion (passkey,
@@ -116,6 +120,9 @@ export class AccountPanel {
     });
     byId("acOfferYes").addEventListener("click", () => void this.run(() => this.addPasskey()));
     byId("acOfferNo").addEventListener("click", () => void this.run(() => this.showAccount()));
+    byId("acRetenusPrendre").addEventListener("click", () => void this.run(() => this.takeRetained()));
+    byId("acRetenusLaisser").addEventListener("click", () => void this.run(() => this.leaveRetained()));
+    byId("acRetenusEffacer").addEventListener("click", () => void this.run(() => this.eraseRetained()));
     byId("acAddKey").addEventListener("click", () => void this.run(() => this.addPasskey()));
     byId("acKeys").addEventListener("click", (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-key]");
@@ -151,43 +158,51 @@ export class AccountPanel {
     const st = await this.store.status();
     const btn = byId("acOpen");
     const saved = byId("saved");
-    saved.classList.toggle("wait", !!st.compte && st.pending > 0);
     const refused = st.refuses.filter((r) => r.nom !== null);
-    saved.classList.toggle("fail", !st.stored || (!!st.compte && (refused.length > 0 || !!st.erreur)));
+    const retenus = st.stored ? st.aDecider.length : 0;
+    saved.classList.toggle("ask", retenus > 0);
+    saved.classList.toggle("wait", !!st.compte && (st.pending > 0 || retenus > 0));
+    saved.classList.toggle("fail", !st.stored || (!!st.compte && !retenus && (refused.length > 0 || !!st.erreur)));
     if (!st.compte) {
       saved.textContent = st.stored ? "Enregistré sur cet appareil" : NOT_STORED;
       btn.className = "btn hbtn acbtn guest";
       btn.innerHTML = `${PERSON}<span class="lbl-long">Ouvrir l'outil</span><span class="lbl-short">Compte</span>`;
       btn.removeAttribute("aria-label");
       // Déconnecté pendant que le compte était à l'écran : plus rien à y montrer.
-      if (["account", "offer", "proof"].includes(this.current)) this.showLogin();
+      if (["account", "offer", "retenus", "proof"].includes(this.current)) this.showLogin();
       return;
     }
     const s = st.pending > 1 ? "s" : "";
     const attente = waitingWords(st);
     const state = !st.stored
       ? NOT_STORED
-      : st.pending && st.offline
-        ? `${attente} à envoyer dès que le réseau revient`
-        : st.erreur
-          ? st.pending
-            ? `${attente} pas encore envoyé${s}. ${st.erreur}`
-            : st.erreur
-          : refused.length
-            ? refusedLine(refused)
-            : st.pending
-              ? `${attente} en cours d'envoi`
-              : st.plusRecents
-                ? newerLine(st.plusRecents)
-                : "escaliers enregistrés sur tous vos appareils";
-    const allSaved = st.stored && !st.pending && !st.erreur && !refused.length && !st.plusRecents;
-    const toSee = refused.length && state === refusedLine(refused) ? " : voir Mon compte" : "";
+      : retenus
+        ? retainedLine(retenus)
+        : st.pending && st.offline
+          ? `${attente} à envoyer dès que le réseau revient`
+          : st.erreur
+            ? st.pending
+              ? `${attente} pas encore envoyé${s}. ${st.erreur}`
+              : st.erreur
+            : refused.length
+              ? refusedLine(refused)
+              : st.pending
+                ? `${attente} en cours d'envoi`
+                : st.plusRecents
+                  ? newerLine(st.plusRecents)
+                  : "escaliers enregistrés sur tous vos appareils";
+    const allSaved = st.stored && !retenus && !st.pending && !st.erreur && !refused.length && !st.plusRecents;
+    const toSee = retenus || (refused.length && state === refusedLine(refused)) ? " : voir Mon compte" : "";
     saved.textContent = allSaved
       ? "Enregistré sur tous vos appareils"
       : `${state[0]!.toUpperCase()}${state.slice(1)}${toSee}`;
     btn.className = "btn hbtn acbtn member";
     btn.innerHTML = `<span class="lbl">Mon compte</span><span class="avatar" aria-hidden="true">${esc(st.compte.email[0]!.toUpperCase())}</span>`;
     btn.setAttribute("aria-label", "Mon compte");
+    // Question posée ou répondue dans un autre onglet : l'écran suit.
+    const askedHere = this.current === "retenus";
+    if ((askedHere || this.current === "account") && askedHere !== st.aDecider.length > 0)
+      void this.run(() => this.showAccount());
     if (byId("acAccount").hidden) return;
     byId("acState").textContent = `${state[0]!.toUpperCase()}${state.slice(1)}`.replace(/\.?$/, ".");
     const list = byId("acRefus");
@@ -208,6 +223,7 @@ export class AccountPanel {
     this.current = v;
     byId("acLogin").hidden = v !== "login";
     byId("acOffer").hidden = v !== "offer";
+    byId("acRetenus").hidden = v !== "retenus";
     byId("acAccount").hidden = v !== "account";
     byId("acProof").hidden = v !== "proof";
   }
@@ -319,7 +335,8 @@ export class AccountPanel {
     await this.signedIn(compte);
     // Proposer la passkey seulement là où Face ID, l'empreinte ou Windows Hello existent.
     const w = await webauthn();
-    if (await w.platformAuthenticatorIsAvailable()) this.view("offer");
+    const asks = (await this.store.status()).aDecider.length > 0;
+    if (!asks && (await w.platformAuthenticatorIsAvailable())) this.view("offer");
     else await this.showAccount();
   }
 
@@ -397,6 +414,8 @@ export class AccountPanel {
   private async showAccount(): Promise<void> {
     const compte = this.store.account();
     if (!compte) return this.showLogin();
+    const { aDecider } = await this.store.status();
+    if (aDecider.length) return this.showRetained(aDecider);
     this.view("account");
     byId("acMe").textContent = compte.email;
     void this.refreshLine();
@@ -410,6 +429,43 @@ export class AccountPanel {
       byId("acKeys").innerHTML = '<li class="empty">Liste indisponible sans réseau.</li>';
       byId("acDevices").innerHTML = '<li class="empty">Liste indisponible sans réseau.</li>';
     }
+  }
+
+  /** La question : ces escaliers de l'appareil sont peut-être à quelqu'un d'autre. Rien ne se décide sans réponse. */
+  private showRetained(retenus: RetenuVu[]): void {
+    this.view("retenus");
+    const several = retenus.length > 1;
+    byId("acRetenusTxt").textContent = several
+      ? `${retenus.length} escaliers de cet appareil ne sont dans aucun compte. Ils sont peut-être à quelqu'un d'autre.`
+      : "Un escalier de cet appareil n'est dans aucun compte. Il est peut-être à quelqu'un d'autre.";
+    byId("acRetenusNoms").innerHTML = retenus.map((r) => `<li><div><b>${esc(r.nom)}</b></div></li>`).join("");
+    byId("acRetenusNote").textContent = several
+      ? "Laissés ici, ils restent à l'écart de votre compte, et la question reviendra à votre prochaine connexion."
+      : "Laissé ici, il reste à l'écart de votre compte, et la question reviendra à votre prochaine connexion.";
+    byId("acRetenusPrendre").textContent = several ? "Les mettre dans mon compte" : "Le mettre dans mon compte";
+    byId("acRetenusLaisser").textContent = several ? "Les laisser sur cet appareil" : "Le laisser sur cet appareil";
+    byId("acRetenusEffacer").textContent = several ? "Les effacer" : "L'effacer";
+  }
+
+  private async takeRetained(): Promise<void> {
+    await this.store.takeRetained();
+    await this.showAccount();
+  }
+
+  private async leaveRetained(): Promise<void> {
+    this.store.leaveRetained();
+    await this.showAccount();
+  }
+
+  private async eraseRetained(): Promise<void> {
+    const n = (await this.store.status()).aDecider.length;
+    const question =
+      n > 1
+        ? `Effacer ces ${n} escaliers ? Ils ne seront plus nulle part.`
+        : "Effacer cet escalier ? Il ne sera plus nulle part.";
+    if (!confirm(question)) return;
+    await this.store.eraseRetained();
+    await this.showAccount();
   }
 
   private render(d: CompteDetail): void {

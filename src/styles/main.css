@@ -98,13 +98,24 @@ body {
   background: var(--warn);
 }
 /* Stockage refusé : une ligne à part sous l'en-tête, à toutes les largeurs, pour ne pas passer inaperçue. */
-.top:has(.saved.fail) {
+.top:has(.saved.fail),
+.top:has(.saved.ask) {
   flex-wrap: wrap;
 }
-.saved.fail {
+.saved.fail,
+.saved.ask {
   order: 1;
   flex: 1 0 100%;
+}
+.saved.fail {
   color: var(--bad);
+}
+/* Escaliers qui attendent une réponse : pas une panne, mais à voir de partout, car ils sont cachés. */
+.saved.ask {
+  color: var(--ink);
+}
+.saved.ask::before {
+  flex: none;
 }
 .saved.fail::before {
   background: var(--bad);
@@ -117,7 +128,7 @@ body {
 .top:has(.recu:not([hidden])) {
   flex-wrap: wrap;
 }
-.top:has(.recu:not([hidden])) .saved:not(.fail) {
+.top:has(.recu:not([hidden])) .saved:not(.fail, .ask) {
   display: none;
 }
 .recu:not([hidden]) {
@@ -531,7 +542,7 @@ body {
 body.home-on .work,
 body.home-on .tabbar,
 body.home-on .proj,
-body.home-on .saved:not(.fail),
+body.home-on .saved:not(.fail, .ask),
 body.home-on .recu,
 body.home-on .undo,
 body.home-on #pjNew {
@@ -2358,7 +2369,7 @@ body.avance .auto {
   display: none;
 }
 @media (max-width: 1100px) {
-  .saved:not(.fail) {
+  .saved:not(.fail, .ask) {
     display: none;
   }
 }
