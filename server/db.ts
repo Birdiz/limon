@@ -144,6 +144,15 @@ const MIGRATIONS = [
     expire timestamptz not null,
     essais int not null default 0
   );`,
+  // Preuve récente avant un geste qui engage le compte : sa date sur la session, nulle pour celles d'avant, qui la
+  // demanderont, et les codes envoyés pour cela, à part des codes de connexion.
+  `alter table sessions add column preuve timestamptz;
+  create table codes_preuve (
+    compte uuid primary key references comptes on delete cascade,
+    hash text not null,
+    expire timestamptz not null,
+    essais int not null default 0
+  );`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */
@@ -173,9 +182,9 @@ const AVERTI_VALABLE = `(averti > greatest(vu, droits_jusqu_a) and averti + inte
 const A_AVERTIR = `vu + interval '${CONSERVATION}' - interval '${PREAVIS}' < now() and ${SANS_DROITS}
   and not coalesce(${AVERTI_VALABLE}, false)`;
 
-/** Efface codes, changements d'adresse, défis et sessions expirés, et les traces de suppression anciennes. */
+/** Efface codes, changements d'adresse, codes de preuve, défis et sessions expirés, et les traces de suppression anciennes. */
 export async function purge(db: Db): Promise<void> {
-  for (const t of ["codes", "changements_adresse", "defis", "sessions"])
+  for (const t of ["codes", "changements_adresse", "codes_preuve", "defis", "sessions"])
     await db.query(`delete from ${t} where expire < now()`);
   await db.query(
     `delete from projets where supprime and modifie < extract(epoch from now() - interval '${CONSERVATION}') * 1000`,

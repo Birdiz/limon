@@ -4,6 +4,8 @@ export type SendCode = (email: string, code: string) => Promise<void>;
 export type SendAvertissement = (email: string, limite: Date) => Promise<void>;
 /** Avis à l'ancienne adresse d'un compte. La nouvelle n'y figure pas : l'ancienne n'est peut-être plus à la personne. */
 export type SendAdresseChangee = (ancienne: string) => Promise<void>;
+/** Avis à l'adresse d'un compte qui a une passkey de plus. */
+export type SendPasskeyAjoutee = (email: string) => Promise<void>;
 
 const SENDER = { name: "Quart de tour", email: "connexion@quart-de-tour.fr" };
 
@@ -97,6 +99,53 @@ function adresseChangeeHtml(): string {
 </body></html>`;
 }
 
+const PREUVE_SI_PAS_VOUS =
+  "Si vous n'avez rien demandé, ne donnez ce code à personne : un appareil connecté à votre compte n'est peut-être plus entre vos mains. Déconnectez-le dans Mon compte.";
+
+function codePreuveText(code: string): string {
+  return [
+    `Votre code pour confirmer que c'est bien vous sur Quart de tour : ${code}`,
+    "",
+    "Il est valable 10 minutes. Il sert à activer Face ID ou l'empreinte, à changer d'adresse ou à supprimer le compte.",
+    PREUVE_SI_PAS_VOUS,
+    "",
+    "Quart de tour, https://quart-de-tour.fr",
+  ].join("\n");
+}
+
+function codePreuveHtml(code: string): string {
+  return `<!doctype html><html lang="fr"><body style="font-family:Helvetica,Arial,sans-serif;color:#1d2228">
+<p>Votre code pour confirmer que c'est bien vous sur Quart de tour :</p>
+<p style="font-size:28px;font-weight:bold;letter-spacing:6px">${code}</p>
+<p>Il est valable 10 minutes. Il sert à activer Face ID ou l'empreinte, à changer d'adresse ou à supprimer le compte.</p>
+<p style="color:#666">${PREUVE_SI_PAS_VOUS}</p>
+<p style="color:#666">Quart de tour, <a href="https://quart-de-tour.fr">quart-de-tour.fr</a></p>
+</body></html>`;
+}
+
+const PASSKEY_SI_PAS_VOUS =
+  "Si ce n'est pas vous : connectez-vous avec un code par e-mail, retirez-le dans Mon compte, à « Face ID et empreinte », puis déconnectez vos autres appareils.";
+
+function passkeyAjouteeText(): string {
+  return [
+    "Face ID ou l'empreinte vient d'être activé sur un appareil, pour entrer dans votre compte Quart de tour.",
+    "",
+    "Si c'est vous, vous n'avez rien à faire.",
+    PASSKEY_SI_PAS_VOUS,
+    "",
+    "Quart de tour, https://quart-de-tour.fr",
+  ].join("\n");
+}
+
+function passkeyAjouteeHtml(): string {
+  return `<!doctype html><html lang="fr"><body style="font-family:Helvetica,Arial,sans-serif;color:#1d2228">
+<p>Face ID ou l'empreinte vient d'être activé sur un appareil, pour entrer dans votre compte Quart de tour.</p>
+<p>Si c'est vous, vous n'avez rien à faire.</p>
+<p>${PASSKEY_SI_PAS_VOUS}</p>
+<p style="color:#666">Quart de tour, <a href="https://quart-de-tour.fr">quart-de-tour.fr</a></p>
+</body></html>`;
+}
+
 /** E-mail transactionnel par l'API de Brevo ; le délai vaut aussi pour la lecture de la réponse. */
 async function envoie(
   apiKey: string,
@@ -149,6 +198,24 @@ export function brevoAdresseChangee(apiKey: string, delai = 10_000): SendAdresse
     });
 }
 
+export function brevoCodePreuve(apiKey: string, delai = 10_000): SendCode {
+  return (email, code) =>
+    envoie(apiKey, delai, email, {
+      subject: `${code} : votre code pour confirmer que c'est bien vous`,
+      textContent: codePreuveText(code),
+      htmlContent: codePreuveHtml(code),
+    });
+}
+
+export function brevoPasskeyAjoutee(apiKey: string, delai = 10_000): SendPasskeyAjoutee {
+  return (email) =>
+    envoie(apiKey, delai, email, {
+      subject: "Face ID ou l'empreinte activé sur votre compte Quart de tour",
+      textContent: passkeyAjouteeText(),
+      htmlContent: passkeyAjouteeHtml(),
+    });
+}
+
 /** En développement : le code s'affiche dans la console. */
 export const consoleMail: SendCode = async (email, code) => {
   console.log(`[code] ${email} : ${code}`);
@@ -164,4 +231,12 @@ export const consoleCodeAdresse: SendCode = async (email, code) => {
 
 export const consoleAdresseChangee: SendAdresseChangee = async (ancienne) => {
   console.log(`[adresse changée] avis à ${ancienne}`);
+};
+
+export const consoleCodePreuve: SendCode = async (email, code) => {
+  console.log(`[code de preuve] ${email} : ${code}`);
+};
+
+export const consolePasskeyAjoutee: SendPasskeyAjoutee = async (email) => {
+  console.log(`[passkey ajoutée] avis à ${email}`);
 };

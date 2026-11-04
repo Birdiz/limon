@@ -2,7 +2,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { getRequestListener } from "@hono/node-server";
 import { api } from "./api";
 import { migrate, pgliteDb, type Db } from "./db";
-import { consoleAdresseChangee, consoleCodeAdresse, consoleMail } from "./mail";
+import {
+  consoleAdresseChangee,
+  consoleCodeAdresse,
+  consoleCodePreuve,
+  consoleMail,
+  consolePasskeyAjoutee,
+} from "./mail";
 
 /* /api dans le serveur de développement de Vite (greffon `api` de vite.config.ts). La base PGlite est
    gardée dans .pglite/ et survit aux redémarrages ; les codes s'affichent dans la console. */
@@ -22,6 +28,8 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
         sendCode: consoleMail,
         sendCodeAdresse: consoleCodeAdresse,
         sendAdresseChangee: consoleAdresseChangee,
+        sendCodePreuve: consoleCodePreuve,
+        sendPasskeyAjoutee: consolePasskeyAjoutee,
       }).fetch,
     );
     listeners.set(origin, listener);

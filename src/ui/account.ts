@@ -1,6 +1,6 @@
 import type { Appareil, Compte, CompteDetail } from "../core/account";
 import type { Project } from "../core/project";
-import { ApiError, NotSignedIn, type Api } from "./api";
+import { ApiError, NotSignedIn, ProofNeeded, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
 import type { RefusVu, SyncStatus, SyncStore } from "./sync";
 
@@ -75,7 +75,7 @@ const deviceItem = (a: Appareil) =>
     : `<li><div><b>${esc(a.nom)}</b><small>connecté le ${day(a.cree)} · utilisé le ${day(a.utilise)}</small></div>` +
       `<button class="btn" type="button" data-device="${esc(a.id)}">Déconnecter</button></li>`;
 
-type View = "login" | "offer" | "account";
+type View = "login" | "offer" | "account" | "proof";
 
 /**
  * Compte : bouton et état de l'enregistrement dans l'en-tête, et onglet Mon compte de l'accueil : connexion (passkey,
@@ -84,6 +84,9 @@ type View = "login" | "offer" | "account";
 export class AccountPanel {
   private msg = byId("acMsg");
   private email = "";
+  private current: View = "login";
+  /** Le geste qui demande une preuve, et la vue où il attend. */
+  private pending: { action: () => Promise<void>; from: View } | null = null;
   private newEmail = "";
 
   constructor(
@@ -127,6 +130,14 @@ export class AccountPanel {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-copie]");
       if (b) void this.run(() => this.keepCopy(b.dataset.copie!));
     });
+    byId("acProofPk").addEventListener("click", () => void this.run(() => this.proveByPasskey()));
+    byId("acProofMail").addEventListener("click", () => void this.run(() => this.sendProofCode()));
+    byId("acProofCodeForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      void this.run(() => this.checkProofCode());
+    });
+    byId("acProofGo").addEventListener("click", () => void this.resume());
+    byId("acProofNo").addEventListener("click", () => this.leaveProof());
     byId("acLogout").addEventListener("click", () => void this.run(() => this.logout()));
     byId("acDelete").addEventListener("click", () => void this.run(() => this.askDelete()));
     byId("acDeleteYes").addEventListener("click", () => void this.run(() => this.deleteAccount()));
@@ -149,7 +160,7 @@ export class AccountPanel {
       btn.innerHTML = `${PERSON}<span class="lbl-long">Ouvrir l'outil</span><span class="lbl-short">Compte</span>`;
       btn.removeAttribute("aria-label");
       // Déconnecté pendant que le compte était à l'écran : plus rien à y montrer.
-      if (!byId("acAccount").hidden || !byId("acOffer").hidden) this.showLogin();
+      if (["account", "offer", "proof"].includes(this.current)) this.showLogin();
       return;
     }
     const s = st.pending > 1 ? "s" : "";
@@ -194,9 +205,11 @@ export class AccountPanel {
   }
 
   private view(v: View): void {
+    this.current = v;
     byId("acLogin").hidden = v !== "login";
     byId("acOffer").hidden = v !== "offer";
     byId("acAccount").hidden = v !== "account";
+    byId("acProof").hidden = v !== "proof";
   }
 
   /** Lance une action du dialogue et affiche son erreur éventuelle. */
@@ -204,10 +217,66 @@ export class AccountPanel {
     try {
       await action();
     } catch (e) {
+      if (e instanceof ProofNeeded) return this.askProof(action);
       if (e instanceof NotSignedIn) await this.store.sessionLost();
       const m = problem(e);
       if (m) flash(this.msg, m, true, 6000);
     }
+  }
+
+  /** Le serveur demande une preuve : passkey si le compte en a une et le navigateur la connaît, sinon code par e-mail. */
+  private async askProof(action: () => Promise<void>): Promise<void> {
+    this.pending = { action, from: this.current };
+    this.view("proof");
+    byId("acProof").scrollIntoView({ block: "nearest" });
+    this.proofStep("choix");
+    byId("acProofTo").textContent = this.store.account()?.email ?? "";
+    byId("acProofPk").hidden = true;
+    byId("acProofMail").classList.add("go");
+    const d = hasWebAuthn() ? await this.api.account().catch(() => null) : null;
+    const withKey = !!d?.passkeys.length;
+    byId("acProofPk").hidden = !withKey;
+    byId("acProofMail").classList.toggle("go", !withKey);
+  }
+
+  private proofStep(step: "choix" | "code" | "fait"): void {
+    byId("acProofAsk").hidden = step !== "choix";
+    byId("acProofCodeForm").hidden = step !== "code";
+    byId("acProofDone").hidden = step !== "fait";
+    byId("acProofNo").hidden = step === "fait";
+    byId<HTMLInputElement>("acProofCode").value = "";
+    if (step === "code") byId("acProofCode").focus();
+  }
+
+  private async proveByPasskey(): Promise<void> {
+    const w = await webauthn();
+    const optionsJSON =
+      await this.api.proofPasskeyOptions<Parameters<typeof w.startAuthentication>[0]["optionsJSON"]>();
+    await this.api.proofPasskey(await w.startAuthentication({ optionsJSON }));
+    this.proofStep("fait");
+  }
+
+  private async sendProofCode(): Promise<void> {
+    await this.api.sendProofCode();
+    this.proofStep("code");
+    flash(this.msg, "Code envoyé : regardez vos e-mails (et les indésirables).", false, 8000);
+  }
+
+  private async checkProofCode(): Promise<void> {
+    await this.api.checkProofCode(byId<HTMLInputElement>("acProofCode").value);
+    this.proofStep("fait");
+  }
+
+  /** Le geste repart sur ce clic, pas tout seul : Safari n'ouvre Face ID qu'après un geste de la personne. */
+  private async resume(): Promise<void> {
+    const pending = this.pending;
+    this.leaveProof();
+    if (pending) await this.run(pending.action);
+  }
+
+  private leaveProof(): void {
+    this.view(this.pending?.from ?? "account");
+    this.pending = null;
   }
 
   private showLogin(): void {

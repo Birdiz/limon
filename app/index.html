@@ -292,6 +292,46 @@
             </div>
           </div>
         </div>
+        <div class="acview" id="acProof" hidden>
+          <h3>Confirmez que c'est bien vous</h3>
+          <p>
+            Ce geste engage votre compte : personne d'autre ne doit pouvoir le faire depuis un appareil resté ouvert.
+          </p>
+          <div id="acProofAsk">
+            <div class="actions">
+              <button class="btn go" id="acProofPk" type="button" hidden>Avec Face ID ou l'empreinte</button
+              ><button class="btn" id="acProofMail" type="button">Recevoir un code par e-mail</button>
+            </div>
+            <p class="disclaimer">
+              Le code part à <b id="acProofTo"></b>. Vous n'avez plus accès à cette adresse ? Écrivez à
+              <a href="mailto:tom.bouzy@gmail.com">tom.bouzy@gmail.com</a>.
+            </p>
+          </div>
+          <form class="newp" id="acProofCodeForm" hidden>
+            <label for="acProofCode">Code reçu par e-mail</label>
+            <input
+              id="acProofCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              pattern="[0-9 ]{6,7}"
+              maxlength="7"
+              required
+            />
+            <div class="actions">
+              <button class="btn go" type="submit">Valider</button>
+            </div>
+          </form>
+          <div id="acProofDone" hidden>
+            <p>C'est bien vous.</p>
+            <div class="actions">
+              <button class="btn go" id="acProofGo" type="button">Continuer</button>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn" id="acProofNo" type="button">Annuler</button>
+          </div>
+        </div>
         <p class="copied" id="acMsg" role="status" hidden></p>
         <label class="adv"
           ><span
@@ -329,9 +369,9 @@
             Responsable : Thomas Bouzy, <a href="mailto:tom.bouzy@gmail.com">tom.bouzy@gmail.com</a>. Le compte garde
             votre adresse e-mail, vos projets, le profil de votre atelier (avec vos tarifs et la fiche de votre
             entreprise si vous les remplissez) et la clé publique de vos passkeys : Face ID et l'empreinte ne quittent
-            pas votre appareil. Il garde aussi le nom de chaque appareil connecté et la date de son dernier usage. Ces
-            données servent seulement à vous connecter et à retrouver votre travail sur vos appareils ; ni publicité, ni
-            mesure d'audience.
+            pas votre appareil. Il garde aussi le nom de chaque appareil connecté, la date de son dernier usage et celle
+            de la dernière fois où vous y avez confirmé que c'était bien vous. Ces données servent seulement à vous
+            connecter et à retrouver votre travail sur vos appareils ; ni publicité, ni mesure d'audience.
             <span data-devis
               >Le nom et l'adresse des clients de vos devis sont gardés avec l'escalier, pour être imprimés sur le
               devis, et partent avec lui.</span

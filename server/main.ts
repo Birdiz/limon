@@ -8,10 +8,14 @@ import {
   brevoAdresseChangee,
   brevoAvertissement,
   brevoCodeAdresse,
+  brevoCodePreuve,
+  brevoPasskeyAjoutee,
   consoleAdresseChangee,
   consoleAvertissement,
   consoleCodeAdresse,
+  consoleCodePreuve,
   consoleMail,
+  consolePasskeyAjoutee,
 } from "./mail";
 import { staticFiles } from "./static";
 
@@ -55,6 +59,8 @@ app.route(
     sendCode: parBrevo ? brevo(key) : consoleMail,
     sendCodeAdresse: parBrevo ? brevoCodeAdresse(key) : consoleCodeAdresse,
     sendAdresseChangee: parBrevo ? brevoAdresseChangee(key) : consoleAdresseChangee,
+    sendCodePreuve: parBrevo ? brevoCodePreuve(key) : consoleCodePreuve,
+    sendPasskeyAjoutee: parBrevo ? brevoPasskeyAjoutee(key) : consolePasskeyAjoutee,
   }),
 );
 app.use(await staticFiles(path.resolve(import.meta.dirname, "../dist")));

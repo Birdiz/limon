@@ -9,7 +9,14 @@ import { compute } from "../src/core/stair";
 import { newProject, NOM_PAR_DEFAUT, SCHEMA, type Project } from "../src/core/project";
 import { api } from "../server/api";
 import { migrate, pgliteDb, purge, purgeComptes } from "../server/db";
-import { brevoAdresseChangee, brevoAvertissement, brevoCodeAdresse } from "../server/mail";
+import {
+  brevoAdresseChangee,
+  brevoAvertissement,
+  brevoCodeAdresse,
+  brevoCodePreuve,
+  brevoPasskeyAjoutee,
+} from "../server/mail";
+import { FausseCle } from "./passkey";
 import { browser, login, ORIGIN, testServer, type TestServer } from "./server";
 
 const json = { "content-type": "application/json" };
@@ -233,7 +240,16 @@ describe("appareils connectés", () => {
     const f = browser(s);
     await connecter(f, "iPhone");
     const [ligne] = await s.db.query<Record<string, unknown>>("select * from sessions");
-    expect(Object.keys(ligne!).sort()).toEqual(["appareil", "compte", "cree", "expire", "hash", "id", "utilise"]);
+    expect(Object.keys(ligne!).sort()).toEqual([
+      "appareil",
+      "compte",
+      "cree",
+      "expire",
+      "hash",
+      "id",
+      "preuve",
+      "utilise",
+    ]);
     expect(JSON.stringify(ligne)).not.toContain("10.0.0");
   });
 
@@ -318,7 +334,7 @@ describe("appareils connectés", () => {
       const db = await pgliteDb();
       await migrate(db);
       await db.exec(
-        `drop table changements_adresse;
+        `drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
          alter table sessions drop column id, drop column appareil, drop column utilise;
          delete from schema_version where v >= 8;`,
       );
@@ -1283,7 +1299,7 @@ describe("numéros de devis", () => {
     await migrate(db);
     // La base telle qu'elle était avant cette migration.
     await db.exec(
-      `drop table changements_adresse;
+      `drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
        alter table sessions drop column id, drop column appareil, drop column utilise;
        drop table devis_numeros; alter table ateliers drop column dates;
        drop table purge_passage; alter table comptes drop column essai;
@@ -1291,7 +1307,7 @@ describe("numéros de devis", () => {
     );
     await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000001', 'a@exemple.fr')");
     await migrate(db);
-    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 9 }]);
+    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 10 }]);
     expect(await db.query("select email from comptes")).toEqual([{ email: "a@exemple.fr" }]);
     await db.query(
       "insert into devis_numeros (compte, projet, annee, rang) values ('00000000-0000-0000-0000-000000000001', 'a', 2026, 1)",
@@ -1341,6 +1357,7 @@ const HORS_EXPORT: Record<string, string> = {
   "devis_numeros.compte": DEJA_RENDU,
   "sessions.hash": "Empreinte du jeton de session : un secret, qui ne dit rien de la personne et ne sort jamais.",
   codes: "Code de connexion haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
+  codes_preuve: "Code de preuve, haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
   changements_adresse:
     "Changement d'adresse en cours, code haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
   defis: "Défi de passkey : valable 5 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
@@ -1454,6 +1471,7 @@ describe("compte", () => {
           cree: expect.any(String),
           utilise: expect.any(String),
           expire: expect.any(String),
+          preuve: expect.any(String),
         },
       ]);
       expect(d.suppressions).toEqual([{ id: "b", modifie: 20 }]);
@@ -1659,6 +1677,8 @@ describe("changer d'adresse", () => {
         throw new Error("Brevo 500");
       },
       sendAdresseChangee: async () => {},
+      sendCodePreuve: async () => {},
+      sendPasskeyAjoutee: async () => {},
     });
     const erreur = vi.spyOn(console, "error").mockImplementation(() => {});
     const f = browser(s);
@@ -1677,6 +1697,8 @@ describe("changer d'adresse", () => {
       sendAdresseChangee: async () => {
         throw new Error("Brevo 500");
       },
+      sendCodePreuve: async () => {},
+      sendPasskeyAjoutee: async () => {},
     });
     const erreur = vi.spyOn(console, "error").mockImplementation(() => {});
     const f = browser(s);
@@ -1712,6 +1734,389 @@ describe("changer d'adresse", () => {
     expect(await s.db.query("select email from changements_adresse")).toEqual([{ email: "neuve2@exemple.fr" }]);
     await g("/api/compte", { method: "DELETE" });
     expect(await s.db.query("select email from changements_adresse")).toEqual([]);
+  });
+});
+
+describe("preuve récente", () => {
+  const sansPreuve = (quand = "now() - interval '6 minutes'") => s.db.query(`update sessions set preuve = ${quand}`);
+  /** Les gestes qui engagent le compte, sans passkey à présenter : tous s'arrêtent avant d'agir. */
+  const gestes = (f: typeof fetch) => [
+    () => post(f, "/api/passkey/ajout/options", {}),
+    () => post(f, "/api/passkey/ajout", { reponse: {}, nom: "Mac" }),
+    () => post(f, "/api/compte/email/code", { email: "neuve@exemple.fr" }),
+    () => f("/api/compte", { method: "DELETE" }),
+  ];
+  const options = async (f: typeof fetch, route: string) =>
+    (await (await post(f, route, {})).json()) as {
+      challenge: string;
+      userVerification?: string;
+      allowCredentials?: { id: string }[];
+      authenticatorSelection?: { userVerification?: string };
+    };
+  /** Une passkey ajoutée au compte de cette session, encore sous sa preuve. */
+  async function ajoute(f: typeof fetch, uv = true) {
+    const cle = new FausseCle(ORIGIN);
+    const { challenge } = await options(f, "/api/passkey/ajout/options");
+    const res = await post(f, "/api/passkey/ajout", { reponse: cle.creation(challenge, uv), nom: "iPhone" });
+    return { cle, res };
+  }
+  const silence = () => vi.spyOn(console, "error").mockImplementation(() => {});
+
+  it("refuse les gestes d'une session sans preuve récente, sans y toucher", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await sansPreuve();
+    for (const geste of gestes(f)) {
+      const res = await geste();
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ preuve: true });
+    }
+    expect(s.codesAdresse.size).toBe(0);
+    expect(await s.db.query("select id from comptes where id = $1", [a.id])).toHaveLength(1);
+    expect(await s.db.query("select defi from defis where compte = $1", [a.id])).toEqual([]);
+  });
+
+  it("refuse une session d'avant la preuve, qui n'en a aucune", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await sansPreuve("null");
+    expect((await f("/api/compte", { method: "DELETE" })).status).toBe(403);
+  });
+
+  it("une connexion est une preuve : les gestes passent aussitôt après", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect((await ajoute(f)).res.status).toBe(200);
+    expect((await post(f, "/api/compte/email/code", { email: "neuve@exemple.fr" })).status).toBe(204);
+    expect((await f("/api/compte", { method: "DELETE" })).status).toBe(204);
+  });
+
+  it("une preuve de presque 5 minutes passe encore", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await sansPreuve("now() - interval '4 minutes 50 seconds'");
+    expect((await post(f, "/api/passkey/ajout/options", {})).status).toBe(200);
+  });
+
+  it("la preuve d'un appareil ne vaut pas pour un autre", async () => {
+    const f = browser(s);
+    const g = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await login(s, g, "a@exemple.fr");
+    await sansPreuve();
+    await post(f, "/api/preuve/code", {});
+    await post(f, "/api/preuve/code/verifier", { code: s.codesPreuve.get("a@exemple.fr") });
+    expect((await post(f, "/api/passkey/ajout/options", {})).status).toBe(200);
+    expect((await post(g, "/api/passkey/ajout/options", {})).status).toBe(403);
+  });
+
+  it("déconnecter un appareil et retirer une passkey restent possibles sans preuve", async () => {
+    const f = browser(s);
+    const g = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await login(s, g, "a@exemple.fr");
+    const { cle } = await ajoute(f);
+    await sansPreuve();
+    expect((await f(`/api/passkeys/${cle.id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await f("/api/sessions", { method: "DELETE" })).status).toBe(200);
+    expect((await g("/api/compte")).status).toBe(401);
+    expect((await post(f, "/api/deconnexion", {})).status).toBe(204);
+  });
+
+  it("une demande faite sous preuve laisse les 10 minutes du code pour changer l'adresse", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await post(f, "/api/compte/email/code", { email: "neuve@exemple.fr" });
+    await sansPreuve();
+    const res = await post(
+      f,
+      "/api/compte/email",
+      { email: "neuve@exemple.fr", code: s.codesAdresse.get("neuve@exemple.fr") },
+      "PUT",
+    );
+    expect(res.status).toBe(200);
+    expect(await s.db.query("select email from comptes where id = $1", [a.id])).toEqual([
+      { email: "neuve@exemple.fr" },
+    ]);
+  });
+
+  describe("par code", () => {
+    it("part à l'adresse du compte, et ouvre les gestes", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await sansPreuve();
+      expect((await post(f, "/api/preuve/code", {})).status).toBe(204);
+      const code = s.codesPreuve.get("a@exemple.fr");
+      expect((await post(f, "/api/preuve/code/verifier", { code })).status).toBe(204);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(204);
+    });
+
+    it("refuse un mauvais code, puis tout code après 5 essais", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await sansPreuve();
+      await post(f, "/api/preuve/code", {});
+      const bon = s.codesPreuve.get("a@exemple.fr")!;
+      const mauvais = bon === "000000" ? "111111" : "000000";
+      for (let i = 0; i < 5; i++) {
+        const r = await post(f, "/api/preuve/code/verifier", { code: mauvais });
+        expect(await r.json()).toEqual({ erreur: "Code incorrect." });
+      }
+      expect((await post(f, "/api/preuve/code/verifier", { code: bon })).status).toBe(400);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(403);
+    });
+
+    it("refuse un code expiré, déjà servi ou mal formé", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await sansPreuve();
+      await post(f, "/api/preuve/code", {});
+      const code = s.codesPreuve.get("a@exemple.fr");
+      expect((await post(f, "/api/preuve/code/verifier", { code: "12" })).status).toBe(400);
+      await s.db.query("update codes_preuve set expire = now() - interval '1 second'");
+      expect((await post(f, "/api/preuve/code/verifier", { code })).status).toBe(400);
+      await post(f, "/api/preuve/code", {});
+      const frais = s.codesPreuve.get("a@exemple.fr");
+      expect((await post(f, "/api/preuve/code/verifier", { code: frais })).status).toBe(204);
+      expect((await post(f, "/api/preuve/code/verifier", { code: frais })).status).toBe(400);
+    });
+
+    it("n'ouvre pas de session, et un code de connexion n'en tient pas lieu", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await sansPreuve();
+      await post(f, "/api/preuve/code", {});
+      const inconnu = browser(s);
+      const entree = await post(inconnu, "/api/code/verifier", {
+        email: "a@exemple.fr",
+        code: s.codesPreuve.get("a@exemple.fr"),
+      });
+      expect(entree.status).toBe(400);
+      expect((await inconnu("/api/compte")).status).toBe(401);
+
+      await post(browser(s), "/api/code", { email: "a@exemple.fr" });
+      const connexion = s.codes.get("a@exemple.fr");
+      if (connexion !== s.codesPreuve.get("a@exemple.fr"))
+        expect((await post(f, "/api/preuve/code/verifier", { code: connexion })).status).toBe(400);
+    });
+
+    it("le code d'un compte ne vaut pas pour un autre", async () => {
+      const f = browser(s);
+      const g = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await login(s, g, "b@exemple.fr");
+      await sansPreuve();
+      await post(f, "/api/preuve/code", {});
+      expect((await post(g, "/api/preuve/code/verifier", { code: s.codesPreuve.get("a@exemple.fr") })).status).toBe(
+        400,
+      );
+    });
+
+    it("demande une session, et limite les envois à 5 par heure", async () => {
+      expect((await post(browser(s), "/api/preuve/code", {})).status).toBe(401);
+      expect((await post(browser(s), "/api/preuve/code/verifier", { code: "123456" })).status).toBe(401);
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const statuts = [];
+      for (let i = 0; i < 6; i++) statuts.push((await post(f, "/api/preuve/code", {})).status);
+      expect(statuts).toEqual([204, 204, 204, 204, 204, 429]);
+    });
+
+    it("dit quand le code n'a pas pu partir", async () => {
+      s.app = api({
+        db: s.db,
+        origin: ORIGIN,
+        sendCode: async (email, code) => void s.codes.set(email, code),
+        sendCodeAdresse: async () => {},
+        sendAdresseChangee: async () => {},
+        sendCodePreuve: async () => {
+          throw new Error("Brevo 500");
+        },
+        sendPasskeyAjoutee: async () => {},
+      });
+      const erreur = silence();
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      expect((await post(f, "/api/preuve/code", {})).status).toBe(502);
+      erreur.mockRestore();
+    });
+
+    it("la purge retire les codes expirés, la suppression du compte les autres", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await post(f, "/api/preuve/code", {});
+      await s.db.query("update codes_preuve set expire = now() - interval '1 second'");
+      await purge(s.db);
+      expect(await s.db.query("select compte from codes_preuve")).toEqual([]);
+      await post(f, "/api/preuve/code", {});
+      await f("/api/compte", { method: "DELETE" });
+      expect(await s.db.query("select compte from codes_preuve")).toEqual([]);
+    });
+  });
+
+  describe("par passkey", () => {
+    it("propose les passkeys du compte, personne vérifiée, et ouvre les gestes", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { cle } = await ajoute(f);
+      await sansPreuve();
+      const o = await options(f, "/api/preuve/passkey/options");
+      expect(o.userVerification).toBe("required");
+      expect(o.allowCredentials?.map((c) => c.id)).toEqual([cle.id]);
+      expect((await post(f, "/api/preuve/passkey", { reponse: cle.entree(o.challenge) })).status).toBe(204);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(204);
+    });
+
+    it("refuse une réponse sans vérification de la personne", async () => {
+      const erreur = silence();
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { cle } = await ajoute(f);
+      await sansPreuve();
+      const { challenge } = await options(f, "/api/preuve/passkey/options");
+      expect((await post(f, "/api/preuve/passkey", { reponse: cle.entree(challenge, false) })).status).toBe(400);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(403);
+      erreur.mockRestore();
+    });
+
+    it("refuse la passkey d'un autre compte, un défi rejoué, et un défi de connexion", async () => {
+      const f = browser(s);
+      const g = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await login(s, g, "b@exemple.fr");
+      const { cle } = await ajoute(f);
+      const { cle: autre } = await ajoute(g);
+      await sansPreuve();
+
+      const { challenge } = await options(f, "/api/preuve/passkey/options");
+      expect((await post(f, "/api/preuve/passkey", { reponse: autre.entree(challenge) })).status).toBe(400);
+      expect((await post(f, "/api/preuve/passkey", { reponse: cle.entree(challenge) })).status).toBe(400);
+
+      const connexion = await options(browser(s), "/api/passkey/options");
+      expect((await post(f, "/api/preuve/passkey", { reponse: cle.entree(connexion.challenge) })).status).toBe(400);
+      expect((await f("/api/compte", { method: "DELETE" })).status).toBe(403);
+    });
+
+    it("un compte sans passkey est renvoyé au code", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const res = await post(f, "/api/preuve/passkey/options", {});
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ erreur: "Votre compte n'a pas de passkey : demandez un code par e-mail." });
+    });
+
+    it("demande une session", async () => {
+      expect((await post(browser(s), "/api/preuve/passkey/options", {})).status).toBe(401);
+      expect((await post(browser(s), "/api/preuve/passkey", { reponse: {} })).status).toBe(401);
+    });
+  });
+
+  describe("vérification de la personne", () => {
+    it("est exigée dans les options de connexion et d'ajout", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      expect((await options(f, "/api/passkey/options")).userVerification).toBe("required");
+      const ajout = await options(f, "/api/passkey/ajout/options");
+      expect(ajout.authenticatorSelection?.userVerification).toBe("required");
+    });
+
+    it("à l'ajout : une réponse sans elle est refusée, rien n'est gardé ni annoncé", async () => {
+      const erreur = silence();
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { res } = await ajoute(f, false);
+      expect(res.status).toBe(400);
+      expect(await s.db.query("select id from passkeys")).toEqual([]);
+      expect(s.ajouts).toEqual([]);
+      erreur.mockRestore();
+    });
+
+    it("à la connexion : une passkey vérifiée entre, une réponse sans vérification non", async () => {
+      const erreur = silence();
+      const f = browser(s);
+      const a = await login(s, f, "a@exemple.fr");
+      const { cle } = await ajoute(f);
+
+      const inconnu = browser(s);
+      const { challenge } = await options(inconnu, "/api/passkey/options");
+      const refusee = await post(inconnu, "/api/passkey/connexion", { reponse: cle.entree(challenge, false) });
+      expect(refusee.status).toBe(400);
+      expect(await refusee.json()).toEqual({
+        erreur: "La passkey n'a pas pu être vérifiée : connectez-vous avec un code par e-mail.",
+      });
+      expect((await inconnu("/api/compte")).status).toBe(401);
+
+      const nouveau = await options(inconnu, "/api/passkey/options");
+      const entree = await post(inconnu, "/api/passkey/connexion", { reponse: cle.entree(nouveau.challenge) });
+      expect(entree.status).toBe(200);
+      expect((await (await inconnu("/api/compte")).json()) as { id: string }).toMatchObject({ id: a.id });
+      // Se connecter avec elle est une preuve.
+      expect((await post(inconnu, "/api/passkey/ajout/options", {})).status).toBe(200);
+      erreur.mockRestore();
+    });
+
+    it("une passkey créée sans vérification n'entre plus, mais le code reste la sortie, et elle se retire", async () => {
+      const erreur = silence();
+      const f = browser(s);
+      const a = await login(s, f, "a@exemple.fr");
+      // Comme celles créées avant cette exigence : la vérification n'était que préférée.
+      const { cle } = await ajoute(f);
+      await post(f, "/api/deconnexion", {});
+
+      const g = browser(s);
+      const { challenge } = await options(g, "/api/passkey/options");
+      expect((await post(g, "/api/passkey/connexion", { reponse: cle.entree(challenge, false) })).status).toBe(400);
+
+      expect(await login(s, g, "a@exemple.fr")).toMatchObject({ id: a.id });
+      expect((await g(`/api/passkeys/${cle.id}`, { method: "DELETE" })).status).toBe(200);
+      expect(await s.db.query("select id from passkeys")).toEqual([]);
+      erreur.mockRestore();
+    });
+  });
+
+  describe("avis d'ajout", () => {
+    it("part à l'adresse du compte une fois la passkey gardée", async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { res } = await ajoute(f);
+      expect(res.status).toBe(200);
+      expect(s.ajouts).toEqual(["a@exemple.fr"]);
+    });
+
+    it("ne part pas pour une passkey qui est déjà celle d'un autre compte", async () => {
+      const f = browser(s);
+      const g = browser(s);
+      await login(s, f, "a@exemple.fr");
+      await login(s, g, "b@exemple.fr");
+      const { cle } = await ajoute(f);
+      s.ajouts.length = 0;
+      const { challenge } = await options(g, "/api/passkey/ajout/options");
+      const res = await post(g, "/api/passkey/ajout", { reponse: cle.creation(challenge), nom: "Mac" });
+      expect(res.status).toBe(200);
+      expect(s.ajouts).toEqual([]);
+    });
+
+    it("un avis qui ne part pas ne revient pas sur l'ajout", async () => {
+      s.app = api({
+        db: s.db,
+        origin: ORIGIN,
+        sendCode: async (email, code) => void s.codes.set(email, code),
+        sendCodeAdresse: async () => {},
+        sendAdresseChangee: async () => {},
+        sendCodePreuve: async () => {},
+        sendPasskeyAjoutee: async () => {
+          throw new Error("Brevo 500");
+        },
+      });
+      const erreur = silence();
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      const { res } = await ajoute(f);
+      expect(res.status).toBe(200);
+      expect(await s.db.query("select id from passkeys")).toHaveLength(1);
+      expect(erreur).toHaveBeenCalled();
+      erreur.mockRestore();
+    });
   });
 });
 
@@ -2120,7 +2525,7 @@ describe("comptes sans connexion", () => {
     const db = await pgliteDb();
     await migrate(db);
     await db.exec(
-      `drop table changements_adresse;
+      `drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
        alter table sessions drop column id, drop column appareil, drop column utilise;
        drop table purge_passage; alter table comptes drop column essai;
        alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 6;`,
@@ -2224,6 +2629,36 @@ describe("comptes sans connexion", () => {
     expect(envoi.textContent).toContain("123456");
     expect(envoi.textContent).not.toContain("connexion");
     expect(envoi.htmlContent).toContain("123456");
+  });
+
+  it("le code de preuve dit à quoi il sert et que faire s'il n'a pas été demandé", async () => {
+    let envoi: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return new Response("{}", { status: 201 });
+    });
+    await brevoCodePreuve("cle")("a@exemple.fr", "123456");
+    expect(envoi.to).toEqual([{ email: "a@exemple.fr" }]);
+    expect(envoi.subject).toContain("123456");
+    for (const texte of [envoi.textContent, envoi.htmlContent]) {
+      expect(texte).toContain("123456");
+      expect(texte).toContain("supprimer le compte");
+      expect(texte).toContain("Déconnectez-le dans Mon compte");
+    }
+  });
+
+  it("l'avis d'ajout dit où retirer la passkey", async () => {
+    let envoi: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return new Response("{}", { status: 201 });
+    });
+    await brevoPasskeyAjoutee("cle")("a@exemple.fr");
+    expect(envoi.to).toEqual([{ email: "a@exemple.fr" }]);
+    for (const texte of [envoi.textContent, envoi.htmlContent]) {
+      expect(texte).toContain("Si c'est vous, vous n'avez rien à faire");
+      expect(texte).toContain("Face ID et empreinte");
+    }
   });
 
   it("l'avis à l'ancienne adresse dit à qui écrire, sans donner la nouvelle", async () => {
