@@ -131,13 +131,17 @@ export class LocalStore implements ProjectStore {
    */
   private flush(): void {
     const changed = this.reload();
+    this.writeProjects();
+    this.emit(changed);
+  }
+
+  private writeProjects(): void {
     const written = write(this.storage, PROJECTS_KEY, JSON.stringify(this.projects));
     if (written) this.unwritten.clear();
     if (written !== this.written) {
       this.written = written;
       for (const cb of this.storedListeners) cb();
     }
-    this.emit(changed);
   }
 
   private emit(ids: string[]): void {
@@ -183,6 +187,15 @@ export class LocalStore implements ProjectStore {
     else this.projects[i] = p;
     this.unwritten.set(p.id, p);
     this.flush();
+    return Promise.resolve();
+  }
+
+  /** Ramène la date d'un projet en arrière, ce que `save` ne fait pas : entre onglets, la plus récente l'emporte. */
+  redate(id: string, modifie: number): Promise<void> {
+    const changed = this.reload();
+    this.projects = this.projects.map((p) => (p.id === id ? { ...p, modifie } : p));
+    this.writeProjects();
+    this.emit(changed);
     return Promise.resolve();
   }
 

@@ -12,7 +12,15 @@ import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { cleanEmail, type Compte, type CompteDetail, type Entree, type Passkey, type Refus } from "../src/core/account";
+import {
+  DATE_REFUSEE,
+  cleanEmail,
+  type Compte,
+  type CompteDetail,
+  type Entree,
+  type Passkey,
+  type Refus,
+} from "../src/core/account";
 import {
   mergeAtelier,
   sameAtelier,
@@ -50,7 +58,6 @@ const MAX_AVANCE = 732 * 24 * HOUR;
 /** Envois ou lectures par minute, par compte et par route : largement au-dessus d'un échange toutes les 3 s. */
 const MAX_ENVOIS = 120;
 
-const DATE_REFUSEE = "Sa date de modification est impossible.";
 const ILLISIBLE = "Cet escalier ne peut pas être relu.";
 const SCHEMA_PLUS_HAUT =
   "Il a été changé sur un autre appareil, avec une version plus récente de l'outil : votre compte garde celle-là.";

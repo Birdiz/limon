@@ -1,4 +1,4 @@
-import type { Changement, Compte, Entree, Refus } from "../core/account";
+import { DATE_REFUSEE, type Changement, type Compte, type Entree, type Refus } from "../core/account";
 import { joinAtelier, mergeAtelier, redatedAtelier, sameAtelier, type Atelier } from "../core/atelier";
 import { fromNewerVersion, sanitizeProject, stamped, type Project } from "../core/project";
 import { ApiError, NotSignedIn, type Api } from "./api";
@@ -166,7 +166,7 @@ export class SyncStore implements ProjectStore {
       if (!(id in this.state.serveur)) return this.emitStatus();
     }
     if (!this.state.compte && !(id in this.state.serveur)) return;
-    this.state.supprimes[id] = p ? stamped(p, Date.now()) : Date.now();
+    this.state.supprimes[id] = p ? stamped(p, this.now()) : this.now();
     this.persist();
     if (this.state.compte) this.schedule();
   }
@@ -381,6 +381,7 @@ export class SyncStore implements ProjectStore {
       const index = changes.length ? await this.send(changes, keepalive) : await this.api.index();
       await this.apply(index);
       this.retry = false;
+      if (await this.redateRefused()) this.again = true;
       await this.exchangeAtelier();
       this.offline = false;
       this.erreur = null;
@@ -394,6 +395,31 @@ export class SyncStore implements ProjectStore {
       this.persist();
     }
     this.emitStatus();
+  }
+
+  /**
+   * Escaliers et suppressions refusés pour une date devant l'horloge de l'appareil : celle-ci a été remise à l'heure.
+   * `stamped` daterait encore chaque version suivante après l'impossible : ils repartent, datés de maintenant.
+   */
+  private async redateRefused(): Promise<boolean> {
+    const now = this.now();
+    const changed: string[] = [];
+    const repartis = new Set<string>();
+    for (const [id, r] of Object.entries(this.state.refuses)) {
+      if (r.raison !== DATE_REFUSEE || r.modifie <= now) continue;
+      const p = await this.local.get(id);
+      if (p?.modifie === r.modifie) {
+        await this.local.redate(id, now);
+        changed.push(id);
+      } else if (this.state.supprimes[id] === r.modifie) this.state.supprimes[id] = now;
+      else continue;
+      repartis.add(id);
+    }
+    if (!repartis.size) return false;
+    this.state.refuses = Object.fromEntries(Object.entries(this.state.refuses).filter(([id]) => !repartis.has(id)));
+    this.persist();
+    this.emit(changed);
+    return true;
   }
 
   /** Profil de l'atelier : le plus récent des deux côtés l'emporte, partie par partie. */

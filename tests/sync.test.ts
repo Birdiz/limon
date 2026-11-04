@@ -22,6 +22,12 @@ beforeAll(async () => {
 });
 beforeEach(() => s.reset());
 
+/** Trois mille jours d'avance : le serveur refuse tout ce que date cette horloge. */
+const horlogeEnAvance = () => {
+  const horloge = { avance: 3000 * 86400_000, now: () => Date.now() + horloge.avance };
+  return horloge;
+};
+
 /** Un appareil : son stockage, son navigateur (cookie), et un réseau qu'on peut couper. */
 function device(storage = memory(), now: () => number = Date.now) {
   const f = browser(s);
@@ -510,8 +516,8 @@ describe("projet d'une version plus récente de l'outil", () => {
 
 describe("refus du serveur à l'envoi", () => {
   /** Compte connecté, avec un projet déjà en ligne et un autre qui attend de descendre. */
-  const connected = async () => {
-    const a = device();
+  const connected = async (now: () => number = Date.now) => {
+    const a = device(memory(), now);
     const other = device();
     await other.store.save(project("autre", "Sur l'autre appareil", 5));
     await other.signIn("jean@exemple.fr");
@@ -528,7 +534,8 @@ describe("refus du serveur à l'envoi", () => {
     (await s.db.query<{ id: string }>("select id from projets where not supprime order by id")).map((r) => r.id);
 
   it.each([1e300, 1e19])("un fichier à une date de %d n'arrête pas les escaliers sains", async (date) => {
-    const a = await connected();
+    // Une date qui n'est pas devant l'horloge de l'appareil : elle reste refusée.
+    const a = await connected(() => date);
     await a.store.save(project("sain", "Sain", 10));
     await a.store.save(opened("abime", "Abîmé", date));
     await a.store.save(project("sain2", "Sain 2", 10));
@@ -658,7 +665,7 @@ describe("refus du serveur à l'envoi", () => {
   });
 
   it("modifié, un escalier trop loin dans le futur reste refusé et nommé", async () => {
-    const a = await connected();
+    const a = await connected(horlogeEnAvance().now);
     const refused = project("p", "Dupont", Date.now() + 800 * 86_400_000);
     await a.store.save(refused);
     await a.store.sync();
@@ -670,7 +677,8 @@ describe("refus du serveur à l'envoi", () => {
   });
 
   it("un refus ne repart pas à chaque échange, mais une fois au chargement suivant", async () => {
-    const a = await connected();
+    const horloge = horlogeEnAvance();
+    const a = await connected(horloge.now);
     await a.store.save(project("p", "Dupont", Date.now() + 800 * 86_400_000));
     await a.store.sync();
     expect(a.envois).toHaveLength(1);
@@ -686,6 +694,8 @@ describe("refus du serveur à l'envoi", () => {
         return a.f(input, init);
       }),
       a.storage,
+      null,
+      horloge.now,
     );
     expect((await reloaded.status()).refuses).toHaveLength(1);
     await reloaded.sync();
@@ -696,8 +706,92 @@ describe("refus du serveur à l'envoi", () => {
     expect((await reloaded.status()).refuses).toHaveLength(1);
   });
 
-  it("un escalier refusé qu'on supprime ne laisse pas de suppression à envoyer", async () => {
+  it("un fichier à une date impossible rejoint le compte, ramené à maintenant", async () => {
     const a = await connected();
+    await a.store.save(opened("abime", "Abîmé", 1e300));
+    await a.store.sync();
+    expect(await onServer()).toEqual(["abime", "autre"]);
+    expect(await a.store.status()).toMatchObject({ pending: 0, refuses: [] });
+    expect((await a.store.get("abime"))!.modifie).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("l'horloge remise à l'heure, un escalier refusé rejoint le compte sans rien à faire", async () => {
+    const horloge = horlogeEnAvance();
+    const a = await connected(horloge.now);
+    const vus: string[][] = [];
+    a.store.onChange((ids) => vus.push(ids));
+    await a.store.save(project("p", "Dupont", horloge.now()));
+    await a.store.sync();
+    expect(await onServer()).toEqual(["autre"]);
+    const refuses = [{ id: "p", nom: "Dupont", raison: expect.stringContaining("date") as string }];
+    expect((await a.store.status()).refuses).toEqual(refuses);
+
+    // Horloge encore en avance : rien ne bouge, et l'état survit au rechargement.
+    const date = (await a.store.get("p"))!.modifie;
+    await a.store.sync();
+    expect((await a.store.get("p"))!.modifie).toBe(date);
+    expect((await a.store.status()).refuses).toEqual(refuses);
+    expect(vus).toEqual([]);
+
+    horloge.avance = 0;
+    await a.store.sync();
+    expect(await onServer()).toEqual(["autre", "p"]);
+    expect(await a.store.status()).toMatchObject({ pending: 0, refuses: [] });
+    expect((await a.store.get("p"))!.modifie).toBeLessThanOrEqual(Date.now());
+    // La date ramenée tient au rechargement, malgré « la plus récente l'emporte » entre onglets.
+    expect((await new LocalStore(a.storage).get("p"))!.modifie).toBeLessThanOrEqual(Date.now());
+    // L'écran reprend la nouvelle date : sinon la modification suivante repartirait de l'ancienne.
+    expect(vus).toContainEqual(["p"]);
+  });
+
+  it("une version datée de plus loin encore rejoint aussi le compte, une fois l'horloge remise", async () => {
+    const horloge = horlogeEnAvance();
+    const a = await connected(horloge.now);
+    const p = project("p", "Dupont", horloge.now());
+    await a.store.save(p);
+    await a.store.sync();
+    horloge.avance = 0;
+    await a.store.save(edited(p, { ...p.params, H: p.params.H + 10 }, horloge.now()));
+    await a.store.sync();
+    expect(await onServer()).toEqual(["autre", "p"]);
+    expect(await a.store.status()).toMatchObject({ pending: 0, refuses: [] });
+  });
+
+  it("l'horloge remise à l'heure, une suppression refusée rejoint le compte", async () => {
+    const horloge = horlogeEnAvance();
+    const a = await connected(horloge.now);
+    await a.store.save(project("p", "Dupont", 10));
+    await a.store.sync();
+    await a.store.save(project("p", "Dupont", horloge.now()));
+    await a.store.sync();
+    await a.store.remove("p");
+    await a.store.sync();
+    expect(await onServer()).toEqual(["autre", "p"]);
+    expect((await a.store.status()).refuses).toMatchObject([{ id: "p", nom: null }]);
+
+    horloge.avance = 0;
+    await a.store.sync();
+    expect(await onServer()).toEqual(["autre"]);
+    expect(await a.store.status()).toMatchObject({ pending: 0, refuses: [] });
+  });
+
+  it("un refus pour une autre raison garde sa date, même devant l'horloge", async () => {
+    const a = await connected();
+    const [row] = await s.db.query<{ compte: string }>("select compte from projets");
+    await s.db.query(
+      `insert into projets (compte, id, modifie, supprime, donnees)
+       select $1::uuid, 'plein' || i, 1, true, null from generate_series(1, 1999) i`,
+      [row!.compte],
+    );
+    const date = Date.now() + 86400_000;
+    await a.store.save(project("trop", "De trop", date));
+    await a.store.sync();
+    expect((await a.store.status()).refuses).toMatchObject([{ id: "trop" }]);
+    expect((await a.store.get("trop"))!.modifie).toBe(date);
+  });
+
+  it("un escalier refusé qu'on supprime ne laisse pas de suppression à envoyer", async () => {
+    const a = await connected(() => 1e300);
     await a.store.save(project("p", "Dupont", 1e300));
     await a.store.sync();
     await a.store.remove("p");
@@ -952,11 +1046,6 @@ describe("synchronisation du profil de l'atelier", () => {
     expect((await a.store.status()).pending).toBe(0);
   });
 
-  /** Trois mille jours d'avance : le serveur refuse tout ce que date cette horloge. */
-  const horlogeEnAvance = () => {
-    const horloge = { avance: 3000 * 86400_000, now: () => Date.now() + horloge.avance };
-    return horloge;
-  };
   /** Appareil connecté à un compte rempli, avec une horloge en avance et un profil daté par elle. */
   const refuse = async (taux: number) => {
     const horloge = horlogeEnAvance();
