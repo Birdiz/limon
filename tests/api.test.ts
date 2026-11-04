@@ -7,7 +7,7 @@ import { quantites } from "../src/cnc/quantites";
 import { MAX_OCTETS, SAISIE_DEFAUT, bloquants, devis, newDevis, remettre, type DevisProjet } from "../src/core/devis";
 import { compute } from "../src/core/stair";
 import { newProject, NOM_PAR_DEFAUT, SCHEMA, type Project } from "../src/core/project";
-import { api } from "../server/api";
+import { api, balayeLimites, CODES_PAR_HEURE, Limiter, VERIFICATIONS_PAR_IP } from "../server/api";
 import { migrate, pgliteDb, purge, purgeComptes } from "../server/db";
 import {
   brevoAdresseChangee,
@@ -2675,5 +2675,188 @@ describe("comptes sans connexion", () => {
     expect(envoi.to).toEqual([{ email: "a@exemple.fr" }]);
     expect(envoi.textContent).toContain("tom.bouzy@gmail.com");
     expect(envoi.htmlContent).toContain("tom.bouzy@gmail.com");
+  });
+});
+
+describe("limites de débit", () => {
+  const HEURE = 3_600_000;
+  /** Sans passer par un navigateur : l'adresse IP est choisie, ou absente. */
+  const envoi = (url: string, ip: string | null, corps: unknown = {}) =>
+    s.app.request(url, {
+      method: "POST",
+      headers: { ...json, origin: ORIGIN, ...(ip ? { "x-forwarded-for": ip } : {}) },
+      body: JSON.stringify(corps),
+    });
+  const adresse = (i: number) => `9.${i >> 16}.${(i >> 8) & 255}.${i & 255}`;
+  const demandeCode = (ip: string | null, email: string) => envoi("/api/code", ip, { email });
+  const plusTard = (ms: number) => {
+    const t = Date.now() + ms;
+    vi.spyOn(Date, "now").mockImplementation(() => t);
+  };
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("refuse dès la limite les demandes de code sans en-tête d'adresse", async () => {
+    const statuts = [];
+    for (let i = 0; i < 22; i++) statuts.push((await demandeCode(null, `p${i}@exemple.fr`)).status);
+    expect(statuts).toEqual([...Array<number>(20).fill(204), 429, 429]);
+  });
+
+  it(
+    "garde une adresse limitée après 10 000 autres, sans toucher aux e-mails ni aux codes",
+    { timeout: 60_000 },
+    async () => {
+      const options = (ip: string) => envoi("/api/passkey/options", ip);
+      for (let i = 0; i < 3; i++) await demandeCode("1.1.1.1", "cible@exemple.fr");
+      for (let i = 0; i < 60; i++) expect((await options("2.2.2.2")).status).toBe(200);
+      expect((await options("2.2.2.2")).status).toBe(429);
+
+      for (let i = 0; i < 10_100; i++) expect((await options(adresse(i))).status).toBe(200);
+
+      expect(s.limites.passkeysParIp.taille).toBe(10_000);
+      expect((await options("2.2.2.2")).status).toBe(429);
+      expect(s.limites.codesParEmail.taille).toBe(1);
+      expect(s.limites.codesParIp.taille).toBe(1);
+      expect((await demandeCode("1.1.1.2", "cible@exemple.fr")).status).toBe(429);
+    },
+  );
+
+  it("garde une limite par e-mail et par adresse quand leur table déborde", async () => {
+    for (let i = 0; i < 3; i++) await demandeCode(`1.1.1.${i}`, "cible@exemple.fr");
+    for (let i = 0; i < 20; i++) await demandeCode("2.2.2.2", `p${i}@exemple.fr`);
+    expect((await demandeCode("2.2.2.2", "autre@exemple.fr")).status).toBe(429);
+
+    for (let i = 0; i < 10_100; i++) {
+      s.limites.codesParEmail.hit(`f${i}@exemple.fr`);
+      s.limites.codesParIp.hit(adresse(i));
+    }
+
+    expect(s.limites.codesParEmail.taille).toBe(10_000);
+    expect(s.limites.codesParIp.taille).toBe(10_000);
+    expect((await demandeCode("3.3.3.3", "cible@exemple.fr")).status).toBe(429);
+    expect((await demandeCode("2.2.2.2", "autre@exemple.fr")).status).toBe(429);
+  });
+
+  it("limite les vérifications de code par adresse, sans compter un code mal formé", async () => {
+    const verifie = (ip: string, code: string) => envoi("/api/code/verifier", ip, { email: "a@exemple.fr", code });
+    await demandeCode("1.1.1.1", "a@exemple.fr");
+    const bon = s.codes.get("a@exemple.fr")!;
+    const mauvais = bon === "000000" ? "111111" : "000000";
+    for (let i = 0; i < VERIFICATIONS_PAR_IP; i++) expect((await verifie("2.2.2.2", mauvais)).status).toBe(400);
+    const refus = await verifie("2.2.2.2", bon);
+    expect(refus.status).toBe(429);
+    expect(await refus.json()).toEqual({ erreur: "Trop d'essais. Réessayez dans une heure." });
+
+    for (let i = 0; i < VERIFICATIONS_PAR_IP + 1; i++) expect((await verifie("3.3.3.3", "douze")).status).toBe(400);
+    expect(s.limites.verificationsParIp.taille).toBe(1);
+
+    await demandeCode("1.1.1.1", "a@exemple.fr");
+    expect((await verifie("3.3.3.3", s.codes.get("a@exemple.fr")!)).status).toBe(200);
+  });
+
+  it("plafonne les codes de tous les chemins, puis les laisse repartir", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect((await post(f, "/api/preuve/code", {})).status).toBe(204);
+    expect((await post(f, "/api/compte/email/code", { email: "neuve@exemple.fr" })).status).toBe(204);
+    for (let i = 3; i < CODES_PAR_HEURE; i++)
+      expect((await demandeCode(adresse(i), `p${i}@exemple.fr`)).status).toBe(204);
+    const emails = s.limites.codesParEmail.taille;
+    const envoyes = s.codes.size;
+
+    const refus = await demandeCode("1.1.1.1", "tard@exemple.fr");
+    expect(refus.status).toBe(429);
+    expect(((await refus.json()) as { erreur: string }).erreur).toContain("pour tout le monde");
+    s.codesPreuve.clear();
+    s.codesAdresse.clear();
+    expect((await post(f, "/api/preuve/code", {})).status).toBe(429);
+    expect((await post(f, "/api/compte/email/code", { email: "n2@exemple.fr" })).status).toBe(429);
+    expect([s.codes.size, s.codesPreuve.size, s.codesAdresse.size]).toEqual([envoyes, 0, 0]);
+    // Rien n'est usé par ces refus, et ce qui ne passe pas par un envoi reste ouvert.
+    expect(s.limites.codesParEmail.taille).toBe(emails);
+    expect((await envoi("/api/passkey/options", "1.1.1.1")).status).toBe(200);
+    const parti = { email: "p3@exemple.fr", code: s.codes.get("p3@exemple.fr") };
+    expect((await envoi("/api/code/verifier", "1.1.1.1", parti)).status).toBe(200);
+
+    plusTard(HEURE);
+    expect((await demandeCode("1.1.1.1", "tard@exemple.fr")).status).toBe(204);
+  });
+
+  it("n'use pas le plafond pour un code refusé à une personne", async () => {
+    for (let i = 0; i < 3; i++) await demandeCode("1.1.1.1", "cible@exemple.fr");
+    for (let i = 0; i <= CODES_PAR_HEURE; i++) {
+      const refus = await demandeCode(adresse(i), "cible@exemple.fr");
+      expect(await refus.json()).toEqual({ erreur: "Trop de codes demandés. Réessayez dans une heure." });
+    }
+    expect((await demandeCode("1.1.1.1", "autre@exemple.fr")).status).toBe(204);
+  });
+
+  it("oublie les adresses et les e-mails expirés au balayage", async () => {
+    await demandeCode("1.1.1.1", "a@exemple.fr");
+    plusTard(HEURE - 1000);
+    balayeLimites(s.limites);
+    expect([s.limites.codesParIp.taille, s.limites.codesParEmail.taille]).toEqual([1, 1]);
+    plusTard(1000);
+    balayeLimites(s.limites);
+    expect([s.limites.codesParIp.taille, s.limites.codesParEmail.taille]).toEqual([0, 0]);
+    expect(s.limites.codesEnvoyes.taille).toBe(0);
+  });
+
+  describe("une table", () => {
+    let maintenant = 0;
+    beforeEach(() => {
+      maintenant = 1_000_000;
+      vi.spyOn(Date, "now").mockImplementation(() => maintenant);
+    });
+
+    it("balaie ce qui a expiré, sans toucher à une clé encore comptée", () => {
+      const l = new Limiter(2, 60_000);
+      l.hit("vieille");
+      l.hit("revue");
+      maintenant += 30_000;
+      l.hit("revue");
+      maintenant += 30_000;
+      l.balaye();
+      expect(l.taille).toBe(1);
+      expect(l.hit("revue")).toBe(true);
+      expect(l.hit("revue")).toBe(false);
+    });
+
+    it("pleine, retire la plus ancienne des clés qui ne sont pas limitées", () => {
+      const l = new Limiter(2, 60_000, 3);
+      l.hit("limitee");
+      l.hit("limitee");
+      l.hit("ancienne");
+      l.hit("recente");
+      expect(l.hit("neuve")).toBe(true);
+      expect(l.taille).toBe(3);
+      expect(l.hit("limitee")).toBe(false);
+      expect(l.atteinte("recente")).toBe(false);
+      expect(l.hit("recente")).toBe(true);
+      expect(l.atteinte("recente")).toBe(true);
+      expect(l.hit("ancienne")).toBe(true);
+      expect(l.atteinte("ancienne")).toBe(false);
+    });
+
+    it("pleine de clés limitées, refuse une clé neuve jusqu'à leur expiration", () => {
+      const l = new Limiter(1, 60_000, 2);
+      l.hit("a");
+      l.hit("b");
+      expect(l.hit("c")).toBe(false);
+      expect(l.taille).toBe(2);
+      expect([l.hit("a"), l.hit("b")]).toEqual([false, false]);
+      maintenant += 60_000;
+      expect(l.hit("c")).toBe(true);
+      expect(l.taille).toBe(2);
+    });
+
+    it("ne garde qu'un début de clé", () => {
+      const l = new Limiter(1, 60_000);
+      const longue = "x".repeat(400);
+      l.hit(`${longue}a`);
+      expect(l.hit(`${longue}b`)).toBe(false);
+      expect(l.atteinte(`${longue}b`)).toBe(true);
+    });
   });
 });

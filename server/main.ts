@@ -1,7 +1,7 @@
 import path from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { api } from "./api";
+import { api, balayeLimites, nouvellesLimites } from "./api";
 import { migrate, pgDb, pgliteDb, purge, purgeComptes } from "./db";
 import {
   brevo,
@@ -42,6 +42,10 @@ setInterval(() => {
   void purge(db).catch(console.error);
   purgeInactifs();
 }, 3_600_000).unref();
+// Les limites gardent des adresses IP et des e-mails : oubliés sans attendre une prochaine demande. Peu coûteux, le
+// balayage ne parcourt que ce qui a expiré.
+const limites = nouvellesLimites();
+setInterval(() => balayeLimites(limites), 60_000).unref();
 
 const app = new Hono();
 app.use(async (c, next) => {
@@ -56,6 +60,7 @@ app.route(
   api({
     db,
     origin,
+    limites,
     sendCode: parBrevo ? brevo(key) : consoleMail,
     sendCodeAdresse: parBrevo ? brevoCodeAdresse(key) : consoleCodeAdresse,
     sendAdresseChangee: parBrevo ? brevoAdresseChangee(key) : consoleAdresseChangee,

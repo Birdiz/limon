@@ -1,5 +1,5 @@
 import { cleanEmail, type Compte } from "../src/core/account";
-import { api } from "../server/api";
+import { api, nouvellesLimites, type Limites } from "../server/api";
 import { migrate, pgliteDb, type Db } from "../server/db";
 
 export const ORIGIN = "https://quart-de-tour.fr";
@@ -16,16 +16,18 @@ export async function testServer() {
   const avis: string[] = [];
   const codesPreuve = new Map<string, string>();
   const ajouts: string[] = [];
-  const make = () =>
+  const make = (limites: Limites) =>
     api({
       db,
       origin: ORIGIN,
+      limites,
       sendCode: async (email, code) => void codes.set(email, code),
       sendCodeAdresse: async (email, code) => void codesAdresse.set(email, code),
       sendAdresseChangee: async (ancienne) => void avis.push(ancienne),
       sendCodePreuve: async (email, code) => void codesPreuve.set(email, code),
       sendPasskeyAjoutee: async (email) => void ajouts.push(email),
     });
+  const limites = nouvellesLimites();
   const s = {
     db,
     codes,
@@ -33,7 +35,8 @@ export async function testServer() {
     avis,
     codesPreuve,
     ajouts,
-    app: make(),
+    limites,
+    app: make(limites),
     /** Base vide et serveur neuf, limites de débit comprises. */
     async reset() {
       await db.query("delete from comptes");
@@ -43,7 +46,8 @@ export async function testServer() {
       avis.length = 0;
       codesPreuve.clear();
       ajouts.length = 0;
-      s.app = make();
+      s.limites = nouvellesLimites();
+      s.app = make(s.limites);
     },
   };
   return s;
