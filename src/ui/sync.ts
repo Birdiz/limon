@@ -1,6 +1,6 @@
 import { DATE_REFUSEE, type Changement, type Compte, type Entree, type Refus } from "../core/account";
 import { joinAtelier, mergeAtelier, redatedAtelier, sameAtelier, type Atelier } from "../core/atelier";
-import { fromNewerVersion, sanitizeProject, stamped, type Project } from "../core/project";
+import { avecRemis, fromNewerVersion, sanitizeProject, stamped, type Project } from "../core/project";
 import { ApiError, NotSignedIn, type Api } from "./api";
 import type { AtelierStore } from "./atelier";
 import { browserStorage, read, write, type KeyValue, type LocalStore, type ProjectStore } from "./store";
@@ -93,7 +93,8 @@ export interface SyncStatus {
 /**
  * Projets de l'appareil, recopiés dans le compte quand on est connecté. Tout se lit et s'écrit dans
  * le LocalStore, tout de suite ; l'échange avec le serveur se fait en arrière-plan, sans bouton.
- * La version modifiée en dernier gagne, projet par projet ; une suppression est une trace datée.
+ * La version modifiée en dernier gagne, projet par projet, sauf sur les versions remises d'un devis, qui s'ajoutent ;
+ * une suppression est une trace datée.
  * Le projet ouvert (`currentId`) reste propre à chaque appareil.
  */
 export class SyncStore implements ProjectStore {
@@ -510,7 +511,10 @@ export class SyncStore implements ProjectStore {
         // Une modification faite ici pendant l'échange reste la plus récente.
         const cur = await this.local.get(q.id);
         if (cur && cur.modifie >= q.modifie) continue;
-        await this.local.save(q);
+        // Une version remise ici que le compte n'a pas reprise (trop lourd, refus) reste, et repart avec la reçue.
+        const kept = avecRemis(q, cur?.devis ?? null);
+        if (kept !== q) this.again = true;
+        await this.local.save(kept);
         changed.push(q.id);
       }
     this.plusRecents = plusRecents;

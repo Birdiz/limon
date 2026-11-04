@@ -1,4 +1,4 @@
-import { sanitizeDevis, type Client, type DevisProjet } from "./devis";
+import { avecRemisDe, sanitizeDevis, type Client, type DevisProjet } from "./devis";
 import { DEFAULTS, sanitizeParams, type Params } from "./params";
 import type { ComputeResult } from "./stair";
 import { sansControles, textesPropres } from "./texte";
@@ -39,7 +39,7 @@ const VERSION = 1;
 export const SCHEMA = 1;
 
 /** Numéro d'un projet non fiable ; 0 s'il n'en a pas, ou pas un vrai. */
-function schemaOf(raw: unknown): number {
+export function schemaOf(raw: unknown): number {
   const s = (raw as { schema?: unknown } | null)?.schema;
   return typeof s === "number" && Number.isSafeInteger(s) && s > 0 ? s : 0;
 }
@@ -175,6 +175,15 @@ export function withEtat(p: Project, etat: Etat, now: number): Project {
 export function edited(p: Project, params: Params, now: number): Project {
   if (JSON.stringify(params) === JSON.stringify(p.params)) return p;
   return { ...(p.etat === "fini" ? withEtat(p, "brouillon", now) : p), params, ...touched(p, now) };
+}
+
+/**
+ * `p`, gagnant de deux copies du même escalier, avec les versions remises que seule l'autre connaît. Daté juste après
+ * lui, pour que les appareils qui ont la copie gagnante reçoivent celle-ci. Le même objet s'il n'y a rien à reprendre.
+ */
+export function avecRemis(p: Project, autre: DevisProjet | null): Project {
+  const devis = avecRemisDe(p.devis, autre);
+  return devis === p.devis ? p : { ...p, devis, modifie: stamped(p, 0) };
 }
 
 /** Passage à « fini » : impossible tant que le calcul échoue, à confirmer si un contrôle n'est pas respecté. */

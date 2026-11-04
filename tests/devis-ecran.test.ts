@@ -342,6 +342,12 @@ describe("remise au client", () => {
     }
   });
 
+  it("une seule remise ne porte ni l'heure ni l'avertissement", async () => {
+    await remettre();
+    expect($("#dvVersions").textContent).not.toContain("à 10:00");
+    expect($("#dvVersions").textContent).not.toContain("même numéro");
+  });
+
   it("note la réponse du client, et l'efface", async () => {
     await remettre();
     vi.setSystemTime(new Date(2026, 10, 3, 9));
@@ -350,7 +356,7 @@ describe("remise au client", () => {
     expect($("#dvChip").textContent).toBe("Accepté");
     expect($("#dvEtatTxt").textContent).toBe("N° 2026-0012, remis le 31/10/2026, accepté le 03/11/2026.");
     $<HTMLButtonElement>("#dvSansReponse").click();
-    expect(project.devis!.remis[0]).toMatchObject({ etat: "remis", etatLe: 0 });
+    expect(project.devis!.remis[0]).toMatchObject({ etat: "remis", etatLe: new Date(2026, 10, 3, 9).getTime() });
     $<HTMLButtonElement>("#dvRefuse").click();
     expect($("#dvChip").textContent).toBe("Refusé");
   });
@@ -385,6 +391,35 @@ describe("remise au client", () => {
     // L'ancienne version garde son document.
     document.querySelector<HTMLButtonElement>('#dvVersions [data-v="1"]')!.click();
     expect(files.at(-1)!.name).toBe("Devis 2026-0012 - Dupont.pdf");
+  });
+
+  it("deux remises de même numéro, faites sur deux appareils : chacune garde son document, l'heure les distingue", async () => {
+    await remettre();
+    const premier = files.at(-1)!;
+    const [r] = project.devis!.remis;
+    const autre = { ...r!, remisLe: new Date(2026, 9, 31, 14, 5).getTime(), client: { ...r!.client, nom: "Martin" } };
+    project = withDevis(project, { ...project.devis!, remis: [r!, autre] }, project.modifie + 1);
+    view.refresh();
+    expect($("#dvEtatTxt").textContent).toContain("N° 2026-0012, remis le 31/10/2026 à 14:05,");
+    const texte = $("#dvVersions").textContent;
+    expect(texte).toContain("remis le 31/10/2026 à 10:00");
+    expect(texte).toContain("remis le 31/10/2026 à 14:05");
+    expect(texte).toContain("Plusieurs versions portent le même numéro");
+
+    const pdfs = document.querySelectorAll<HTMLButtonElement>('#dvVersions [data-v="1"]');
+    pdfs[1]!.click();
+    expect(files.at(-1)!.name).toBe("Devis 2026-0012 - Dupont.pdf");
+    expect(Buffer.from(files.at(-1)!.data).equals(Buffer.from(premier.data))).toBe(true);
+    pdfs[0]!.click();
+    expect(files.at(-1)!.name).toBe("Devis 2026-0012 - Martin.pdf");
+
+    // La réponse va au document à l'écran, pas à son double.
+    $<HTMLButtonElement>("#dvAccepte").click();
+    expect(project.devis!.remis.map((x) => x.etat)).toEqual(["remis", "accepte"]);
+    // La suivante passe au-dessus.
+    $<HTMLButtonElement>("#dvRouvrir").click();
+    await remettre();
+    expect(project.devis!.remis.map((x) => x.version)).toEqual([1, 1, 2]);
   });
 
   it("se reprend à la main, puis revient à la version remise", async () => {

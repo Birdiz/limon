@@ -123,7 +123,7 @@ export function newDevis(tva: TauxTVA = 20): DevisProjet {
 
 const MAX_TEXTE = 2000;
 const MAX_LIGNES = 100;
-/** Versions remises gardées pour un escalier. */
+/** Versions qu'une remise peut atteindre sur un escalier. Deux appareils réunis peuvent la dépasser : rien n'est effacé. */
 const MAX_VERSIONS = 50;
 /**
  * Octets d'un escalier dans un compte, versions remises comprises. Une version pèse 4 ko pour un devis courant, 23 ko
@@ -193,10 +193,7 @@ function sanitizeSaisie(raw: unknown): Saisie {
 export function sanitizeDevis(raw: unknown): DevisProjet | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  const remis = (Array.isArray(r.remis) ? r.remis : [])
-    .slice(-MAX_VERSIONS)
-    .map(sanitizeRemis)
-    .filter((v): v is DevisRemis => v !== null);
+  const remis = (Array.isArray(r.remis) ? r.remis : []).map(sanitizeRemis).filter((v): v is DevisRemis => v !== null);
   return {
     client: sanitizeClient(r.client),
     saisie: sanitizeSaisie(r.saisie),
@@ -496,7 +493,7 @@ export interface DevisRemis {
   /** Durée de validité, en jours. */
   validite: number;
   etat: EtatRemis;
-  /** Date de l'acceptation ou du refus, 0 sinon. */
+  /** Date de la dernière réponse notée, ou de son effacement ; 0 si rien n'a été noté. */
   etatLe: number;
   /** Nom de l'escalier. */
   nom: string;
@@ -567,7 +564,7 @@ function sanitizeRemis(raw: unknown): DevisRemis | null {
     remisLe: date(r.remisLe),
     validite: Math.round(Math.min(positif(r.validite) ?? 30, 3650)),
     etat,
-    etatLe: etat === "remis" ? 0 : date(r.etatLe),
+    etatLe: date(r.etatLe),
     nom: texte(r.nom, 80),
     params: sanitizeParams(r.params),
     tarifs: sanitizeTarifs(r.tarifs),
@@ -628,14 +625,60 @@ export function remettre(
 }
 
 /** Réponse du client notée sur une version ; « remis » efface une réponse notée par erreur. */
-export function noterReponse(d: DevisProjet, version: number, etat: EtatRemis, now: number): DevisProjet {
+export function noterReponse(
+  d: DevisProjet,
+  v: Pick<DevisRemis, "version" | "remisLe">,
+  etat: EtatRemis,
+  now: number,
+): DevisProjet {
   return {
     ...d,
-    remis: d.remis.map((r) => (r.version === version ? { ...r, etat, etatLe: etat === "remis" ? 0 : now } : r)),
+    remis: d.remis.map((r) => (r.version === v.version && r.remisLe === v.remisLe ? { ...r, etat, etatLe: now } : r)),
   };
 }
 
 const octets = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length;
+
+/**
+ * La même remise, vue de deux appareils. La date la distingue d'une autre remise de même numéro et de même version :
+ * deux appareils sans réseau entre eux en font chacun une, et les deux documents restent tels que le client les a reçus.
+ */
+const cleRemis = (r: DevisRemis) => `${r.numero} ${r.version} ${r.remisLe}`;
+
+/** Une autre version remise porte le même numéro et la même version que `r`. */
+export function enDouble(d: DevisProjet, r: DevisRemis): boolean {
+  return d.remis.some((x) => x !== r && x.numero === r.numero && x.version === r.version);
+}
+
+/**
+ * Les versions de deux copies d'un même devis : aucune ne se perd, et une version connue des deux garde la réponse
+ * notée en dernier. Rangées par version, puis par date. Le même tableau si `b` n'apporte rien à `a`.
+ */
+function reunirRemis(a: DevisRemis[], b: DevisRemis[]): DevisRemis[] {
+  const autres = new Map(b.map((r) => [cleRemis(r), r]));
+  let plusRecente = false;
+  const out = a.map((r) => {
+    const o = autres.get(cleRemis(r));
+    autres.delete(cleRemis(r));
+    if (!o || o.etatLe <= r.etatLe) return r;
+    plusRecente = true;
+    return { ...r, etat: o.etat, etatLe: o.etatLe };
+  });
+  if (!autres.size && !plusRecente) return a;
+  return [...out, ...autres.values()].sort((x, y) => x.version - y.version || x.remisLe - y.remisLe);
+}
+
+/**
+ * Le devis `d`, gagnant de deux copies d'un même escalier, avec ce que l'autre a remis et qu'il ne connaît pas : la
+ * version la plus récente l'emporte sur tout, sauf sur un document déjà donné à un client. Le même objet s'il n'y a
+ * rien à reprendre.
+ */
+export function avecRemisDe(d: DevisProjet | null, autre: DevisProjet | null): DevisProjet | null {
+  if (!autre?.remis.length) return d;
+  if (!d) return autre;
+  const remis = reunirRemis(d.remis, autre.remis);
+  return remis === d.remis ? d : { ...d, remis };
+}
 
 /** Une version de plus tient dans l'escalier : la remise n'efface aucune version, et le compte ne la refusera pas. */
 function placePourRemettre(D: Devis, d: DevisProjet, T: Tarifs, E: Entreprise): boolean {

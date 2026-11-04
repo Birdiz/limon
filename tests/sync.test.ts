@@ -1,8 +1,21 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { buildCNC } from "../src/cnc/build";
+import { quantites } from "../src/cnc/quantites";
 import { atelierDefauts, newAtelier, type AtelierDefauts } from "../src/core/atelier";
+import { devis, newDevis, noterReponse, remettre, versionSuivante } from "../src/core/devis";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
-import { edited, newProject, parseProjectFile, projectFile, SCHEMA, withEtat, type Project } from "../src/core/project";
+import {
+  edited,
+  newProject,
+  parseProjectFile,
+  projectFile,
+  SCHEMA,
+  touched,
+  withDevis,
+  withEtat,
+  type Project,
+} from "../src/core/project";
 import { compute } from "../src/core/stair";
 import { AtelierStore } from "../src/ui/atelier";
 import { Api } from "../src/ui/api";
@@ -1250,5 +1263,167 @@ describe("synchronisation du profil de l'atelier", () => {
     expect(seen).toEqual([["b"]]);
     expect(notes).toBe(1);
     expect(await d.names()).toEqual(["Dans l'autre onglet", "Ici"]);
+  });
+});
+
+describe("versions remises d'un devis, deux appareils qui divergent", () => {
+  const R = compute(DEFAULTS, false);
+  if (!R.ok) throw new Error("exemple invalide");
+  const Q = quantites(R.stair, buildCNC(R.stair));
+
+  /** Remise au client, chiffrée à ce total de lignes libres : deux documents différents sous le même numéro. */
+  function remis(p: Project, client: string, pu: number, now: number): Project {
+    const d = p.devis ?? newDevis();
+    const saisie = { ...d.saisie, libres: [{ designation: "Pose", q: 1, unite: "u", pu, tva: 20 }] };
+    const avec = { ...d, client: { ...d.client, nom: client }, saisie };
+    const chiffrage = devis(Q, TARIFS_VIDES, saisie);
+    const v = { numero: "2026-0012", nom: p.nom, params: p.params, tarifs: TARIFS_VIDES, entreprise: ENTREPRISE_VIDE };
+    return withDevis(p, remettre(avec, { ...v, chiffrage }, now), now);
+  }
+
+  /** Les deux appareils ont le même escalier, puis le réseau tombe. */
+  async function diverge() {
+    const a = device();
+    const b = device();
+    await a.signIn("jean@exemple.fr");
+    await a.store.save(project("p", "Dupont", 1000));
+    await a.store.sync();
+    await b.signIn("jean@exemple.fr");
+    a.online = b.online = false;
+    return { a, b, p: (await a.store.get("p"))! };
+  }
+
+  const clients = async (d: ReturnType<typeof device>) =>
+    (await d.store.get("p"))!.devis!.remis.map((r) => r.client.nom).sort();
+
+  async function retrouve(a: ReturnType<typeof device>, b: ReturnType<typeof device>) {
+    a.online = b.online = true;
+    await a.store.sync();
+    await b.store.sync();
+    await a.store.sync();
+  }
+
+  it("une remise sur chacun : les deux restent, sur les deux appareils et dans le compte", async () => {
+    const { a, b, p } = await diverge();
+    await a.store.save(remis(p, "Dupont", 100, 2000));
+    await b.store.save(remis(p, "Martin", 200, 3000));
+    await retrouve(a, b);
+    expect(await clients(a)).toEqual(["Dupont", "Martin"]);
+    expect(await clients(b)).toEqual(["Dupont", "Martin"]);
+    expect((await a.store.status()).pending).toBe(0);
+    expect((await b.store.status()).pending).toBe(0);
+  });
+
+  it("la même version sur chacun : même numéro gardé, documents intacts, la suivante au-dessus", async () => {
+    const { a, b, p } = await diverge();
+    const surA = remis(p, "Dupont", 100, 2000);
+    const surB = remis(p, "Martin", 200, 3000);
+    await a.store.save(surA);
+    await b.store.save(surB);
+    await retrouve(a, b);
+    const d = (await b.store.get("p"))!.devis!;
+    expect(d.remis.map((r) => [r.numero, r.version])).toEqual([
+      ["2026-0012", 1],
+      ["2026-0012", 1],
+    ]);
+    expect(d.remis[0]).toEqual(surA.devis!.remis[0]);
+    expect(d.remis[1]).toEqual(surB.devis!.remis[0]);
+    expect(versionSuivante(d)).toBe(2);
+  });
+
+  it("deux horloges qui donnent la même date : les deux remises restent quand même", async () => {
+    const { a, b, p } = await diverge();
+    await a.store.save({ ...remis(p, "Dupont", 100, 2000), modifie: 5000 });
+    await b.store.save({ ...remis(p, "Martin", 200, 3000), modifie: 5000 });
+    await retrouve(a, b);
+    expect(await clients(a)).toEqual(["Dupont", "Martin"]);
+    expect(await clients(b)).toEqual(["Dupont", "Martin"]);
+  });
+
+  it("une réponse notée sur un appareil et une remise sur l'autre : les deux restent", async () => {
+    const { a, b, p } = await diverge();
+    const surA = remis(p, "Dupont", 100, 2000);
+    a.online = true;
+    await a.store.save(surA);
+    await a.store.sync();
+    b.online = true;
+    await b.store.sync();
+    a.online = b.online = false;
+    const q = (await b.store.get("p"))!;
+    await a.store.save(withDevis(surA, noterReponse(surA.devis!, surA.devis!.remis[0]!, "accepte", 4000), 4000));
+    await b.store.save(remis({ ...q, devis: { ...q.devis!, rouvert: true } }, "Martin", 200, 5000));
+    await retrouve(a, b);
+    for (const d of [a, b])
+      expect((await d.store.get("p"))!.devis!.remis.map((r) => [r.client.nom, r.etat])).toEqual([
+        ["Dupont", "accepte"],
+        ["Martin", "remis"],
+      ]);
+  });
+
+  it("réunies trop lourdes pour le compte : le refus est dit, et chaque remise reste où elle est", async () => {
+    const { a, b, p } = await diverge();
+    const lourd = "é".repeat(2000);
+    const pleine = (q: Project, client: string, debut: number, n: number) => {
+      let out = q;
+      for (let i = 0; i < n; i++) {
+        const d = out.devis ?? newDevis();
+        const saisie = {
+          ...d.saisie,
+          libres: Array.from({ length: 100 }, () => ({
+            designation: "é".repeat(200),
+            q: 1,
+            unite: "u",
+            pu: 1,
+            tva: 20,
+          })),
+        };
+        const avec = { ...d, client: { nom: client, adresse: lourd, chantier: lourd }, saisie };
+        const v = {
+          numero: "2026-0012",
+          nom: q.nom,
+          params: q.params,
+          tarifs: TARIFS_VIDES,
+          entreprise: ENTREPRISE_VIDE,
+        };
+        out = withDevis(out, remettre(avec, { ...v, chiffrage: devis(Q, TARIFS_VIDES, saisie) }, debut + i), debut + i);
+      }
+      return out;
+    };
+    await a.store.save(pleine(p, "Dupont", 2000, 6));
+    await b.store.save(pleine(p, "Martin", 3000, 6));
+    await retrouve(a, b);
+    expect((await b.store.status()).refuses.map((r) => r.raison)).toEqual([expect.stringContaining("trop lourd")]);
+    expect((await a.store.get("p"))!.devis!.remis).toHaveLength(6);
+    expect((await b.store.get("p"))!.devis!.remis).toHaveLength(6);
+    // Le compte a pris une nouvelle version : la remise refusée ne se perd pas en la recevant.
+    b.online = false;
+    const q = (await a.store.get("p"))!;
+    await a.store.save({ ...q, nom: "Retouché", ...touched(q, Date.now() + 1000) });
+    await a.store.sync();
+    b.online = true;
+    await b.store.sync();
+    const surB = (await b.store.get("p"))!;
+    expect(surB.nom).toBe("Retouché");
+    expect(surB.devis!.remis.map((r) => r.client.nom).filter((n) => n === "Martin")).toHaveLength(6);
+    expect(surB.devis!.remis).toHaveLength(12);
+  });
+
+  it("une remise sur le plus ancien, une retouche sur le plus récent : la remise reste", async () => {
+    const { a, b, p } = await diverge();
+    await a.store.save(remis(p, "Dupont", 100, 2000));
+    await b.store.save({ ...p, nom: "Dupont, retouché", ...touched(p, 3000) });
+    await retrouve(a, b);
+    expect(await clients(a)).toEqual(["Dupont"]);
+    expect(await clients(b)).toEqual(["Dupont"]);
+    expect((await a.store.get("p"))!.nom).toBe("Dupont, retouché");
+  });
+
+  it("une remise sur le plus récent, une retouche sur le plus ancien : la remise reste", async () => {
+    const { a, b, p } = await diverge();
+    await a.store.save({ ...p, nom: "Dupont, retouché", ...touched(p, 2000) });
+    await b.store.save(remis(p, "Martin", 200, 3000));
+    await retrouve(a, b);
+    expect(await clients(a)).toEqual(["Martin"]);
+    expect(await clients(b)).toEqual(["Martin"]);
   });
 });

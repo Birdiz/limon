@@ -4,7 +4,9 @@ import { buildCNC } from "../src/cnc/build";
 import { quantites } from "../src/cnc/quantites";
 import {
   SAISIE_DEFAUT,
+  avecRemisDe,
   devis,
+  enDouble,
   etatRemis,
   finValidite,
   newDevis,
@@ -12,6 +14,7 @@ import {
   remettre,
   sanitizeDevis,
   versionRemise,
+  versionSuivante,
   type DevisProjet,
   type Saisie,
 } from "../src/core/devis";
@@ -117,12 +120,63 @@ describe("versions remises", () => {
     expect(d2.rouvert).toBe(false);
   });
 
+  describe("deux copies réunies", () => {
+    const a = remettre(d1, v, now + 10);
+    const b = remettre(d1, { ...v, nom: "Autre" }, now + 20);
+
+    it("gardent les deux remises de même numéro et de même version, la suivante au-dessus", () => {
+      const m = avecRemisDe(a, b)!;
+      expect(m.remis.map((x) => [x.version, x.remisLe])).toEqual([
+        [1, now],
+        [2, now + 10],
+        [2, now + 20],
+      ]);
+      expect(avecRemisDe(b, a)!.remis.map((x) => x.remisLe)).toEqual([now, now + 10, now + 20]);
+      expect(versionSuivante(m)).toBe(3);
+      expect(enDouble(m, m.remis[0]!)).toBe(false);
+      expect(enDouble(m, m.remis[1]!)).toBe(true);
+      // Noter une réponse ne touche que le document désigné.
+      const noté = noterReponse(m, m.remis[1]!, "accepte", now + 30);
+      expect(noté.remis.map((x) => x.etat)).toEqual(["remis", "accepte", "remis"]);
+    });
+
+    it("ne changent rien quand l'autre n'apporte rien", () => {
+      expect(avecRemisDe(a, d1)).toBe(a);
+      expect(avecRemisDe(a, null)).toBe(a);
+      expect(avecRemisDe(a, a)).toBe(a);
+      expect(avecRemisDe(null, null)).toBeNull();
+    });
+
+    it("gardent le brouillon du gagnant, et le devis de l'autre s'il n'en a pas", () => {
+      const repris = { ...d1, rouvert: true, client: { ...d1.client, nom: "Repris" } };
+      expect(avecRemisDe(repris, b)).toMatchObject({ rouvert: true, client: { nom: "Repris" } });
+      expect(avecRemisDe(repris, b)!.remis).toHaveLength(2);
+      expect(avecRemisDe(null, b)).toBe(b);
+    });
+
+    it("gardent la réponse notée en dernier, même effacée", () => {
+      const accepte = noterReponse(d1, d1.remis[0]!, "accepte", now + 5);
+      const efface = noterReponse(accepte, d1.remis[0]!, "remis", now + 6);
+      const etat = (x: DevisProjet, y: DevisProjet) => avecRemisDe(x, y)!.remis.map((r) => r.etat);
+      expect(etat(d1, accepte)).toEqual(["accepte"]);
+      expect(etat(accepte, d1)).toEqual(["accepte"]);
+      expect(etat(efface, accepte)).toEqual(["remis"]);
+      expect(etat(accepte, efface)).toEqual(["remis"]);
+      expect(sanitizeDevis(JSON.parse(JSON.stringify(efface)))!.remis[0]!.etatLe).toBe(now + 6);
+    });
+
+    it("se relisent sans rien perdre au-delà de ce qu'une remise peut atteindre", () => {
+      const d = { ...d1, remis: Array.from({ length: 60 }, (_, i) => ({ ...d1.remis[0]!, version: i + 1 })) };
+      expect(sanitizeDevis(JSON.parse(JSON.stringify(d)))!.remis).toHaveLength(60);
+    });
+  });
+
   it("valent jusqu'au soir du dernier jour, puis expirent sans réponse", () => {
     const r1 = d1.remis[0]!;
     expect(finValidite(r1)).toBe(new Date(2026, 10, 30, 23, 59, 59, 999).getTime());
     expect(etatRemis(r1, finValidite(r1))).toBe("remis");
     expect(etatRemis(r1, finValidite(r1) + 1)).toBe("expire");
-    const ok = noterReponse(d1, 1, "accepte", now + 5).remis[0]!;
+    const ok = noterReponse(d1, d1.remis[0]!, "accepte", now + 5).remis[0]!;
     expect(etatRemis(ok, finValidite(r1) + 1)).toBe("accepte");
     expect(ok.etatLe).toBe(now + 5);
   });
