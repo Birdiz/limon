@@ -136,6 +136,14 @@ const MIGRATIONS = [
     add column utilise timestamptz not null default now();
   update sessions set utilise = least(now(), greatest(cree, expire - interval '365 days'));
   update sessions set expire = least(utilise + interval '90 days', cree + interval '365 days');`,
+  // Changement d'adresse en cours : à part des codes de connexion, l'un ne sert pas à l'autre et ne le remplace pas.
+  `create table changements_adresse (
+    compte uuid primary key references comptes on delete cascade,
+    email text not null,
+    hash text not null,
+    expire timestamptz not null,
+    essais int not null default 0
+  );`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */
@@ -165,9 +173,10 @@ const AVERTI_VALABLE = `(averti > greatest(vu, droits_jusqu_a) and averti + inte
 const A_AVERTIR = `vu + interval '${CONSERVATION}' - interval '${PREAVIS}' < now() and ${SANS_DROITS}
   and not coalesce(${AVERTI_VALABLE}, false)`;
 
-/** Efface codes, défis et sessions expirés, et les traces de suppression anciennes. */
+/** Efface codes, changements d'adresse, défis et sessions expirés, et les traces de suppression anciennes. */
 export async function purge(db: Db): Promise<void> {
-  for (const t of ["codes", "defis", "sessions"]) await db.query(`delete from ${t} where expire < now()`);
+  for (const t of ["codes", "changements_adresse", "defis", "sessions"])
+    await db.query(`delete from ${t} where expire < now()`);
   await db.query(
     `delete from projets where supprime and modifie < extract(epoch from now() - interval '${CONSERVATION}') * 1000`,
   );

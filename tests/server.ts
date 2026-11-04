@@ -4,21 +4,34 @@ import { migrate, pgliteDb, type Db } from "../server/db";
 
 export const ORIGIN = "https://quart-de-tour.fr";
 
-/** Serveur de test sur PGlite en mémoire ; les codes envoyés restent dans `codes`. */
+/** Serveur de test sur PGlite en mémoire ; les codes envoyés restent dans `codes` et `codesAdresse`, les avis dans `avis`. */
 export async function testServer() {
   const db: Db = await pgliteDb();
   await migrate(db);
   const codes = new Map<string, string>();
-  const make = () => api({ db, origin: ORIGIN, sendCode: async (email, code) => void codes.set(email, code) });
+  const codesAdresse = new Map<string, string>();
+  const avis: string[] = [];
+  const make = () =>
+    api({
+      db,
+      origin: ORIGIN,
+      sendCode: async (email, code) => void codes.set(email, code),
+      sendCodeAdresse: async (email, code) => void codesAdresse.set(email, code),
+      sendAdresseChangee: async (ancienne) => void avis.push(ancienne),
+    });
   const s = {
     db,
     codes,
+    codesAdresse,
+    avis,
     app: make(),
     /** Base vide et serveur neuf, limites de débit comprises. */
     async reset() {
       await db.query("delete from comptes");
       await db.query("delete from codes");
       codes.clear();
+      codesAdresse.clear();
+      avis.length = 0;
       s.app = make();
     },
   };

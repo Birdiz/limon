@@ -25,6 +25,8 @@ interface SyncState {
    * L'e-mail plutôt que l'identifiant : un compte supprimé puis recréé avec la même adresse garde ses projets.
    */
   dernier: string | null;
+  /** Identifiant de ce compte : une adresse changée depuis un autre appareil reste la même personne. */
+  dernierId: string | null;
   /** Un compte a déjà servi sur cet appareil, même déconnecté : on propose de s'y connecter plutôt que d'en créer un. */
   connu: boolean;
   /** Version de chaque projet que le serveur avait au dernier échange. */
@@ -42,6 +44,7 @@ interface SyncState {
 const EMPTY: SyncState = {
   compte: null,
   dernier: null,
+  dernierId: null,
   connu: false,
   serveur: {},
   supprimes: {},
@@ -132,6 +135,8 @@ export class SyncStore implements ProjectStore {
     this.state = { ...EMPTY, ...readState(storage) };
     // État enregistré avant `connu`.
     this.state.connu ||= !!this.state.dernier;
+    // État enregistré avant `dernierId`.
+    this.state.dernierId ??= this.state.compte?.id ?? null;
     local.onChange((ids) => {
       this.emit(ids);
       this.emitStatus();
@@ -220,6 +225,16 @@ export class SyncStore implements ProjectStore {
     return this.state.connu;
   }
 
+  /** Le serveur a dit le compte : son adresse a pu changer, ici ou sur un autre appareil. */
+  accountSeen({ id, email }: Compte): void {
+    const compte = this.state.compte;
+    if (compte?.id !== id || compte.email === email) return;
+    this.state.compte = { ...compte, email };
+    this.state.dernier = email;
+    this.persist();
+    this.emitStatus();
+  }
+
   /** Session perdue : les escaliers restent ouvrables, leurs devis et leurs clients attendent la reconnexion. */
   hidesClients(): boolean {
     return !this.state.compte && !!this.state.dernier;
@@ -263,7 +278,7 @@ export class SyncStore implements ProjectStore {
   async signIn(compte: Compte): Promise<void> {
     const hidden = this.hidesClients();
     let changed: string[] = [];
-    if (this.state.dernier && this.state.dernier !== compte.email) {
+    if (this.state.dernier && this.state.dernier !== compte.email && this.state.dernierId !== compte.id) {
       // Autre compte que le précédent : les projets de celui-ci, à l'abri dans son compte, quittent l'appareil.
       changed = await this.removeSynced();
       this.atelier?.clear();
@@ -275,6 +290,7 @@ export class SyncStore implements ProjectStore {
     }
     this.state.compte = compte;
     this.state.dernier = compte.email;
+    this.state.dernierId = compte.id;
     this.state.connu = true;
     this.persist();
     this.emit(hidden ? [...new Set([...changed, ...(await this.allIds())])] : changed);
