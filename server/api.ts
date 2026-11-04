@@ -35,13 +35,17 @@ import type { Entreprise, Tarifs } from "../src/core/tarifs";
 import { avecRemis, fromNewerVersion, isProjectId, sanitizeProject, schemaOf, type Project } from "../src/core/project";
 import { sansControles } from "../src/core/texte";
 import type { Db } from "./db";
-import type { SendCode } from "./mail";
+import type { SendAdresseChangee, SendCode } from "./mail";
 
 export interface ApiConfig {
   db: Db;
   /** Adresse du site, seule origine acceptée : https://quart-de-tour.fr en ligne. */
   origin: string;
   sendCode: SendCode;
+  /** Code envoyé à la nouvelle adresse d'un compte. */
+  sendCodeAdresse: SendCode;
+  /** Avis à son ancienne adresse, une fois changée. */
+  sendAdresseChangee: SendAdresseChangee;
 }
 
 type Env = { Variables: { compte: string; session: string } };
@@ -53,6 +57,9 @@ const SESSION_DAYS = 90;
 const SESSION_MAX_DAYS = 365;
 const CODE_MINUTES = 10;
 const CODE_TRIES = 5;
+/** Codes de changement d'adresse par heure : une adresse reçoit peu, un compte peut se tromper en la tapant. */
+const CODES_ADRESSE_PAR_ADRESSE = 3;
+const CODES_ADRESSE_PAR_COMPTE = 5;
 const HOUR = 3_600_000;
 /** Projets ou identifiants par requête. */
 const MAX_BATCH = 1000;
@@ -381,6 +388,69 @@ export function api(cfg: ApiConfig): Hono<Env> {
   });
 
   /* ---------- Compte ---------- */
+
+  /**
+   * Changer l'adresse : un code part à la nouvelle, sans dire si elle a déjà un compte, puis `PUT /compte/email` la
+   * prend. Le code ne vaut que pour ce compte et cette adresse, et une adresse déjà prise n'est dite qu'à qui prouve
+   * qu'elle est à lui.
+   */
+  app.post("/compte/email/code", auth, async (c) => {
+    const email = cleanEmail((await body(c)).email);
+    if (!email) return err(c, 400, "Cette adresse e-mail n'est pas valable.");
+    const compte = c.get("compte");
+    if (email === (await compteOf(compte))!.email) return err(c, 400, "C'est déjà l'adresse de votre compte.");
+    if (
+      !limiter.hit(`adresse-compte:${compte}`, CODES_ADRESSE_PAR_COMPTE, HOUR) ||
+      !limiter.hit(`adresse:${email}`, CODES_ADRESSE_PAR_ADRESSE, HOUR)
+    )
+      return err(c, 429, "Trop de codes demandés. Réessayez dans une heure.");
+    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    await db.query(
+      `insert into changements_adresse (compte, email, hash, expire, essais)
+       values ($1, $2, $3, now() + interval '${CODE_MINUTES} minutes', 0)
+       on conflict (compte) do update set email = excluded.email, hash = excluded.hash, expire = excluded.expire, essais = 0`,
+      [compte, email, codeHash(`${compte}:${email}`, code).toString("hex")],
+    );
+    try {
+      await cfg.sendCodeAdresse(email, code);
+    } catch (e) {
+      console.error(e);
+      return err(c, 502, "L'e-mail n'a pas pu partir. Réessayez dans un instant.");
+    }
+    return c.body(null, 204);
+  });
+
+  app.put("/compte/email", auth, async (c) => {
+    const b = await body(c);
+    const email = cleanEmail(b.email);
+    const code = typeof b.code === "string" ? b.code.replace(/\s/g, "") : "";
+    if (!email || !/^\d{6}$/.test(code)) return err(c, 400, "Le code a 6 chiffres.");
+    const compte = c.get("compte");
+    const [row] = await db.query<{ hash: string; essais: number }>(
+      `update changements_adresse set essais = essais + 1
+       where compte = $1 and email = $2 and expire > now() returning hash, essais`,
+      [compte, email],
+    );
+    if (!row) return err(c, 400, "Ce code a expiré : demandez-en un nouveau.");
+    if (row.essais > CODE_TRIES) {
+      await db.query("delete from changements_adresse where compte = $1", [compte]);
+      return err(c, 400, "Trop d'essais : demandez un nouveau code.");
+    }
+    if (!timingSafeEqual(Buffer.from(row.hash, "hex"), codeHash(`${compte}:${email}`, code)))
+      return err(c, 400, "Code incorrect.");
+    await db.query("delete from changements_adresse where compte = $1", [compte]);
+    const ancienne = (await compteOf(compte))!.email;
+    try {
+      // Sans lecture avant : l'unicité de la base tranche, même si un compte se crée à cette adresse au même instant.
+      await db.query("update comptes set email = $2, essai = null where id = $1", [compte, email]);
+    } catch (e) {
+      if ((e as { code?: unknown } | null)?.code !== "23505") throw e;
+      return err(c, 409, "Cette adresse a déjà son propre compte. Votre compte garde son adresse actuelle.");
+    }
+    // L'adresse a changé : un avis qui ne part pas n'y revient pas.
+    await cfg.sendAdresseChangee(ancienne).catch(console.error);
+    return c.json(await detail(c));
+  });
 
   async function detail(c: Context<Env>): Promise<CompteDetail> {
     const id = c.get("compte");

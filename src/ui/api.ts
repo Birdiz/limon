@@ -43,6 +43,9 @@ export class Api {
   passkeyAdd = (reponse: unknown, nom: string) => this.call<CompteDetail>("POST", "passkey/ajout", { reponse, nom });
   passkeyRemove = (id: string) => this.call<CompteDetail>("DELETE", `passkeys/${encodeURIComponent(id)}`);
   account = () => this.call<CompteDetail>("GET", "compte");
+  /** Un code part à la nouvelle adresse ; elle n'est prise qu'avec lui. */
+  sendEmailCode = (email: string) => this.call<undefined>("POST", "compte/email/code", { email });
+  changeEmail = (email: string, code: string) => this.call<CompteDetail>("PUT", "compte/email", { email, code });
   closeDevice = (id: string) => this.call<CompteDetail>("DELETE", `sessions/${encodeURIComponent(id)}`);
   closeOtherDevices = () => this.call<CompteDetail>("DELETE", "sessions");
   deleteAccount = () => this.call<undefined>("DELETE", "compte");

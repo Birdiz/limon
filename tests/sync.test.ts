@@ -531,6 +531,33 @@ describe("synchronisation des projets", () => {
       expect((await a.store.get("q"))!.devis!.client.nom).toBe("M. Martin");
     });
 
+    it("la reprise à l'adresse changée depuis un autre appareil : même compte, rien ne quitte l'appareil", async () => {
+      const a = await perdue();
+      a.atelier.set({ entreprise: { ...ENTREPRISE_VIDE, nom: "Menuiserie Jean" } }, 5000);
+      await s.db.query("update comptes set email = 'neuve@exemple.fr'");
+      await a.signIn("neuve@exemple.fr");
+      expect(a.store.hidesClients()).toBe(false);
+      expect((await a.store.get("p"))!.devis!.client.nom).toBe("M. Martin");
+      expect(a.atelier.get()!.entreprise.nom).toBe("Menuiserie Jean");
+    });
+
+    it("de même pour une session ouverte avant que l'appareil retienne l'identifiant du compte", async () => {
+      const storage = memory();
+      const a = device(storage);
+      await a.store.save(avecClient("p", 1));
+      await a.signIn("jean@exemple.fr");
+      const avant = JSON.parse(storage.getItem("limon-synchro")!) as Record<string, unknown>;
+      delete avant.dernierId;
+      storage.setItem("limon-synchro", JSON.stringify(avant));
+      // Un autre navigateur sur le même stockage : pas de cookie, la session est perdue au premier échange.
+      const b = device(storage);
+      await b.store.sync();
+      expect(b.store.account()).toBeNull();
+      await s.db.query("update comptes set email = 'neuve@exemple.fr'");
+      await b.signIn("neuve@exemple.fr");
+      expect((await b.store.get("p"))!.devis!.client.nom).toBe("M. Martin");
+    });
+
     it("sans jamais avoir eu de compte, le client se voit", async () => {
       const a = device();
       await a.store.save(avecClient("p", 1));

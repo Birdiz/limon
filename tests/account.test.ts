@@ -412,6 +412,107 @@ describe("compte affiché", () => {
   });
 });
 
+describe("changer d'adresse", () => {
+  const NEUVE = "neuve@exemple.fr";
+  const change = async (reponses: Record<string, () => Response> = {}) => {
+    const d = await connecte({ "PUT compte/email": () => json({ ...detail(), email: NEUVE }), ...reponses });
+    el("acEmailChange").click();
+    return d;
+  };
+  const auCodeNeuf = async (reponses: Record<string, () => Response> = {}) => {
+    const d = await change(reponses);
+    el<HTMLInputElement>("acNewEmail").value = ` ${NEUVE} `;
+    soumettre("acNewEmailForm");
+    await vi.waitFor(() => expect(el("acNewCodeForm").hidden).toBe(false));
+    return d;
+  };
+
+  it("ne montre que le bouton, jusqu'à ce qu'on le demande", async () => {
+    await connecte();
+    expect(el("acEmailChange").hidden).toBe(false);
+    expect(el("acNewEmailForm").hidden).toBe(true);
+    expect(el("acNewCodeForm").hidden).toBe(true);
+    el("acEmailChange").click();
+    expect(el("acEmailChange").hidden).toBe(true);
+    expect(el("acNewEmailForm").hidden).toBe(false);
+    el("acNewEmailNo").click();
+    expect(el("acEmailChange").hidden).toBe(false);
+    expect(el("acNewEmailForm").hidden).toBe(true);
+  });
+
+  it("le bon code : l'adresse change partout, sans déconnecter, et l'en-tête suit", async () => {
+    const { store, appels } = await auCodeNeuf();
+    expect(el("acNewCodeTo").textContent).toBe(NEUVE);
+    expect(appels.find((a) => a.route === "POST compte/email/code")?.corps).toEqual({ email: NEUVE });
+    el<HTMLInputElement>("acNewCode").value = "123456";
+    soumettre("acNewCodeForm");
+    await vi.waitFor(() => expect(el("acMe").textContent).toBe(NEUVE));
+    expect(appels.find((a) => a.route === "PUT compte/email")?.corps).toEqual({ email: NEUVE, code: "123456" });
+    expect(store.account()).toMatchObject({ id: COMPTE.id, email: NEUVE });
+    expect(el("acOpen").querySelector(".avatar")?.textContent).toBe("N");
+    expect(msg().textContent).toContain("connectez-vous désormais");
+    expect(el("acNewCodeForm").hidden).toBe(true);
+    expect(el("acEmailChange").hidden).toBe(false);
+    expect(el<HTMLInputElement>("acNewEmail").value).toBe("");
+  });
+
+  it("une adresse qui a déjà un compte : le refus est dit, et l'adresse reste", async () => {
+    const non = "Cette adresse a déjà son propre compte. Votre compte garde son adresse actuelle.";
+    const { store } = await auCodeNeuf({ "PUT compte/email": refus(409, non) });
+    el<HTMLInputElement>("acNewCode").value = "123456";
+    soumettre("acNewCodeForm");
+    await vi.waitFor(() => expect(msg().textContent).toBe(non));
+    expect(enErreur()).toBe(true);
+    expect(store.account()!.email).toBe(COMPTE.email);
+    expect(el("acMe").textContent).toBe(COMPTE.email);
+    // Le code est usé : retour à l'adresse, pour en donner une autre.
+    expect(el("acNewEmailForm").hidden).toBe(false);
+    expect(el("acNewCodeForm").hidden).toBe(true);
+  });
+
+  it("un mauvais code : on reste sur le code, pour réessayer", async () => {
+    await auCodeNeuf({ "PUT compte/email": refus(400, "Code incorrect.") });
+    el<HTMLInputElement>("acNewCode").value = "000000";
+    soumettre("acNewCodeForm");
+    await vi.waitFor(() => expect(msg().textContent).toBe("Code incorrect."));
+    expect(el("acNewCodeForm").hidden).toBe(false);
+  });
+
+  it("le code qui ne part pas : on reste sur l'adresse, pour réessayer", async () => {
+    await change({ "POST compte/email/code": refus(502, "L'e-mail n'a pas pu partir. Réessayez dans un instant.") });
+    el<HTMLInputElement>("acNewEmail").value = NEUVE;
+    soumettre("acNewEmailForm");
+    await vi.waitFor(() => expect(enErreur()).toBe(true));
+    expect(el("acNewEmailForm").hidden).toBe(false);
+    expect(el("acNewCodeForm").hidden).toBe(true);
+  });
+
+  it("revient à l'adresse pour la corriger ou renvoyer un code", async () => {
+    await auCodeNeuf();
+    el("acNewCodeBack").click();
+    expect(el("acNewEmailForm").hidden).toBe(false);
+    expect(el<HTMLInputElement>("acNewEmail").value.trim()).toBe(NEUVE);
+  });
+
+  it("revenir sur l'onglet repart du bouton", async () => {
+    const { panel } = await auCodeNeuf();
+    await panel.show();
+    expect(el("acEmailChange").hidden).toBe(false);
+    expect(el("acNewCodeForm").hidden).toBe(true);
+  });
+
+  it("une adresse changée sur un autre appareil se voit en ouvrant Mon compte", async () => {
+    const { store } = await connecte({ "GET compte": () => json({ ...detail(), email: NEUVE }) });
+    expect(el("acMe").textContent).toBe(NEUVE);
+    expect(store.account()!.email).toBe(NEUVE);
+  });
+
+  it("la réponse d'un autre compte ne remplace pas celui de l'appareil", async () => {
+    const { store } = await connecte({ "GET compte": () => json({ ...detail(), id: "autre", email: NEUVE }) });
+    expect(store.account()).toMatchObject({ id: COMPTE.id, email: COMPTE.email });
+  });
+});
+
 describe("session perdue", () => {
   it("revient à la connexion, sans plus dire « Connecté avec… »", async () => {
     await connecte({ "GET compte": () => new Response(null, { status: 401 }) });

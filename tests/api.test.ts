@@ -7,8 +7,9 @@ import { quantites } from "../src/cnc/quantites";
 import { MAX_OCTETS, SAISIE_DEFAUT, bloquants, devis, newDevis, remettre, type DevisProjet } from "../src/core/devis";
 import { compute } from "../src/core/stair";
 import { newProject, NOM_PAR_DEFAUT, SCHEMA, type Project } from "../src/core/project";
+import { api } from "../server/api";
 import { migrate, pgliteDb, purge, purgeComptes } from "../server/db";
-import { brevoAvertissement } from "../server/mail";
+import { brevoAdresseChangee, brevoAvertissement, brevoCodeAdresse } from "../server/mail";
 import { browser, login, ORIGIN, testServer, type TestServer } from "./server";
 
 const json = { "content-type": "application/json" };
@@ -317,7 +318,8 @@ describe("appareils connectés", () => {
       const db = await pgliteDb();
       await migrate(db);
       await db.exec(
-        `alter table sessions drop column id, drop column appareil, drop column utilise;
+        `drop table changements_adresse;
+         alter table sessions drop column id, drop column appareil, drop column utilise;
          delete from schema_version where v >= 8;`,
       );
       await db.query("insert into comptes (id, email) values ($1, 'a@exemple.fr')", [COMPTE_ID]);
@@ -1281,14 +1283,15 @@ describe("numéros de devis", () => {
     await migrate(db);
     // La base telle qu'elle était avant cette migration.
     await db.exec(
-      `alter table sessions drop column id, drop column appareil, drop column utilise;
+      `drop table changements_adresse;
+       alter table sessions drop column id, drop column appareil, drop column utilise;
        drop table devis_numeros; alter table ateliers drop column dates;
        drop table purge_passage; alter table comptes drop column essai;
        alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 4;`,
     );
     await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000001', 'a@exemple.fr')");
     await migrate(db);
-    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 8 }]);
+    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 9 }]);
     expect(await db.query("select email from comptes")).toEqual([{ email: "a@exemple.fr" }]);
     await db.query(
       "insert into devis_numeros (compte, projet, annee, rang) values ('00000000-0000-0000-0000-000000000001', 'a', 2026, 1)",
@@ -1338,6 +1341,8 @@ const HORS_EXPORT: Record<string, string> = {
   "devis_numeros.compte": DEJA_RENDU,
   "sessions.hash": "Empreinte du jeton de session : un secret, qui ne dit rien de la personne et ne sort jamais.",
   codes: "Code de connexion haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
+  changements_adresse:
+    "Changement d'adresse en cours, code haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
   defis: "Défi de passkey : valable 5 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
   purge_passage: "L'heure du dernier passage de la purge : rien sur une personne.",
   schema_version: "Le numéro de la dernière migration : rien sur une personne.",
@@ -1497,6 +1502,216 @@ describe("compte", () => {
   it("ne garde pas les réponses en cache", async () => {
     expect((await browser(s)("/api/sante")).headers.get("cache-control")).toBe("no-store");
     expect(ORIGIN).toMatch(/^https:/);
+  });
+});
+
+describe("changer d'adresse", () => {
+  const demande = (f: typeof fetch, email: string) => post(f, "/api/compte/email/code", { email });
+  const change = (f: typeof fetch, email: string, code: unknown) =>
+    post(f, "/api/compte/email", { email, code }, "PUT");
+  const adresse = async (id: string) =>
+    (await s.db.query<{ email: string }>("select email from comptes where id = $1", [id]))[0]?.email;
+  const autreCode = (code: string) => (code === "000000" ? "111111" : "000000");
+
+  it("change l'adresse avec le bon code : même compte, mêmes escaliers, mêmes appareils", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    const projet = newProject("p", "Dupont", "guide", 3);
+    await post(f, "/api/projets", { changements: [{ id: "p", projet }] }, "PUT");
+    const ailleurs = browser(s);
+    await login(s, ailleurs, "a@exemple.fr");
+
+    expect((await demande(f, " Neuve@Exemple.fr ")).status).toBe(204);
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+    const res = await change(f, "neuve@exemple.fr", s.codesAdresse.get("neuve@exemple.fr"));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: a.id, email: "neuve@exemple.fr" });
+    expect(await adresse(a.id)).toBe("neuve@exemple.fr");
+    expect(s.avis).toEqual(["a@exemple.fr"]);
+    expect((await ailleurs("/api/compte")).status).toBe(200);
+    expect(await (await f("/api/projets")).json()).toMatchObject([{ id: "p" }]);
+    // La nouvelle adresse retrouve le compte ; l'ancienne, libre, n'y mène plus.
+    expect((await login(s, browser(s), "neuve@exemple.fr")).id).toBe(a.id);
+    expect((await login(s, browser(s), "a@exemple.fr")).id).not.toBe(a.id);
+  });
+
+  it("refuse une adresse qui a déjà un compte, et ne le dit qu'à qui a reçu le code", async () => {
+    await login(s, browser(s), "prise@exemple.fr");
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    const prise = await demande(f, "prise@exemple.fr");
+    const libre = await demande(f, "libre@exemple.fr");
+    expect([prise.status, libre.status]).toEqual([204, 204]);
+    await demande(f, "prise@exemple.fr");
+    const good = s.codesAdresse.get("prise@exemple.fr")!;
+
+    expect(await (await change(f, "prise@exemple.fr", autreCode(good))).json()).toEqual({ erreur: "Code incorrect." });
+    const res = await change(f, "prise@exemple.fr", good);
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      erreur: "Cette adresse a déjà son propre compte. Votre compte garde son adresse actuelle.",
+    });
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+    expect(s.avis).toEqual([]);
+  });
+
+  it("refuse un mauvais code, puis tout code après 5 essais", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const good = s.codesAdresse.get("neuve@exemple.fr")!;
+    for (let i = 0; i < 5; i++) {
+      const r = await change(f, "neuve@exemple.fr", autreCode(good));
+      expect(await r.json()).toEqual({ erreur: "Code incorrect." });
+    }
+    expect((await change(f, "neuve@exemple.fr", good)).status).toBe(400);
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+  });
+
+  it("refuse un code expiré, déjà servi, ou demandé pour une autre adresse", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const code = s.codesAdresse.get("neuve@exemple.fr");
+    expect((await change(f, "autre@exemple.fr", code)).status).toBe(400);
+
+    await s.db.query("update changements_adresse set expire = now() - interval '1 second'");
+    expect((await change(f, "neuve@exemple.fr", code)).status).toBe(400);
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+
+    await demande(f, "neuve@exemple.fr");
+    const frais = s.codesAdresse.get("neuve@exemple.fr");
+    expect((await change(f, "neuve@exemple.fr", frais)).status).toBe(200);
+    expect((await change(f, "neuve@exemple.fr", frais)).status).toBe(400);
+  });
+
+  it("le code ne vaut que pour le compte qui l'a demandé", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    const g = browser(s);
+    const b = await login(s, g, "b@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const code = s.codesAdresse.get("neuve@exemple.fr");
+    expect((await change(g, "neuve@exemple.fr", code)).status).toBe(400);
+    expect(await adresse(b.id)).toBe("b@exemple.fr");
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+  });
+
+  it("un code de changement n'ouvre pas de session, un code de connexion ne change pas l'adresse", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const pourAdresse = s.codesAdresse.get("neuve@exemple.fr");
+    const inconnu = browser(s);
+    const entre = await post(inconnu, "/api/code/verifier", { email: "neuve@exemple.fr", code: pourAdresse });
+    expect(entre.status).toBe(400);
+    expect((await inconnu("/api/compte")).status).toBe(401);
+
+    await post(browser(s), "/api/code", { email: "neuve2@exemple.fr" });
+    await demande(f, "neuve2@exemple.fr");
+    const pourConnexion = s.codes.get("neuve2@exemple.fr")!;
+    const pourChanger = s.codesAdresse.get("neuve2@exemple.fr")!;
+    expect(pourConnexion).toBeTruthy();
+    if (pourConnexion !== pourChanger) expect((await change(f, "neuve2@exemple.fr", pourConnexion)).status).toBe(400);
+    expect(await adresse(a.id)).toBe("a@exemple.fr");
+    // Le code de changement n'a pas remplacé le code de connexion déjà parti.
+    const ok = await post(browser(s), "/api/code/verifier", { email: "neuve2@exemple.fr", code: pourConnexion });
+    expect(ok.status).toBe(200);
+  });
+
+  it("refuse sans session, une adresse mal formée, et l'adresse du compte", async () => {
+    const anonyme = browser(s);
+    expect((await demande(anonyme, "neuve@exemple.fr")).status).toBe(401);
+    expect((await change(anonyme, "neuve@exemple.fr", "123456")).status).toBe(401);
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect((await demande(f, "pas-une-adresse")).status).toBe(400);
+    const meme = await demande(f, "A@exemple.fr");
+    expect(meme.status).toBe(400);
+    expect(await meme.json()).toEqual({ erreur: "C'est déjà l'adresse de votre compte." });
+    expect((await change(f, "neuve@exemple.fr", "douze")).status).toBe(400);
+    expect(s.codesAdresse.size).toBe(0);
+  });
+
+  it("limite les codes par adresse et par compte, sans toucher à ceux de connexion", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    for (let i = 0; i < 3; i++) expect((await demande(f, "neuve@exemple.fr")).status).toBe(204);
+    expect((await demande(f, "neuve@exemple.fr")).status).toBe(429);
+    expect((await post(browser(s), "/api/code", { email: "neuve@exemple.fr" })).status).toBe(204);
+
+    const g = browser(s);
+    await login(s, g, "b@exemple.fr");
+    // Ce refus compte pour le compte, qui ne peut donc pas user l'adresse d'un autre une fois à sa limite.
+    expect((await demande(g, "neuve@exemple.fr")).status).toBe(429);
+    for (let i = 0; i < 4; i++) expect((await demande(g, `n${i}@exemple.fr`)).status).toBe(204);
+    expect((await demande(g, "n9@exemple.fr")).status).toBe(429);
+  });
+
+  it("dit quand le code n'a pas pu partir", async () => {
+    s.app = api({
+      db: s.db,
+      origin: ORIGIN,
+      sendCode: async (email, code) => void s.codes.set(email, code),
+      sendCodeAdresse: async () => {
+        throw new Error("Brevo 500");
+      },
+      sendAdresseChangee: async () => {},
+    });
+    const erreur = vi.spyOn(console, "error").mockImplementation(() => {});
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect((await demande(f, "neuve@exemple.fr")).status).toBe(502);
+    erreur.mockRestore();
+  });
+
+  it("un avis qui ne part pas à l'ancienne adresse ne revient pas sur le changement", async () => {
+    const codes = new Map<string, string>();
+    s.app = api({
+      db: s.db,
+      origin: ORIGIN,
+      sendCode: async (email, code) => void s.codes.set(email, code),
+      sendCodeAdresse: async (email, code) => void codes.set(email, code),
+      sendAdresseChangee: async () => {
+        throw new Error("Brevo 500");
+      },
+    });
+    const erreur = vi.spyOn(console, "error").mockImplementation(() => {});
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    const res = await change(f, "neuve@exemple.fr", codes.get("neuve@exemple.fr"));
+    expect(res.status).toBe(200);
+    expect(await adresse(a.id)).toBe("neuve@exemple.fr");
+    expect(erreur).toHaveBeenCalled();
+    erreur.mockRestore();
+  });
+
+  it("efface l'échec d'envoi noté sur l'ancienne adresse", async () => {
+    const f = browser(s);
+    const a = await login(s, f, "a@exemple.fr");
+    await s.db.query("update comptes set essai = now() where id = $1", [a.id]);
+    await demande(f, "neuve@exemple.fr");
+    await change(f, "neuve@exemple.fr", s.codesAdresse.get("neuve@exemple.fr"));
+    expect(await s.db.query("select essai from comptes where id = $1", [a.id])).toEqual([{ essai: null }]);
+  });
+
+  it("la purge retire un changement expiré, et la suppression du compte le sien", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    const g = browser(s);
+    await login(s, g, "b@exemple.fr");
+    await demande(f, "neuve@exemple.fr");
+    await demande(g, "neuve2@exemple.fr");
+    await s.db.query(
+      "update changements_adresse set expire = now() - interval '1 second' where email = 'neuve@exemple.fr'",
+    );
+    await purge(s.db);
+    expect(await s.db.query("select email from changements_adresse")).toEqual([{ email: "neuve2@exemple.fr" }]);
+    await g("/api/compte", { method: "DELETE" });
+    expect(await s.db.query("select email from changements_adresse")).toEqual([]);
   });
 });
 
@@ -1905,7 +2120,8 @@ describe("comptes sans connexion", () => {
     const db = await pgliteDb();
     await migrate(db);
     await db.exec(
-      `alter table sessions drop column id, drop column appareil, drop column utilise;
+      `drop table changements_adresse;
+       alter table sessions drop column id, drop column appareil, drop column utilise;
        drop table purge_passage; alter table comptes drop column essai;
        alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 6;`,
     );
@@ -1994,5 +2210,31 @@ describe("comptes sans connexion", () => {
   it("un refus de Brevo se voit comme un échec", async () => {
     vi.stubGlobal("fetch", async () => new Response("non", { status: 500 }));
     await expect(brevoAvertissement("cle")("a@exemple.fr", new Date())).rejects.toThrow(/Brevo 500/);
+  });
+
+  it("le code de changement d'adresse ne se présente pas comme un code de connexion", async () => {
+    let envoi: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return new Response("{}", { status: 201 });
+    });
+    await brevoCodeAdresse("cle")("neuve@exemple.fr", "123456");
+    expect(envoi.to).toEqual([{ email: "neuve@exemple.fr" }]);
+    expect(envoi.subject).toContain("changer d'adresse");
+    expect(envoi.textContent).toContain("123456");
+    expect(envoi.textContent).not.toContain("connexion");
+    expect(envoi.htmlContent).toContain("123456");
+  });
+
+  it("l'avis à l'ancienne adresse dit à qui écrire, sans donner la nouvelle", async () => {
+    let envoi: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return new Response("{}", { status: 201 });
+    });
+    await brevoAdresseChangee("cle")("a@exemple.fr");
+    expect(envoi.to).toEqual([{ email: "a@exemple.fr" }]);
+    expect(envoi.textContent).toContain("tom.bouzy@gmail.com");
+    expect(envoi.htmlContent).toContain("tom.bouzy@gmail.com");
   });
 });

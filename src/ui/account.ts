@@ -84,6 +84,7 @@ type View = "login" | "offer" | "account";
 export class AccountPanel {
   private msg = byId("acMsg");
   private email = "";
+  private newEmail = "";
 
   constructor(
     private store: SyncStore,
@@ -99,6 +100,17 @@ export class AccountPanel {
       void this.run(() => this.checkCode());
     });
     byId("acBack").addEventListener("click", () => this.codeStep(false));
+    byId("acEmailChange").addEventListener("click", () => this.emailStep("adresse"));
+    byId("acNewEmailNo").addEventListener("click", () => this.emailStep(null));
+    byId("acNewEmailForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      void this.run(() => this.sendEmailCode());
+    });
+    byId("acNewCodeBack").addEventListener("click", () => this.emailStep("adresse"));
+    byId("acNewCodeForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      void this.run(() => this.changeEmail());
+    });
     byId("acOfferYes").addEventListener("click", () => void this.run(() => this.addPasskey()));
     byId("acOfferNo").addEventListener("click", () => void this.run(() => this.showAccount()));
     byId("acAddKey").addEventListener("click", () => void this.run(() => this.addPasskey()));
@@ -176,6 +188,7 @@ export class AccountPanel {
   async show(): Promise<void> {
     this.msg.hidden = true;
     byId("acDeleteBox").hidden = true;
+    this.emailStep(null, false);
     if (this.store.account()) await this.run(() => this.showAccount());
     else this.showLogin();
   }
@@ -272,6 +285,36 @@ export class AccountPanel {
     if (n && confirm(`Passkey retirée. Déconnecter aussi ${qui} ? Celui-ci reste connecté.`)) await this.closeOthers();
   }
 
+  /** Changer d'adresse : le bouton, puis la nouvelle adresse, puis le code qu'elle a reçu. */
+  private emailStep(step: "adresse" | "code" | null, focus = true): void {
+    byId("acEmailChange").hidden = step !== null;
+    byId("acNewEmailForm").hidden = step !== "adresse";
+    byId("acNewCodeForm").hidden = step !== "code";
+    byId("acNewCodeTo").textContent = this.newEmail;
+    byId<HTMLInputElement>("acNewCode").value = "";
+    if (step === null) byId<HTMLInputElement>("acNewEmail").value = "";
+    else if (focus) byId<HTMLInputElement>(step === "code" ? "acNewCode" : "acNewEmail").focus();
+  }
+
+  private async sendEmailCode(): Promise<void> {
+    this.newEmail = byId<HTMLInputElement>("acNewEmail").value.trim();
+    await this.api.sendEmailCode(this.newEmail);
+    this.emailStep("code");
+    flash(this.msg, "Code envoyé : regardez vos e-mails (et les indésirables).", false, 8000);
+  }
+
+  private async changeEmail(): Promise<void> {
+    try {
+      this.render(await this.api.changeEmail(this.newEmail, byId<HTMLInputElement>("acNewCode").value));
+    } catch (e) {
+      // Adresse déjà prise : le code est usé, il en faut une autre.
+      if (e instanceof ApiError && e.status === 409) this.emailStep("adresse");
+      throw e;
+    }
+    this.emailStep(null);
+    flash(this.msg, "Adresse changée : connectez-vous désormais avec celle-ci.", false, 8000);
+  }
+
   private async closeDevice(id: string): Promise<void> {
     this.render(await this.api.closeDevice(id));
     flash(this.msg, "Appareil déconnecté");
@@ -302,6 +345,7 @@ export class AccountPanel {
 
   private render(d: CompteDetail): void {
     this.view("account");
+    this.store.accountSeen(d);
     byId("acMe").textContent = d.email;
     byId("acKeys").innerHTML = d.passkeys.length
       ? d.passkeys

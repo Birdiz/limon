@@ -221,6 +221,41 @@
           <p>Connecté avec <b id="acMe"></b></p>
           <p class="disclaimer" id="acState"></p>
           <ul class="plist" id="acRefus" hidden></ul>
+          <div class="actions">
+            <button class="btn" id="acEmailChange" type="button">Changer d'adresse e-mail</button>
+          </div>
+          <form class="newp" id="acNewEmailForm" hidden>
+            <label for="acNewEmail">Nouvelle adresse e-mail</label>
+            <input
+              id="acNewEmail"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              required
+              placeholder="vous@exemple.fr"
+            />
+            <small>Vos escaliers, vos appareils et Face ID restent : seule l'adresse change.</small>
+            <div class="actions">
+              <button class="btn go" type="submit">Recevoir un code à cette adresse</button
+              ><button class="btn" id="acNewEmailNo" type="button">Annuler</button>
+            </div>
+          </form>
+          <form class="newp" id="acNewCodeForm" hidden>
+            <label for="acNewCode">Code reçu à <span id="acNewCodeTo"></span></label>
+            <input
+              id="acNewCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              pattern="[0-9 ]{6,7}"
+              maxlength="7"
+              required
+            />
+            <div class="actions">
+              <button class="btn go" type="submit">Changer mon adresse</button
+              ><button class="btn" id="acNewCodeBack" type="button">Changer d'adresse ou renvoyer</button>
+            </div>
+          </form>
           <h3>Face ID et empreinte</h3>
           <ul class="plist" id="acKeys"></ul>
           <div class="actions">
@@ -312,8 +347,8 @@
             votre atelier part avec le compte, et vous choisissez d'effacer aussi vos escaliers, avec leurs devis et
             leurs clients ; vos autres appareils gardent ce qu'ils ont déjà. Si votre connexion prend fin, vos escaliers
             restent enregistrés ici, mais leurs devis et leurs clients ne s'affichent plus tant que vous ne vous êtes
-            pas reconnecté. Vous pouvez télécharger vos données et supprimer votre compte ici même. Pour toute autre
-            demande, écrivez à l'adresse ci-dessus ; vous pouvez aussi vous adresser à la CNIL.
+            pas reconnecté. Vous pouvez télécharger vos données, changer votre adresse et supprimer votre compte ici
+            même. Pour toute autre demande, écrivez à l'adresse ci-dessus ; vous pouvez aussi vous adresser à la CNIL.
           </p>
         </details>
       </div>
