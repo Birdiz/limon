@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildCNC } from "../src/cnc/build";
 import { quantites } from "../src/cnc/quantites";
 import { atelierDefauts, newAtelier, type AtelierDefauts } from "../src/core/atelier";
@@ -1413,6 +1413,104 @@ describe("synchronisation du profil de l'atelier", () => {
     expect(seen).toEqual([["b"]]);
     expect(notes).toBe(1);
     expect(await d.names()).toEqual(["Dans l'autre onglet", "Ici"]);
+  });
+});
+
+describe("deux fenêtres d'un navigateur connectées au même compte", () => {
+  /** Ce que le navigateur envoie aux autres onglets après une écriture. Il ne prévient pas celui qui écrit. */
+  const ecrit = (key: string) => window.dispatchEvent(Object.assign(new Event("storage"), { key }));
+  /** Le délai laissé à l'autre onglet, largement passé. */
+  const apresLeDelai = () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    return () => {
+      vi.advanceTimersByTime(60_000);
+      vi.useRealTimers();
+    };
+  };
+
+  beforeEach(() => vi.stubGlobal("window", new EventTarget()));
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** A et B sur le même stockage, chacun avec sa session ; un escalier déjà en ligne. */
+  async function fenetres() {
+    const storage = memory();
+    const a = device(storage);
+    await a.store.save(project("p", "Dupont", 1000));
+    await a.signIn("jean@exemple.fr");
+    const b = device(storage);
+    await login(s, b.f, "jean@exemple.fr");
+    a.store.watch();
+    b.store.watch();
+    b.requests = 0;
+    return { a, b };
+  }
+
+  it("A a envoyé sa cote : B le sait, ne l'envoie pas et ne le dit plus", async () => {
+    const { a, b } = await fenetres();
+    let notes = 0;
+    b.store.onStatus(() => notes++);
+    const fin = apresLeDelai();
+    await a.store.save(project("p", "Dupont (a)", 2000));
+    ecrit("limon-projets");
+    expect(await b.names()).toEqual(["Dupont (a)"]);
+    expect((await b.store.status()).pending).toBe(1);
+
+    await a.store.sync();
+    notes = 0;
+    ecrit("limon-synchro");
+    expect(notes).toBe(1);
+    expect(await b.store.status()).toMatchObject({ pending: 0, offline: false, erreur: null });
+
+    fin();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(b.requests).toBe(0);
+  });
+
+  it("un nouvel escalier créé et envoyé par A ne s'annonce pas non plus dans B", async () => {
+    const { a, b } = await fenetres();
+    await a.store.save(project("q", "Martin", 2000));
+    ecrit("limon-projets");
+    await a.store.sync();
+    ecrit("limon-synchro");
+    expect((await b.store.status()).pending).toBe(0);
+    expect(b.requests).toBe(0);
+  });
+
+  it("A n'a rien envoyé : B s'en charge, ce qu'il annonce a lieu", async () => {
+    const { a, b } = await fenetres();
+    // A est fermé juste après la frappe, ou son envoi a échoué.
+    const fin = apresLeDelai();
+    await a.store.save(project("p", "Dupont (a)", 2000));
+    ecrit("limon-projets");
+    expect((await b.store.status()).pending).toBe(1);
+    fin();
+    await vi.waitFor(async () => expect((await b.store.status()).pending).toBe(0));
+    expect(b.envois).toEqual([1]);
+    const [ligne] = await s.db.query<{ nom: string }>("select donnees->>'nom' as nom from projets where id = 'p'");
+    expect(ligne!.nom).toBe("Dupont (a)");
+  });
+
+  it("B ne reprend rien de l'échange d'un autre compte", async () => {
+    const { a, b } = await fenetres();
+    await a.store.save(project("p", "Dupont (a)", 2000));
+    ecrit("limon-projets");
+    await a.store.sync();
+    const etat = JSON.parse(a.storage.getItem("limon-synchro")!) as { compte: { id: string } };
+    a.storage.setItem("limon-synchro", JSON.stringify({ ...etat, compte: { ...etat.compte, id: "autre" } }));
+    ecrit("limon-synchro");
+    expect((await b.store.status()).pending).toBe(1);
+  });
+
+  it("deux onglets ne s'écrasent toujours pas", async () => {
+    const { a, b } = await fenetres();
+    await a.store.save(project("q", "De A", 2000));
+    await b.store.save(project("r", "De B", 2001));
+    ecrit("limon-projets");
+    expect(await a.names()).toEqual(["De A", "De B", "Dupont"]);
+    expect(await b.names()).toEqual(["De A", "De B", "Dupont"]);
   });
 });
 
