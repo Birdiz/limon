@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { atelierDefauts, newAtelier } from "../src/core/atelier";
+import { atelierDefauts, newAtelier, type AtelierDefauts } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
 import { edited, newProject, parseProjectFile, projectFile, SCHEMA, withEtat, type Project } from "../src/core/project";
@@ -635,7 +635,7 @@ describe("refus du serveur à l'envoi", () => {
     await a.store.sync();
     expect(await onServer()).toEqual(["autre", "p"]);
     const st = await a.store.status();
-    expect(st).toMatchObject({ offline: false, pending: 0 });
+    expect(st).toMatchObject({ offline: false, pending: 1, atelierAttend: true });
     expect(st.erreur).toContain("profil de l'atelier");
     await a.store.signOut();
   });
@@ -821,6 +821,60 @@ describe("synchronisation du profil de l'atelier", () => {
     expect(await new Api(a.f).atelierOf()).toMatchObject({ tarifs: { taux: 45 }, entreprise: { nom: "Exemple" } });
   });
 
+  /** Réglages d'un escalier dont une seule cote s'écarte de l'exemple. */
+  const uneCote = (cote: Partial<AtelierDefauts>): AtelierDefauts => ({ ...atelierDefauts(DEFAULTS), ...cote });
+
+  it("un appareil neuf qui garde une seule cote ne remet pas les autres réglages du compte à l'exemple", async () => {
+    const a = device();
+    await a.signIn("jean@exemple.fr");
+    a.atelier.set({ defauts: uneCote({ enc: 22, ess: "noyer" }) }, 1000);
+    await a.store.sync();
+
+    const neuf = device();
+    neuf.atelier.set({ defauts: uneCote({ et: 45 }) }, 5000);
+    await neuf.signIn("jean@exemple.fr");
+    await a.store.sync();
+    const attendu = { defauts: { enc: 22, ess: "noyer", et: 45 } };
+    expect(neuf.atelier.get()).toMatchObject(attendu);
+    expect(a.atelier.get()).toMatchObject(attendu);
+    expect(await new Api(a.f).atelierOf()).toMatchObject(attendu);
+    expect(await neuf.store.status()).toMatchObject({ pending: 0, atelierAttend: false });
+  });
+
+  it("un appareil neuf : réseau coupé après la lecture du compte, sa cote part quand même, sans rien remplacer", async () => {
+    const a = device();
+    await a.signIn("jean@exemple.fr");
+    a.atelier.set({ defauts: uneCote({ enc: 22 }) }, 1000);
+    await a.store.sync();
+
+    const neuf = device();
+    neuf.atelier.set({ defauts: uneCote({ et: 45 }) }, 5000);
+    const api = Object.getOwnPropertyDescriptor(neuf.store, "api")!.value as Api;
+    const push = api.pushAtelier;
+    api.pushAtelier = () => Promise.reject(new TypeError("Failed to fetch"));
+    await neuf.signIn("jean@exemple.fr");
+    expect(await neuf.store.status()).toMatchObject({ pending: 1, atelierAttend: true, offline: true });
+    expect(neuf.atelier.get()).toMatchObject({ defauts: { enc: 22, et: 45 } });
+    // Ce qui suit vient de l'artisan, sur des réglages où `enc` est déjà celui du compte.
+    neuf.atelier.set({ defauts: { ...neuf.atelier.get()!.defauts, et: 50 } }, 6000);
+    api.pushAtelier = push;
+    await neuf.store.sync();
+    expect(await new Api(a.f).atelierOf()).toMatchObject({ defauts: { enc: 22, et: 50 } });
+  });
+
+  it("un appareil neuf dont la cote est plus ancienne que les réglages du compte ne change rien", async () => {
+    const a = device();
+    await a.signIn("jean@exemple.fr");
+    a.atelier.set({ defauts: uneCote({ enc: 22 }) }, 5000);
+    await a.store.sync();
+
+    const neuf = device();
+    neuf.atelier.set({ defauts: uneCote({ et: 45 }) }, 1000);
+    await neuf.signIn("jean@exemple.fr");
+    expect(neuf.atelier.get()).toMatchObject({ defauts: { enc: 22, et: DEFAULTS.et }, modifie: 5000 });
+    expect(await new Api(a.f).atelierOf()).toMatchObject({ defauts: { enc: 22, et: DEFAULTS.et }, modifie: 5000 });
+  });
+
   it("deux appareils changent chacun une partie hors ligne : les deux restent", async () => {
     const a = await compteRempli();
     const b = device();
@@ -895,19 +949,40 @@ describe("synchronisation du profil de l'atelier", () => {
     expect((await a.store.status()).pending).toBe(0);
   });
 
-  it("un profil refusé reste dit, sort de l'attente, et une autre version repart", async () => {
+  it("un profil refusé reste dit et compte dans l'attente, et une autre version repart", async () => {
     const a = await compteRempli();
     a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 60 } }, Date.now() + 3000 * 86400_000);
     await a.store.sync();
     const st = await a.store.status();
-    expect(st).toMatchObject({ pending: 0, atelierAttend: false });
+    expect(st).toMatchObject({ pending: 1, atelierAttend: true });
     expect(st.erreur).toContain("profil de l'atelier");
     // L'état survit au rechargement de la page.
     const rouvert = device(a.storage);
-    expect(await rouvert.store.status()).toMatchObject({ pending: 0, atelierAttend: false });
+    expect(await rouvert.store.status()).toMatchObject({ pending: 1, atelierAttend: true });
+    // Hors ligne, aucune erreur à dire : l'attente seule empêche l'en-tête d'annoncer « Enregistré ».
+    a.online = false;
+    await a.store.sync();
+    expect(await a.store.status()).toMatchObject({ pending: 1, offline: true, erreur: null });
+    a.online = true;
     // Une version suivante est de nouveau à envoyer.
     a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 61 } }, Date.now());
     expect(await a.store.status()).toMatchObject({ pending: 1, atelierAttend: true });
+  });
+
+  it("un profil refusé reste sur l'appareil à la déconnexion, comme un escalier refusé", async () => {
+    const a = await compteRempli();
+    a.atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 77 } }, Date.now() + 3000 * 86400_000);
+    await a.store.sync();
+    await a.store.signOut();
+    expect(a.store.account()).toBeNull();
+    expect(a.atelier.get()!.tarifs.taux).toBe(77);
+    expect(new AtelierStore(a.storage).get()!.tarifs.taux).toBe(77);
+    expect(await a.store.status()).toMatchObject({ pending: 0, atelierAttend: false, erreur: null });
+
+    // Le compte n'a rien reçu, et un appareil qui s'y connecte garde ses tarifs.
+    const b = device();
+    await b.signIn("jean@exemple.fr");
+    expect(b.atelier.get()!.tarifs.taux).toBe(45);
   });
 
   it("un état enregistré avant `serveurAtelier` se reprend au premier échange", async () => {

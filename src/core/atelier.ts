@@ -106,6 +106,18 @@ export function mergeAtelier(a: Atelier, b: Atelier): Atelier {
   };
 }
 
+/**
+ * Profil d'un appareil qui n'a encore jamais échangé avec le compte, réuni avec celui-ci. Sa partie « réglages » n'a
+ * qu'une date, posée sur tout dès la première cote gardée : seuls les réglages qui s'écartent de l'exemple sont les
+ * choix de l'artisan, les autres ne remplacent pas ceux du compte. Une date plus ancienne ne remplace rien.
+ */
+export function joinAtelier(mine: Atelier, compte: Atelier): Atelier {
+  const merged = mergeAtelier(mine, compte);
+  if (mine.dates.defauts <= compte.dates.defauts) return merged;
+  const choisis = ATELIER_KEYS.filter((k) => mine.defauts[k] !== DEFAULTS[k]).map((k) => [k, mine.defauts[k]]);
+  return { ...merged, defauts: { ...compte.defauts, ...Object.fromEntries(choisis) } };
+}
+
 /** Vrai si les deux profils disent la même chose, dates comprises, dans quelque ordre que soient leurs clés. */
 export function sameAtelier(a: Atelier, b: Atelier): boolean {
   return memeTexte(sanitizeAtelier(a), sanitizeAtelier(b));
