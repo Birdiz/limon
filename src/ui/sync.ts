@@ -8,6 +8,8 @@ import { browserStorage, read, write, type KeyValue, type LocalStore, type Proje
 const SYNC_KEY = "limon-synchro";
 /** Délai entre la dernière modification et l'envoi. */
 const DEBOUNCE = 3000;
+/** Délai laissé à l'onglet qui a écrit un projet pour l'envoyer, avant qu'un autre s'en charge. */
+const RELAIS = 2 * DEBOUNCE;
 /** Le navigateur refuse un envoi `keepalive` de plus de 64 ko. */
 const KEEPALIVE_MAX = 60_000;
 /** Éléments par envoi, comme la lecture. */
@@ -47,6 +49,15 @@ const EMPTY: SyncState = {
   serveurAtelier: null,
   atelierRefuse: null,
 };
+
+/** État enregistré, par cet onglet ou un autre ; null s'il est absent ou abîmé. */
+function readState(storage: KeyValue | null): Partial<SyncState> | null {
+  try {
+    return JSON.parse(read(storage, SYNC_KEY) ?? "null") as Partial<SyncState> | null;
+  } catch {
+    return null;
+  }
+}
 
 /** Découpe un envoi : 500 éléments au plus, et de quoi tenir dans ce que le serveur accepte. */
 export function lots(changes: Changement[]): Changement[][] {
@@ -102,6 +113,7 @@ export class SyncStore implements ProjectStore {
   private running: Promise<void> | null = null;
   private again = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private relais: ReturnType<typeof setTimeout> | undefined;
   private offline = false;
   private erreur: string | null = null;
   private plusRecents = 0;
@@ -117,25 +129,28 @@ export class SyncStore implements ProjectStore {
     private atelier: AtelierStore | null = null,
     private now: () => number = Date.now,
   ) {
-    let raw: Partial<SyncState> | null;
-    try {
-      raw = JSON.parse(read(storage, SYNC_KEY) ?? "null") as Partial<SyncState> | null;
-    } catch {
-      raw = null;
-    }
-    this.state = { ...EMPTY, ...raw };
+    this.state = { ...EMPTY, ...readState(storage) };
     // État enregistré avant `connu`.
     this.state.connu ||= !!this.state.dernier;
     local.onChange((ids) => {
       this.emit(ids);
       this.emitStatus();
+      this.relay();
     });
     local.onStored(() => this.emitStatus());
   }
 
+  /** Écoute les autres onglets : les projets qu'ils écrivent, et ce que leurs échanges apprennent du serveur. */
+  watch(): void {
+    this.local.watch();
+    window.addEventListener("storage", (e) => {
+      if (e.key === SYNC_KEY) this.otherTabExchanged();
+    });
+  }
+
   /** Échanges au démarrage, au retour du réseau, au retour sur la page et toutes les 5 minutes. */
   start(): void {
-    this.local.watch();
+    this.watch();
     window.addEventListener("online", () => void this.sync());
     document.addEventListener("visibilitychange", () => void this.sync(document.hidden));
     setInterval(() => {
@@ -346,6 +361,33 @@ export class SyncStore implements ProjectStore {
     this.emitStatus();
   }
 
+  /**
+   * Un autre onglet a échangé avec le serveur : ce qu'il y a vu vaut ici, sinon ses envois resteraient à envoyer.
+   * Sans jamais descendre : son état peut dater, et l'échange suivant d'ici recale tout sur l'index.
+   */
+  private otherTabExchanged(): void {
+    const other = readState(this.storage);
+    if (!this.state.compte || other?.compte?.id !== this.state.compte.id) return;
+    const { serveur } = this.state;
+    for (const [id, modifie] of Object.entries(other.serveur ?? {}))
+      if (!(id in serveur) || serveur[id]! < modifie) serveur[id] = modifie;
+    this.emitStatus();
+  }
+
+  /**
+   * Un autre onglet a écrit des projets, et c'est à lui de les envoyer. Fermé entre-temps, refusé ou en panne, il ne
+   * l'aura pas fait : cet onglet, qui les compte à envoyer, s'en charge.
+   */
+  private relay(): void {
+    if (!this.state.compte) return;
+    clearTimeout(this.relais);
+    this.relais = setTimeout(() => {
+      void this.pending().then((changes) => {
+        if (changes.length) void this.sync();
+      });
+    }, RELAIS);
+  }
+
   /** Versions plus récentes ici que sur le serveur, et suppressions à envoyer ; les refusées seulement à la demande. */
   private async pending(withRefused = false): Promise<Changement[]> {
     const { serveur, supprimes, refuses } = this.state;
@@ -552,6 +594,7 @@ export class SyncStore implements ProjectStore {
 
   private reset(connu: boolean): void {
     clearTimeout(this.timer);
+    clearTimeout(this.relais);
     this.state = { ...EMPTY, connu, serveur: {}, supprimes: {}, refuses: {} };
     this.plusRecents = 0;
     this.offline = false;

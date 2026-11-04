@@ -45,6 +45,8 @@ Limites : une coupure que le serveur ne voit pas (domaine, réseau, routes `/api
 
 Le serveur renvoie l'index (`id`, `modifie`, `supprime`) ; la version la plus récente gagne sur `modifie`, projet par projet ; une suppression est une trace datée. État dans `limon-synchro`. `currentId` reste propre à l'appareil. Toute modification du projet (réglages, nom, étape du mode guidé, devis, état) passe par `touched` (`src/core/project.ts`), toute suppression par `stamped` : datées toujours après la version remplacée, même si l'horloge de l'appareil retarde sur celle qui l'a écrite.
 
+**Deux onglets d'un navigateur** : ils partagent `limon-projets` et `limon-synchro`, mais chacun garde `state` en mémoire. Un projet écrit par A est compté à envoyer dans B, et c'est A qui l'envoie. Quand A écrit `limon-synchro`, B reprend le `serveur` de A (`otherTabExchanged`, même compte, sans descendre) et son en-tête se met à jour, sans échange. Si B compte encore quelque chose à envoyer 6 s après (`RELAIS`) le dernier changement venu d'un autre onglet (A fermé, en panne, refus), B l'envoie lui-même. Limite : un envoi de A de plus de 3 s peut partir aussi depuis B, et la ligne n'y change rien.
+
 **Versions remises d'un devis** : elles échappent à « la plus récente gagne » (`avecRemis`, `src/core/project.ts`). `PUT /projets` relit la ligne et écrit si elle n'a pas changé entre-temps (cinq essais, sinon refus nommé) :
 
 - La version reçue passe : ce que seule la ligne a remis s'y ajoute.
