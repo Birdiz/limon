@@ -85,7 +85,11 @@ const devisView = new DevisView({
   },
   openTarifs: () => void home.show("atelier"),
   openCompte: () => void home.show("compte"),
-  numero: (id) => api.devisNumero(id),
+  // Le compte ne numérote que ses escaliers : celui qui attend encore d'y partir, fait hors ligne, y part d'abord.
+  numero: async (id) => {
+    await store.sync();
+    return api.devisNumero(id);
+  },
   // Une version remise peut avoir un autre escalier que celui à l'écran : on le dessine le temps de la capture.
   vue3d: (R) => {
     if (!scene) return null;

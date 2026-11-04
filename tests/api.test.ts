@@ -2,7 +2,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { atelierDefauts, newAtelier } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
-import { newDevis } from "../src/core/devis";
+import { buildCNC } from "../src/cnc/build";
+import { quantites } from "../src/cnc/quantites";
+import { MAX_OCTETS, SAISIE_DEFAUT, bloquants, devis, newDevis, remettre, type DevisProjet } from "../src/core/devis";
+import { compute } from "../src/core/stair";
 import { newProject, NOM_PAR_DEFAUT, SCHEMA, type Project } from "../src/core/project";
 import { migrate, pgliteDb, purge, purgeComptes } from "../server/db";
 import { brevoAvertissement } from "../server/mail";
@@ -769,16 +772,96 @@ describe("atelier", () => {
   });
 });
 
+describe("poids d'un escalier", () => {
+  const r = compute(DEFAULTS, false);
+  if (!r.ok) throw new Error("exemple");
+  const Q = quantites(r.stair, buildCNC(r.stair));
+  const T = "é".repeat(200);
+  const saisiePleine = {
+    ...SAISIE_DEFAUT,
+    libres: Array.from({ length: 100 }, () => ({ designation: T, q: 1, unite: "forfait", pu: 350, tva: 20 })),
+  };
+  const clientPlein = { nom: T, adresse: "é".repeat(2000), chantier: "é".repeat(2000) };
+  const D = devis(Q, TARIFS_VIDES, saisiePleine);
+  const version = {
+    numero: "2026-0001",
+    nom: "a",
+    params: DEFAULTS,
+    tarifs: TARIFS_VIDES,
+    entreprise: ENTREPRISE_VIDE,
+  };
+  const manqueDeLaPlace = (d: DevisProjet) =>
+    bloquants(D, d, TARIFS_VIDES, ENTREPRISE_VIDE).some((m) => m.startsWith("de la place"));
+  const envoi = async (f: typeof fetch, changement: unknown) => {
+    const res = await post(f, "/api/projets", { changements: [changement], detail: true }, "PUT");
+    return ((await res.json()) as { refus: { raison: string }[] }).refus;
+  };
+  const projet = (modifie: number, d: DevisProjet | null = null) => ({
+    ...newProject("a", "a", "complet", 1),
+    modifie,
+    devis: d,
+  });
+  const lu = async (f: typeof fetch) =>
+    ((await (await post(f, "/api/projets/lire", { ids: ["a"] })).json()) as Project[])[0];
+
+  it("refuse trop lourd : la raison est dite, et le compte garde la version d'avant", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect(await envoi(f, { id: "a", projet: projet(1) })).toEqual([]);
+    const plein = { ...newDevis(), client: clientPlein, saisie: saisiePleine };
+    const remis = remettre(plein, { ...version, chiffrage: D }, 1).remis[0]!;
+    const lourd = { ...plein, remis: Array<typeof remis>(12).fill(remis) };
+    const [refus] = await envoi(f, { id: "a", projet: projet(2, lourd) });
+    expect(refus!.raison).toContain("trop lourd");
+    expect(refus!.raison).toContain("Aucune n'est perdue");
+    expect((await lu(f))!.modifie).toBe(1);
+    // Une suppression et une version plus légère passent encore.
+    expect(await envoi(f, { id: "a", modifie: 3, supprime: true })).toEqual([]);
+    expect(await envoi(f, { id: "a", projet: projet(4) })).toEqual([]);
+    expect((await lu(f))!.modifie).toBe(4);
+  });
+
+  it("arrête la remise avant la borne : tout ce qui est remis rejoint le compte, même repris ensuite", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    let d = newDevis();
+    let n = 0;
+    while (!manqueDeLaPlace(d)) {
+      d = remettre(d, { ...version, chiffrage: D }, ++n);
+      expect(n).toBeLessThan(50);
+    }
+    expect(n).toBeGreaterThan(1);
+    const repris = { ...d, rouvert: true, client: clientPlein, saisie: saisiePleine };
+    expect(Buffer.byteLength(JSON.stringify(projet(1, repris)))).toBeLessThanOrEqual(MAX_OCTETS);
+    expect(await envoi(f, { id: "a", projet: projet(1, repris) })).toEqual([]);
+    expect((await lu(f))!.devis!.remis).toHaveLength(n);
+  });
+
+  it("arrête la remise à la dernière version gardée, plutôt que d'effacer la première", () => {
+    const pleine = remettre(newDevis(), { ...version, chiffrage: devis(Q, TARIFS_VIDES, SAISIE_DEFAUT) }, 1).remis[0]!;
+    expect(manqueDeLaPlace({ ...newDevis(), remis: Array<typeof pleine>(49).fill(pleine) })).toBe(false);
+    expect(manqueDeLaPlace({ ...newDevis(), remis: Array<typeof pleine>(50).fill(pleine) })).toBe(true);
+  });
+});
+
 describe("numéros de devis", () => {
   const numero = async (f: typeof fetch, projet: unknown) => {
     const r = await post(f, "/api/devis/numero", { projet });
     return r.ok ? ((await r.json()) as { numero: string }).numero : r.status;
   };
+  const escaliers = (f: typeof fetch, ...ids: string[]) =>
+    post(
+      f,
+      "/api/projets",
+      { changements: ids.map((id) => ({ id, projet: newProject(id, id, "complet", 1) })) },
+      "PUT",
+    );
   const annee = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", year: "numeric" }).format(new Date());
 
   it("suivent l'année, sans trou, et redonnent le même numéro au même escalier", async () => {
     const f = browser(s);
     await login(s, f, "a@exemple.fr");
+    await escaliers(f, "a", "b", "c");
     expect(await numero(f, "a")).toBe(`${annee}-0001`);
     expect(await numero(f, "b")).toBe(`${annee}-0002`);
     expect(await numero(f, "a")).toBe(`${annee}-0001`);
@@ -791,6 +874,8 @@ describe("numéros de devis", () => {
     const a = await login(s, f, "a@exemple.fr");
     await login(s, g, "b@exemple.fr");
     await s.db.query("insert into devis_numeros (compte, projet, annee, rang) values ($1, 'vieux', 2001, 57)", [a.id]);
+    await escaliers(f, "a");
+    await escaliers(g, "a", "b");
     expect(await numero(f, "a")).toBe(`${annee}-0001`);
     expect(await numero(g, "a")).toBe(`${annee}-0001`);
     expect(await numero(g, "b")).toBe(`${annee}-0002`);
@@ -800,6 +885,7 @@ describe("numéros de devis", () => {
   it("tiennent quand deux demandes arrivent ensemble", async () => {
     const f = browser(s);
     await login(s, f, "a@exemple.fr");
+    await escaliers(f, "a", "b", "c", "d");
     const got = await Promise.all(["a", "b", "c", "d", "a"].map((p) => numero(f, p)));
     expect(new Set(got.slice(0, 4)).size).toBe(4);
     expect(got[4]).toBe(got[0]);
@@ -814,10 +900,56 @@ describe("numéros de devis", () => {
     expect(await numero(f, 12)).toBe(400);
   });
 
+  it("refusent un identifiant hors format, sans rien écrire", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect(await numero(f, '"><img src=x>')).toBe(400);
+    expect(await numero(f, "x".repeat(101))).toBe(400);
+    expect(await s.db.query("select * from devis_numeros")).toEqual([]);
+  });
+
+  it("attendent que l'escalier soit dans le compte, sans perdre de rang", async () => {
+    const f = browser(s),
+      g = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await login(s, g, "b@exemple.fr");
+    await escaliers(g, "fait-hors-ligne");
+    const r = await post(f, "/api/devis/numero", { projet: "fait-hors-ligne" });
+    expect(r.status).toBe(409);
+    expect(((await r.json()) as { erreur: string }).erreur).toContain("Réessayez");
+    expect(await s.db.query("select * from devis_numeros")).toEqual([]);
+    await escaliers(f, "fait-hors-ligne");
+    expect(await numero(f, "fait-hors-ligne")).toBe(`${annee}-0001`);
+  });
+
+  it("ne s'attribuent pas à un escalier supprimé, mais lui restent s'il en avait un", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await escaliers(f, "a", "b");
+    expect(await numero(f, "a")).toBe(`${annee}-0001`);
+    const traces = ["a", "b"].map((id) => ({ id, modifie: Date.now(), supprime: true }));
+    await post(f, "/api/projets", { changements: traces }, "PUT");
+    expect(await numero(f, "a")).toBe(`${annee}-0001`);
+    expect(await numero(f, "b")).toBe(409);
+  });
+
+  it("limitent le débit par compte", async () => {
+    const f = browser(s),
+      g = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await login(s, g, "b@exemple.fr");
+    await escaliers(f, "a");
+    await escaliers(g, "a");
+    for (let i = 0; i < 120; i++) expect(typeof (await numero(f, "a"))).toBe("string");
+    expect(await numero(f, "a")).toBe(429);
+    expect(await numero(g, "a")).toBe(`${annee}-0001`);
+  });
+
   it("partent avec le compte", async () => {
     const f = browser(s);
     await login(s, f, "a@exemple.fr");
-    await numero(f, "a");
+    await escaliers(f, "a");
+    expect(await numero(f, "a")).toBe(`${annee}-0001`);
     await f("/api/compte", { method: "DELETE" });
     expect(await s.db.query("select * from devis_numeros")).toEqual([]);
   });
