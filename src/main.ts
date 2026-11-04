@@ -77,6 +77,7 @@ const devisView = new DevisView({
   stair: () => (current?.ok ? current.stair : null),
   tarifs: () => atelier.get()?.tarifs ?? TARIFS_VIDES,
   entreprise: () => atelier.get()?.entreprise ?? ENTREPRISE_VIDE,
+  clientsCaches: () => store.hidesClients(),
   saved: (d) => {
     if (!project) return;
     project = withDevis(project, d, Date.now());
@@ -436,6 +437,10 @@ store.onChange(async (ids) => {
       if (p.modifie !== project.modifie) {
         showProject(p);
         undo.reset(params);
+      } else {
+        // Même version : seul son devis change, caché quand la session se perd, revenu à la reconnexion.
+        project = { ...project, devis: p.devis };
+        devisView.refresh();
       }
     } else {
       const next = (await store.list())[0] ?? null;

@@ -1672,6 +1672,11 @@ body[data-tab="devis"] .work,
   align-items: center;
   flex-wrap: wrap;
 }
+/* Session perdue : le devis et le client restent cachés, seul le message reste */
+.devisv.cache > :not(.dvhead, #dvMsg),
+.devisv.cache .dvetat {
+  display: none;
+}
 .dvgrid {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
@@ -1949,6 +1954,19 @@ a.btn {
 }
 .acview .plist {
   align-self: stretch;
+}
+/* Suppression du compte : ce qui part, et le choix pour cet appareil */
+.acdelete {
+  align-self: stretch;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+.acdelete p {
+  margin: 8px 0 12px;
+}
+.acdelete .adv[hidden] {
+  display: none;
 }
 /* Les outils à venir, dans l'onglet Mon compte */
 .soon {

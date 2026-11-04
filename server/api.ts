@@ -18,6 +18,7 @@ import {
   type Compte,
   type CompteDetail,
   type Entree,
+  type Appareil,
   type Passkey,
   type Refus,
 } from "../src/core/account";
@@ -43,10 +44,13 @@ export interface ApiConfig {
   sendCode: SendCode;
 }
 
-type Env = { Variables: { compte: string } };
+type Env = { Variables: { compte: string; session: string } };
 
 const COOKIE = "limon-session";
-const SESSION_DAYS = 365;
+/** Une session sans usage pendant cette durée se ferme ; un usage, une fois par jour au plus, la prolonge d'autant. */
+const SESSION_DAYS = 90;
+/** Aucune ne dépasse cette durée après son ouverture, même utilisée chaque jour. */
+const SESSION_MAX_DAYS = 365;
 const CODE_MINUTES = 10;
 const CODE_TRIES = 5;
 const HOUR = 3_600_000;
@@ -106,6 +110,8 @@ const ms = (d: unknown) => (d ? new Date(d as string).getTime() : null);
 const err = (c: Context, status: ContentfulStatusCode, erreur: string) => c.json({ erreur }, status);
 /** Erreur de Postgres qui tient à la donnée reçue, pas à la base (classe 22). */
 const isDataError = (e: unknown) => /^22/.test(String((e as { code?: unknown } | null)?.code));
+/** Nom donné par la page à l'appareil qu'elle connecte, ou à sa passkey. */
+const nomAppareil = (nom: unknown) => (typeof nom === "string" && sansControles(nom).trim().slice(0, 40)) || "Appareil";
 const validDate = (m: unknown): m is number =>
   Number.isInteger(m) && (m as number) >= 0 && (m as number) <= Date.now() + MAX_AVANCE;
 const body = async (c: Context): Promise<Record<string, unknown>> => {
@@ -153,36 +159,30 @@ export function api(cfg: ApiConfig): Hono<Env> {
   /** Le compte a servi : son effacement recule, et un avertissement déjà parti ne compte plus. */
   const vu = (compte: string) => db.query("update comptes set vu = now(), averti = null where id = $1", [compte]);
 
-  async function startSession(c: Context, compte: string): Promise<void> {
+  async function startSession(c: Context, compte: string, appareil: unknown): Promise<void> {
     await vu(compte);
     const token = randomBytes(32).toString("base64url");
     await db.query(
-      `insert into sessions (hash, compte, expire) values ($1, $2, now() + interval '${SESSION_DAYS} days')`,
-      [sha256(token), compte],
+      `insert into sessions (hash, compte, appareil, expire) values ($1, $2, $3, now() + interval '${SESSION_DAYS} days')`,
+      [sha256(token), compte, nomAppareil(appareil)],
     );
-    setSessionCookie(c, token);
+    setSessionCookie(c, token, SESSION_DAYS * 86400);
   }
-  function setSessionCookie(c: Context, token: string): void {
-    setCookie(c, COOKIE, token, {
-      httpOnly: true,
-      secure,
-      sameSite: "Lax",
-      path: "/api",
-      maxAge: SESSION_DAYS * 86400,
-    });
+  function setSessionCookie(c: Context, token: string, maxAge: number): void {
+    setCookie(c, COOKIE, token, { httpOnly: true, secure, sameSite: "Lax", path: "/api", maxAge });
   }
   async function compteOf(id: string): Promise<Compte | null> {
     const [r] = await db.query<Compte>("select id, email, statut from comptes where id = $1", [id]);
     return r ?? null;
   }
 
-  /** Session valable, prolongée d'un an au plus une fois par jour, comme la dernière activité du compte. */
+  /** Session valable, prolongée au plus une fois par jour jusqu'à son plafond, avec la dernière activité du compte. */
   const auth = createMiddleware<Env>(async (c, next) => {
     const token = getCookie(c, COOKIE);
     const hash = token && sha256(token);
     const [s] = hash
       ? await db.query<{ compte: string; renew: boolean; revu: boolean }>(
-          `select s.compte, s.expire < now() + interval '${SESSION_DAYS - 1} days' as renew,
+          `select s.compte, s.utilise < now() - interval '1 day' as renew,
              c.vu < now() - interval '1 day' as revu
            from sessions s join comptes c on c.id = s.compte where s.hash = $1 and s.expire > now()`,
           [hash],
@@ -191,10 +191,16 @@ export function api(cfg: ApiConfig): Hono<Env> {
     if (!s) return err(c, 401, "Vous n'êtes plus connecté.");
     if (s.revu) await vu(s.compte);
     if (s.renew) {
-      await db.query(`update sessions set expire = now() + interval '${SESSION_DAYS} days' where hash = $1`, [hash]);
-      setSessionCookie(c, token!);
+      const [r] = await db.query<{ reste: number }>(
+        `update sessions set utilise = now(),
+           expire = least(now() + interval '${SESSION_DAYS} days', cree + interval '${SESSION_MAX_DAYS} days')
+         where hash = $1 returning extract(epoch from expire - now())::int as reste`,
+        [hash],
+      );
+      if (r) setSessionCookie(c, token!, r.reste);
     }
     c.set("compte", s.compte);
+    c.set("session", hash!);
     await next();
   });
 
@@ -254,7 +260,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
       email,
     ]);
     const [compte] = await db.query<Compte>("select id, email, statut from comptes where email = $1", [email]);
-    await startSession(c, compte!.id);
+    await startSession(c, compte!.id, b.appareil);
     return c.json(compte!);
   });
 
@@ -268,7 +274,8 @@ export function api(cfg: ApiConfig): Hono<Env> {
   });
 
   app.post("/passkey/connexion", async (c) => {
-    const reponse = (await body(c)).reponse as AuthenticationResponseJSON | undefined;
+    const b = await body(c);
+    const reponse = b.reponse as AuthenticationResponseJSON | undefined;
     const defi = challengeOf(reponse);
     const [ok] = defi
       ? await db.query("delete from defis where defi = $1 and compte is null and expire > now() returning defi", [defi])
@@ -301,7 +308,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
       return err(c, 400, "La passkey n'a pas pu être vérifiée.");
     }
     await db.query("update passkeys set compteur = $2, utilise = now() where id = $1", [reponse.id, newCounter]);
-    await startSession(c, pk.compte);
+    await startSession(c, pk.compte, b.appareil);
     return c.json(await compteOf(pk.compte));
   });
 
@@ -330,7 +337,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
   app.post("/passkey/ajout", auth, async (c) => {
     const b = await body(c);
     const reponse = b.reponse as RegistrationResponseJSON | undefined;
-    const nom = typeof b.nom === "string" && b.nom.trim() ? b.nom.trim().slice(0, 40) : "Appareil";
+    const nom = nomAppareil(b.nom);
     const defi = challengeOf(reponse);
     const [ok] = defi
       ? await db.query("delete from defis where defi = $1 and compte = $2 and expire > now() returning defi", [
@@ -365,27 +372,56 @@ export function api(cfg: ApiConfig): Hono<Env> {
       console.error(e);
       return err(c, 400, "La passkey n'a pas pu être enregistrée.");
     }
-    return c.json(await detail(c.get("compte")));
+    return c.json(await detail(c));
   });
 
   app.delete("/passkeys/:id", auth, async (c) => {
     await db.query("delete from passkeys where id = $1 and compte = $2", [c.req.param("id"), c.get("compte")]);
-    return c.json(await detail(c.get("compte")));
+    return c.json(await detail(c));
   });
 
   /* ---------- Compte ---------- */
 
-  async function detail(id: string): Promise<CompteDetail> {
+  async function detail(c: Context<Env>): Promise<CompteDetail> {
+    const id = c.get("compte");
     const compte = (await compteOf(id))!;
     const rows = await db.query<{ id: string; nom: string; cree: Date; utilise: Date | null }>(
       "select id, nom, cree, utilise from passkeys where compte = $1 order by cree",
       [id],
     );
     const passkeys: Passkey[] = rows.map((r) => ({ id: r.id, nom: r.nom, cree: ms(r.cree)!, utilise: ms(r.utilise) }));
-    return { ...compte, passkeys };
+    const sessions = await db.query<{ id: string; appareil: string; cree: Date; utilise: Date; actuel: boolean }>(
+      `select id, appareil, cree, utilise, hash = $2 as actuel from sessions
+       where compte = $1 and expire > now() order by actuel desc, utilise desc, cree desc`,
+      [id, c.get("session")],
+    );
+    const appareils: Appareil[] = sessions.map((r) => ({
+      id: r.id,
+      nom: r.appareil,
+      cree: ms(r.cree)!,
+      utilise: ms(r.utilise)!,
+      actuel: r.actuel,
+    }));
+    return { ...compte, passkeys, appareils };
   }
 
-  app.get("/compte", auth, async (c) => c.json(await detail(c.get("compte"))));
+  app.get("/compte", auth, async (c) => c.json(await detail(c)));
+
+  /** Déconnecte un autre appareil. Pas celui-ci : « Se déconnecter » envoie d'abord ce qui attend. */
+  app.delete("/sessions/:id", auth, async (c) => {
+    await db.query("delete from sessions where id = $1 and compte = $2 and hash <> $3", [
+      c.req.param("id"),
+      c.get("compte"),
+      c.get("session"),
+    ]);
+    return c.json(await detail(c));
+  });
+
+  /** Déconnecte tous les autres appareils. */
+  app.delete("/sessions", auth, async (c) => {
+    await db.query("delete from sessions where compte = $1 and hash <> $2", [c.get("compte"), c.get("session")]);
+    return c.json(await detail(c));
+  });
 
   app.delete("/compte", auth, async (c) => {
     await db.query("delete from comptes where id = $1", [c.get("compte")]);
@@ -404,8 +440,11 @@ export function api(cfg: ApiConfig): Hono<Env> {
       "select id, nom, cle, compteur, transports, cree, utilise from passkeys where compte = $1 order by cree",
       [id],
     );
-    // Les dates seulement : l'empreinte ne sort jamais.
-    const sessions = await db.query("select cree, expire from sessions where compte = $1 order by cree", [id]);
+    // Sans l'empreinte, qui ne sort jamais.
+    const sessions = await db.query(
+      "select id, appareil, cree, utilise, expire from sessions where compte = $1 order by cree",
+      [id],
+    );
     const projets = await db.query<{ donnees: Project }>(
       "select donnees from projets where compte = $1 and not supprime order by modifie desc",
       [id],

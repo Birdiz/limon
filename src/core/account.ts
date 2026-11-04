@@ -20,8 +20,21 @@ export interface Passkey {
   utilise: number | null;
 }
 
+/** Appareil connecté au compte : une session, sans rien de son jeton. */
+export interface Appareil {
+  id: string;
+  /** « iPhone », « Mac »… ; « Appareil » pour une connexion d'avant ces noms. */
+  nom: string;
+  cree: number;
+  /** Dernier usage, noté une fois par jour au plus. */
+  utilise: number;
+  /** Celui qui demande. */
+  actuel: boolean;
+}
+
 export interface CompteDetail extends Compte {
   passkeys: Passkey[];
+  appareils: Appareil[];
 }
 
 /** Ligne de l'index des projets d'un compte : de quoi savoir qui a la version la plus récente. */

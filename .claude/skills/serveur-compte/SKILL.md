@@ -19,11 +19,15 @@ description: Serveur et /api (server/), base et migrations, compte, passkeys, se
 
 Sans mot de passe : passkey (SimpleWebAuthn, `@simplewebauthn/browser` chargé à part) ; code à 6 chiffres par e-mail (Brevo, `server/mail.ts`) pour créer le compte et en secours, haché avec un sel propre au processus.
 
-Session : cookie `limon-session` (`HttpOnly`, `Path=/api`), un an, prolongée à l'usage. Requêtes qui modifient : origine du site exigée. Limites de débit en mémoire (un seul serveur).
+Session : cookie `limon-session` (`HttpOnly`, `Path=/api`). 90 jours sans usage la ferment (`SESSION_DAYS`) ; un usage la prolonge, une fois par jour au plus, sans dépasser un an après son ouverture (`SESSION_MAX_DAYS`), et le cookie ne promet que ce qui reste. Requêtes qui modifient : origine du site exigée. Limites de débit en mémoire (un seul serveur).
+
+**Appareils connectés** : une session par appareil, avec son `id` (seul montré, `hash` ne sort jamais), le nom d'appareil donné par la page (`deviceName`, jamais le navigateur ni l'adresse), `utilise` et `cree`. Liste dans `CompteDetail.appareils`, `DELETE /sessions/:id` déconnecte un autre appareil, `DELETE /sessions` tous les autres. Celui qui demande n'est jamais fermé par ces routes : `/deconnexion` passe par `signOut`, qui envoie d'abord ce qui attend. Retirer une passkey propose de déconnecter les autres. Un appareil déconnecté reçoit 401 à son prochain échange : session perdue, ses escaliers restent et leurs clients se cachent.
+
+Limites : `utilise` n'est noté qu'une fois par jour, donc une session peut s'arrêter jusqu'à un jour avant les 90 jours comptés depuis son vrai dernier usage, et la liste peut dater ce dernier usage de la veille. Deux appareils de même sorte portent le même nom : la date les sépare. Un appareil qui ne contacte plus le serveur (téléphone perdu hors réseau) garde ce qu'il affiche : la fermeture n'efface rien à distance.
 
 ## Données
 
-Minimales (e-mail, projets, clés publiques, empreinte des sessions ; pas d'IP conservée). `statut` du compte : `testeur` pour l'instant, l'abonnement viendra. Suppression du compte en cascade ; export des données dans Mon compte.
+Minimales (e-mail, projets, clés publiques, empreinte des sessions, nom d'appareil et dernier usage ; pas d'IP conservée). `statut` du compte : `testeur` pour l'instant, l'abonnement viendra. Suppression du compte en cascade ; export des données dans Mon compte.
 
 **Export** (`GET /compte/donnees`) : tout ce que le compte garde, traces de suppression et numéros de devis compris, un numéro restant après la suppression de son escalier. L'empreinte des sessions n'en sort jamais. Une colonne ou une table ajoutée fait échouer `tests/api.test.ts` tant qu'elle n'est pas rendue par la route ou écrite dans `HORS_EXPORT`, avec sa raison (dehors aujourd'hui : l'identifiant du compte répété dans chaque table, et `codes` et `defis`, de durée très courte).
 
@@ -67,14 +71,14 @@ Côté page, `SyncState.refuses` garde la version refusée : elle sort de l'atte
 
 - **Première connexion** : les projets de l'appareil montent dans le compte.
 - **Déconnexion** : tout est envoyé, puis les projets du compte quittent l'appareil (refusée s'il reste des envois, profil de l'atelier compris ; un projet ou un profil refusé n'en est pas un, et reste sur l'appareil).
-- **Session perdue** : les projets restent ; connexion à une autre adresse ensuite : ceux de l'ancien compte quittent l'appareil.
-- **Compte supprimé** : les projets restent sur l'appareil.
+- **Session perdue** (`compte` nul, `dernier` rempli : `hidesClients`) : les projets restent et s'ouvrent, mais `get` et `list` les rendent sans `devis`, donc sans client ; `save` remet le devis de l'appareil, un geste ne l'efface pas, et une copie (`Dupliquer`, fichier) part sans lui. L'onglet Devis ne montre qu'un message et « Me connecter » ; `store.onChange` prévient avec tous les projets à la perte et à la reprise, l'escalier ouvert suit. Reprise à la même adresse : tout revient. À une autre adresse : ceux de l'ancien compte quittent l'appareil. Limites : caché, pas effacé (`limon-projets` les garde en clair, l'e-mail reste dans `dernier`) ; le nom de l'escalier et le profil de l'atelier restent visibles ; un compte supprimé depuis un autre appareil se lit comme une session perdue, et ses clients restent cachés jusqu'à une connexion.
+- **Compte supprimé** : le profil de l'atelier quitte l'appareil, et « Effacer aussi de cet appareil » (non coché au départ) efface tous les projets, envoyés ou non. Sinon ils restent, clients visibles, comme avant d'avoir un compte. Limite : les autres appareils gardent ce qu'ils ont, clients cachés.
 
 ## Profil de l'atelier
 
 `Atelier` et `ATELIER_KEYS` dans `src/core/atelier.ts`, `AtelierStore` et `AtelierPanel` dans `src/ui/atelier.ts`. Les réglages qui tiennent à l'habitude de l'artisan (bois, limons, poteau, assemblage, plateaux, garde-corps), repris par chaque nouvel escalier ; les cotes du chantier n'en font pas partie, et l'escalier d'exemple comme « Revenir à l'exemple » gardent les valeurs d'origine.
 
-Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garder ces réglages pour mes prochains escaliers » (masqué en pas à pas, comme « Revenir à l'exemple »). Enregistré dans `limon-atelier` ; avec un compte, table `ateliers` et `/api/atelier` (GET, PUT), échangé avec les projets, et il quitte l'appareil à la déconnexion, sauf refusé. Toute modification est datée par `stamped`, comme un projet : un appareil à l'horloge en retard ne perd pas contre la version qu'il remplace.
+Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garder ces réglages pour mes prochains escaliers » (masqué en pas à pas, comme « Revenir à l'exemple »). Enregistré dans `limon-atelier` ; avec un compte, table `ateliers` et `/api/atelier` (GET, PUT), échangé avec les projets, et il quitte l'appareil à la déconnexion, sauf refusé, et à la suppression du compte. Toute modification est datée par `stamped`, comme un projet : un appareil à l'horloge en retard ne perd pas contre la version qu'il remplace.
 
 **Fusion par partie** : réglages, tarifs et fiche de l'entreprise ont chacun leur date (`Atelier.dates`, colonne `dates`), `set` ne date que la partie changée, et `modifie` reste la plus récente. `mergeAtelier` garde la plus récente partie par partie, côté serveur et côté page ; à date égale, celle du compte. Un appareil neuf qui garde un réglage ne vide donc ni les tarifs ni la fiche du compte. `PUT /atelier` renvoie le profil réuni, et relit la ligne s'il ne la retrouve pas telle qu'il l'a lue.
 
@@ -86,4 +90,4 @@ Rempli depuis l'onglet « Mon atelier » de l'accueil, ou d'un coup par « Garde
 
 ## Compte à l'écran
 
-Dans l'en-tête (bouton et état de l'enregistrement, qui nomme un escalier refusé) et l'onglet Mon compte de l'accueil (`AccountPanel`, `src/ui/account.ts`), avec la liste des refus et leur « Garder une copie », la notice de confidentialité (responsable : Thomas Bouzy) et le bloc « Bientôt », qui annonce ce que l'abonnement apportera (nom et logo sur la fiche, devis, état du chantier, lien de visite, versions).
+Dans l'en-tête (bouton et état de l'enregistrement, qui nomme un escalier refusé) et l'onglet Mon compte de l'accueil (`AccountPanel`, `src/ui/account.ts`), qui revient à la connexion dès que le compte quitte l'appareil, même découvert par un échange en arrière-plan, avec « Supprimer mon compte » (un bloc dans la page, pas un `confirm`, pour le choix sur cet appareil), la liste des refus et leur « Garder une copie », la notice de confidentialité (responsable : Thomas Bouzy) et le bloc « Bientôt », qui annonce ce que l'abonnement apportera (nom et logo sur la fiche, devis, état du chantier, lien de visite, versions).

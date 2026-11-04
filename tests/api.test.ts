@@ -87,7 +87,7 @@ describe("sessions", () => {
     expect(res.status).toBe(403);
   });
 
-  it("pose un cookie d'un an, réservé à /api", async () => {
+  it("pose un cookie de 90 jours, réservé à /api", async () => {
     const f = browser(s);
     await post(f, "/api/code", { email: "a@exemple.fr" });
     const res = await post(f, "/api/code/verifier", { email: "a@exemple.fr", code: s.codes.get("a@exemple.fr") });
@@ -96,17 +96,65 @@ describe("sessions", () => {
     expect(cookie).toMatch(/Secure/);
     expect(cookie).toMatch(/SameSite=Lax/);
     expect(cookie).toMatch(/Path=\/api/);
-    expect(cookie).toMatch(/Max-Age=31536000/);
+    expect(cookie).toMatch(/Max-Age=7776000/);
   });
 
-  it("prolonge une session vieille d'un jour", async () => {
+  /** Le temps passe pour toutes les sessions de la base : `utilise` et `cree` reculent avec `expire`. */
+  const vieillir = (jours: number) =>
+    s.db.query(
+      `update sessions set cree = cree - $1 * interval '1 day', utilise = utilise - $1 * interval '1 day',
+         expire = expire - $1 * interval '1 day'`,
+      [jours],
+    );
+
+  it("prolonge de 90 jours une session vieille d'un jour, et une fois par jour au plus", async () => {
     const f = browser(s);
     await login(s, f, "a@exemple.fr");
     expect((await f("/api/compte")).headers.get("set-cookie")).toBeNull();
-    await s.db.query("update sessions set expire = expire - interval '2 days'");
-    expect((await f("/api/compte")).headers.get("set-cookie")).toMatch(/Max-Age=31536000/);
-    const [r] = await s.db.query<{ ok: boolean }>("select expire > now() + interval '364 days' as ok from sessions");
+    await vieillir(2);
+    expect((await f("/api/compte")).headers.get("set-cookie")).toMatch(/Max-Age=77\d{5}/);
+    const [r] = await s.db.query<{ expire: boolean; utilise: boolean }>(
+      `select expire > now() + interval '89 days' as expire, utilise > now() - interval '1 minute' as utilise
+       from sessions`,
+    );
+    expect(r).toEqual({ expire: true, utilise: true });
+    expect((await f("/api/compte")).headers.get("set-cookie")).toBeNull();
+  });
+
+  it("une session utilisée juste avant les 90 jours continue, sans usage plus de 90 jours elle s'arrête", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await vieillir(89);
+    expect((await f("/api/compte")).status).toBe(200);
+    await vieillir(89);
+    expect((await f("/api/compte")).status).toBe(200);
+    await vieillir(91);
+    expect((await f("/api/compte")).status).toBe(401);
+  });
+
+  it("une session s'arrête un an après son ouverture, même utilisée sans cesse", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    for (let jour = 2; jour <= 364; jour += 2) {
+      await vieillir(2);
+      expect((await f("/api/compte")).status, `jour ${jour}`).toBe(200);
+    }
+    const [r] = await s.db.query<{ ok: boolean }>("select expire <= cree + interval '365 days' as ok from sessions");
     expect(r!.ok).toBe(true);
+    await vieillir(1.5);
+    const res = await f("/api/compte");
+    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(res.status).toBe(401);
+  });
+
+  it("près du plafond, le cookie ne promet que ce qui reste", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    await s.db.query("update sessions set cree = now() - interval '350 days', utilise = now() - interval '2 days'");
+    const cookie = (await f("/api/compte")).headers.get("set-cookie")!;
+    const reste = Number(/Max-Age=(\d+)/.exec(cookie)![1]);
+    expect(reste).toBeGreaterThan(14 * 86400);
+    expect(reste).toBeLessThanOrEqual(15 * 86400);
   });
 
   it("refuse une session expirée", async () => {
@@ -122,6 +170,202 @@ describe("sessions", () => {
     expect((await f("/api/deconnexion", { method: "POST" })).status).toBe(204);
     expect((await f("/api/compte")).status).toBe(401);
     expect(await s.db.query("select * from sessions")).toEqual([]);
+  });
+
+  it("la déconnexion ferme cette session et laisse l'autre appareil", async () => {
+    const [f, g] = [browser(s), browser(s)];
+    await login(s, f, "a@exemple.fr");
+    await login(s, g, "a@exemple.fr");
+    expect((await f("/api/deconnexion", { method: "POST" })).status).toBe(204);
+    expect((await f("/api/compte")).status).toBe(401);
+    expect((await g("/api/compte")).status).toBe(200);
+  });
+});
+
+describe("appareils connectés", () => {
+  type Liste = { appareils: { id: string; nom: string; cree: number; utilise: number; actuel: boolean }[] };
+  const appareils = async (f: typeof fetch) => ((await (await f("/api/compte")).json()) as Liste).appareils;
+  const connecter = async (f: typeof fetch, appareil: unknown, email = "a@exemple.fr") => {
+    await post(f, "/api/code", { email });
+    return post(f, "/api/code/verifier", { email, code: s.codes.get(email), appareil });
+  };
+
+  it("liste les appareils du compte, nom et dernier usage, celui-ci en tête, sans empreinte", async () => {
+    const [f, g, h] = [browser(s), browser(s), browser(s)];
+    await connecter(f, "iPhone");
+    await connecter(g, "  Mac  ");
+    await connecter(h, "Windows", "b@exemple.fr");
+    await s.db.query("update sessions set utilise = now() - interval '3 days' where appareil = 'iPhone'");
+    const res = await g("/api/compte");
+    const texte = await res.clone().text();
+    const liste = ((await res.json()) as Liste).appareils;
+    expect(liste.map((a) => [a.nom, a.actuel])).toEqual([
+      ["Mac", true],
+      ["iPhone", false],
+    ]);
+    expect(Date.now() - liste[1]!.utilise).toBeGreaterThan(2 * 86_400_000);
+    expect(Date.now() - liste[0]!.utilise).toBeLessThan(60_000);
+    for (const { hash } of await s.db.query<{ hash: string }>("select hash from sessions"))
+      expect(texte).not.toContain(hash);
+    // Son usage s'inscrit : l'autre appareil le voit, et chacun se voit en tête.
+    expect((await appareils(f)).map((a) => [a.nom, a.actuel])).toEqual([
+      ["iPhone", true],
+      ["Mac", false],
+    ]);
+    expect(Date.now() - (await appareils(g))[1]!.utilise).toBeLessThan(60_000);
+  });
+
+  it.each([
+    [undefined, "Appareil"],
+    [12, "Appareil"],
+    ["   ", "Appareil"],
+    ["\u0000", "Appareil"],
+    ["x".repeat(60), "x".repeat(40)],
+    ["<b>Té\u0000l</b>", "<b>Tél</b>"],
+  ])("nom d'appareil %j : gardé comme %j", async (appareil, nom) => {
+    const f = browser(s);
+    expect((await connecter(f, appareil)).status).toBe(200);
+    expect((await appareils(f))[0]!.nom).toBe(nom);
+  });
+
+  it("ne garde pas l'adresse IP ni le navigateur", async () => {
+    const f = browser(s);
+    await connecter(f, "iPhone");
+    const [ligne] = await s.db.query<Record<string, unknown>>("select * from sessions");
+    expect(Object.keys(ligne!).sort()).toEqual(["appareil", "compte", "cree", "expire", "hash", "id", "utilise"]);
+    expect(JSON.stringify(ligne)).not.toContain("10.0.0");
+  });
+
+  it("une session fermée depuis un autre appareil rend 401, et la liste ne la montre plus", async () => {
+    const [f, g] = [browser(s), browser(s)];
+    await connecter(f, "iPhone");
+    await connecter(g, "Mac");
+    const [, autre] = await appareils(g);
+    const res = await g(`/api/sessions/${autre!.id}`, { method: "DELETE" });
+    expect(((await res.json()) as Liste).appareils.map((a) => a.nom)).toEqual(["Mac"]);
+    expect((await f("/api/compte")).status).toBe(401);
+    expect((await g("/api/compte")).status).toBe(200);
+  });
+
+  it("fermer les autres laisse celle-ci et les autres comptes", async () => {
+    const [f, g, h, voisin] = [browser(s), browser(s), browser(s), browser(s)];
+    await connecter(f, "iPhone");
+    await connecter(g, "Mac");
+    await connecter(h, "iPad");
+    await connecter(voisin, "Windows", "b@exemple.fr");
+    const res = await g("/api/sessions", { method: "DELETE" });
+    expect(((await res.json()) as Liste).appareils.map((a) => a.nom)).toEqual(["Mac"]);
+    expect((await f("/api/compte")).status).toBe(401);
+    expect((await h("/api/compte")).status).toBe(401);
+    expect((await g("/api/compte")).status).toBe(200);
+    expect((await voisin("/api/compte")).status).toBe(200);
+  });
+
+  it("ne ferme pas celle-ci par son identifiant : c'est le rôle de la déconnexion", async () => {
+    const f = browser(s);
+    await connecter(f, "iPhone");
+    const [ici] = await appareils(f);
+    expect((await f(`/api/sessions/${ici!.id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await f("/api/compte")).status).toBe(200);
+  });
+
+  it("ne ferme pas la session d'un autre compte", async () => {
+    const [f, voisin] = [browser(s), browser(s)];
+    await connecter(f, "iPhone");
+    await connecter(voisin, "Windows", "b@exemple.fr");
+    const [chezLui] = await appareils(voisin);
+    expect((await f(`/api/sessions/${chezLui!.id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await voisin("/api/compte")).status).toBe(200);
+  });
+
+  it("refuse sans session, d'un autre site, ou avec un identifiant mal formé", async () => {
+    const f = browser(s);
+    await connecter(f, "iPhone");
+    expect((await f("/api/sessions/pas-un-identifiant", { method: "DELETE" })).status).toBe(400);
+    expect((await browser(s)("/api/sessions", { method: "DELETE" })).status).toBe(401);
+    expect((await s.app.request("/api/sessions", { method: "DELETE" })).status).toBe(403);
+  });
+
+  it("ne liste pas une session expirée que la purge n'a pas encore retirée", async () => {
+    const [f, g] = [browser(s), browser(s)];
+    await connecter(f, "iPhone");
+    await connecter(g, "Mac");
+    await s.db.query("update sessions set expire = now() - interval '1 second' where appareil = 'iPhone'");
+    expect((await appareils(g)).map((a) => a.nom)).toEqual(["Mac"]);
+  });
+
+  it("retirer une passkey rend la liste, pour proposer de fermer les autres", async () => {
+    const [f, g] = [browser(s), browser(s)];
+    await connecter(f, "iPhone");
+    const a = await connecter(g, "Mac");
+    const { id } = (await a.json()) as { id: string };
+    await s.db.query("insert into passkeys (id, compte, cle, compteur, nom) values ('cle', $1, 'c', 0, 'Mac')", [id]);
+    const res = await g("/api/passkeys/cle", { method: "DELETE" });
+    const d = (await res.json()) as Liste & { passkeys: unknown[] };
+    expect(d.passkeys).toEqual([]);
+    expect(d.appareils.map((x) => [x.nom, x.actuel])).toEqual([
+      ["Mac", true],
+      ["iPhone", false],
+    ]);
+    expect((await f("/api/compte")).status).toBe(200);
+  });
+
+  describe("migration", () => {
+    const COMPTE_ID = "00000000-0000-0000-0000-000000000001";
+    /** Une base d'avant cette migration : les sessions n'ont que `cree` et `expire`, à un an du dernier usage. */
+    async function avant() {
+      const db = await pgliteDb();
+      await migrate(db);
+      await db.exec(
+        `alter table sessions drop column id, drop column appareil, drop column utilise;
+         delete from schema_version where v >= 8;`,
+      );
+      await db.query("insert into comptes (id, email) values ($1, 'a@exemple.fr')", [COMPTE_ID]);
+      return db;
+    }
+    const session = (db: Awaited<ReturnType<typeof pgliteDb>>, hash: string, cree: string, usage: string) =>
+      db.query(
+        `insert into sessions (hash, compte, cree, expire)
+         values ($1, $2, now() - $3::interval, now() - $4::interval + interval '365 days')`,
+        [hash, COMPTE_ID, cree, usage],
+      );
+
+    it("garde une session utilisée depuis moins de 90 jours, et arrête les autres", async () => {
+      const db = await avant();
+      await session(db, "recente", "5 days", "1 day");
+      await session(db, "oubliee", "120 days", "100 days");
+      await session(db, "ancienne", "370 days", "1 day");
+      await migrate(db);
+      const lignes = await db.query<{ hash: string; valable: boolean; jours: number; id: string; appareil: string }>(
+        `select hash, expire > now() as valable, round(extract(epoch from expire - now()) / 86400)::int as jours,
+           id, appareil from sessions order by cree desc`,
+      );
+      expect(lignes.map((l) => [l.hash, l.valable])).toEqual([
+        ["recente", true],
+        ["oubliee", false],
+        ["ancienne", false],
+      ]);
+      expect(lignes[0]!.jours).toBe(89);
+      expect(lignes[0]!.appareil).toBe("Appareil");
+      expect(new Set(lignes.map((l) => l.id)).size).toBe(3);
+      await db.close();
+    });
+
+    it("garde à une session ouverte son plafond d'un an, et date son dernier usage sans passer l'heure présente", async () => {
+      const db = await avant();
+      await session(db, "pres-du-plafond", "360 days", "1 day");
+      await session(db, "avenir", "0 days", "-10 days");
+      await migrate(db);
+      const [plafond] = await db.query<{ ok: boolean }>(
+        "select expire = cree + interval '365 days' as ok from sessions where hash = 'pres-du-plafond'",
+      );
+      expect(plafond!.ok).toBe(true);
+      const [avenir] = await db.query<{ ok: boolean }>(
+        "select utilise <= now() and expire <= now() + interval '90 days' as ok from sessions where hash = 'avenir'",
+      );
+      expect(avenir!.ok).toBe(true);
+      await db.close();
+    });
   });
 });
 
@@ -1037,13 +1281,14 @@ describe("numéros de devis", () => {
     await migrate(db);
     // La base telle qu'elle était avant cette migration.
     await db.exec(
-      `drop table devis_numeros; alter table ateliers drop column dates;
+      `alter table sessions drop column id, drop column appareil, drop column utilise;
+       drop table devis_numeros; alter table ateliers drop column dates;
        drop table purge_passage; alter table comptes drop column essai;
        alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 4;`,
     );
     await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000001', 'a@exemple.fr')");
     await migrate(db);
-    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 7 }]);
+    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 8 }]);
     expect(await db.query("select email from comptes")).toEqual([{ email: "a@exemple.fr" }]);
     await db.query(
       "insert into devis_numeros (compte, projet, annee, rang) values ('00000000-0000-0000-0000-000000000001', 'a', 2026, 1)",
@@ -1072,7 +1317,7 @@ interface Donnees {
 const RENDU: Record<string, (d: Donnees, l: Ligne) => Ligne | undefined> = {
   comptes: (d) => d.compte,
   passkeys: (d, l) => d.passkeys.find((p) => p.id === l.id),
-  sessions: (d, l) => d.sessions.find((x) => x.cree === l.cree),
+  sessions: (d, l) => d.sessions.find((x) => x.id === l.id),
   ateliers: (d) => ({ ...d.atelier, donnees: d.atelier.defauts }),
   projets: (d, l) => {
     if (l.supprime) return { ...d.suppressions.find((x) => x.id === l.id), supprime: true, donnees: null };
@@ -1197,7 +1442,15 @@ describe("compte", () => {
       expect(d.passkeys).toEqual([
         expect.objectContaining({ id: "cle-a", transports: "internal,hybrid", utilise: expect.any(String) }),
       ]);
-      expect(d.sessions).toEqual([{ cree: expect.any(String), expire: expect.any(String) }]);
+      expect(d.sessions).toEqual([
+        {
+          id: expect.any(String),
+          appareil: "Appareil",
+          cree: expect.any(String),
+          utilise: expect.any(String),
+          expire: expect.any(String),
+        },
+      ]);
       expect(d.suppressions).toEqual([{ id: "b", modifie: 20 }]);
       expect(d.numerosDevis).toEqual([expect.objectContaining({ projet: "b", rang: 1 })]);
       const empreintes = [
@@ -1652,7 +1905,8 @@ describe("comptes sans connexion", () => {
     const db = await pgliteDb();
     await migrate(db);
     await db.exec(
-      `drop table purge_passage; alter table comptes drop column essai;
+      `alter table sessions drop column id, drop column appareil, drop column utilise;
+       drop table purge_passage; alter table comptes drop column essai;
        alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 6;`,
     );
     const compte = async (n: number, age: string) => {

@@ -34,13 +34,17 @@ export class Api {
   }
 
   sendCode = (email: string) => this.call<undefined>("POST", "code", { email });
-  checkCode = (email: string, code: string) => this.call<Compte>("POST", "code/verifier", { email, code });
+  checkCode = (email: string, code: string, appareil: string) =>
+    this.call<Compte>("POST", "code/verifier", { email, code, appareil });
   passkeyOptions = <T>() => this.call<T>("POST", "passkey/options", {});
-  passkeyLogin = (reponse: unknown) => this.call<Compte>("POST", "passkey/connexion", { reponse });
+  passkeyLogin = (reponse: unknown, appareil: string) =>
+    this.call<Compte>("POST", "passkey/connexion", { reponse, appareil });
   passkeyAddOptions = <T>() => this.call<T>("POST", "passkey/ajout/options", {});
   passkeyAdd = (reponse: unknown, nom: string) => this.call<CompteDetail>("POST", "passkey/ajout", { reponse, nom });
   passkeyRemove = (id: string) => this.call<CompteDetail>("DELETE", `passkeys/${encodeURIComponent(id)}`);
   account = () => this.call<CompteDetail>("GET", "compte");
+  closeDevice = (id: string) => this.call<CompteDetail>("DELETE", `sessions/${encodeURIComponent(id)}`);
+  closeOtherDevices = () => this.call<CompteDetail>("DELETE", "sessions");
   deleteAccount = () => this.call<undefined>("DELETE", "compte");
   logout = () => this.call<undefined>("POST", "deconnexion", {});
 

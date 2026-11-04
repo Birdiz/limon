@@ -22,7 +22,7 @@ Pas de framework d'interface.
 
 - **En-tête** : logo (retour à l'accueil), « Mes escaliers » avec l'état de l'escalier et son nom, état de l'enregistrement, « Nouvel escalier », bouton du compte (« Ouvrir l'outil » tant qu'on n'est pas connecté, puis initiale).
 - **Accueil** (`Home`, `src/ui/home.ts`) : page entière à la place de tout dialogue. Onglets Escaliers (création, cartes avec vignette du plan, rangées En cours et Terminés, copies en fichier, installation), Mon atelier, Mon compte. Montré quand aucun escalier n'est ouvert, par le logo, « Mes escaliers » (onglet Escaliers) ou le bouton du compte (onglet Mon compte).
-- Un nouvel escalier part toujours en pas à pas.
+- Un nouvel escalier part en pas à pas, sauf l'exemple, un lien reçu et le bouton avancé « Tous les réglages d'un coup », qui partent en mode complet.
 
 ## État de l'escalier
 

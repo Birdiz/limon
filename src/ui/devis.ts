@@ -39,6 +39,8 @@ export interface DevisHost {
   stair(): Stair | null;
   tarifs(): Tarifs;
   entreprise(): Entreprise;
+  /** Session perdue : le devis et le client de l'escalier restent cachés jusqu'à la reconnexion. */
+  clientsCaches(): boolean;
   /** Le devis a changé : à enregistrer avec l'escalier. */
   saved(d: DevisProjet): void;
   /** Ouvre Mon atelier, où sont les tarifs. */
@@ -191,6 +193,10 @@ export class DevisView {
     this.renderEtat();
     this.renderVersions();
     this.lock();
+    const cache = this.host.clientsCaches();
+    byId("devisView").classList.toggle("cache", cache);
+    if (cache)
+      this.message("Vous n'êtes plus connecté : le devis et le client sont cachés jusqu'à votre reconnexion.", true);
   }
 
   /** Client et saisie à l'écran : ceux de la version remise quand elle est figée. */

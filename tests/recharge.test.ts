@@ -102,6 +102,71 @@ beforeEach(async () => {
   await newStair();
 });
 
+// En tête du fichier : chaque rechargement laisse la page d'avant à l'écoute, et celle d'un test connecté réagirait
+// aussi au retour sur la page, en écrivant dans les mêmes champs que la page essayée ici.
+describe("session perdue, l'escalier ouvert", () => {
+  // Cette page repart déconnectée : à l'écoute elle aussi, elle enverrait son escalier dans les tests suivants.
+  afterEach(async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(null, { status: 401 })));
+    document.dispatchEvent(new Event("visibilitychange"));
+    await settle();
+  });
+
+  it("le client quitte l'écran, le geste suivant le garde, et il revient à la reconnexion", async () => {
+    const client = { nom: "M. Martin", adresse: "1 rue des Lilas", chantier: "" };
+    const ici = { ...newProject("p", "Chantier", "complet", now), devis: { ...newDevis(), client } };
+    storeProject(ici);
+    const compte = { id: "c", email: "a@exemple.fr", statut: "testeur" };
+    localStorage.setItem(
+      "limon-synchro",
+      JSON.stringify({ compte, dernier: compte.email, connu: true, serveur: { p: ici.modifie } }),
+    );
+    const enLigne = (url: string) =>
+      Promise.resolve(
+        Response.json(url === "/api/projets" ? [{ id: "p", modifie: saved().modifie, supprime: false }] : null),
+      );
+    vi.stubGlobal("fetch", enLigne);
+    await reload();
+    await settle();
+    button("devisBtn").click();
+    await settle();
+    expect(field("dvNom").value).toBe("M. Martin");
+
+    // Le retour sur la page découvre que la session est perdue.
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(null, { status: 401 })));
+    document.dispatchEvent(new Event("visibilitychange"));
+    await settle();
+    expect(field("dvNom").value).toBe("");
+    expect(document.getElementById("devisView")!.classList.contains("cache")).toBe(true);
+
+    // L'escalier reste à l'écran et se modifie, sans perdre le client enregistré.
+    type("H", "3100");
+    await settle();
+    expect(saved().params.H).toBe(3100);
+    expect(saved().devis!.client.nom).toBe("M. Martin");
+
+    // Reconnexion par le code : le client revient à l'écran.
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+      if (url === "/api/code/verifier") return Promise.resolve(Response.json(compte));
+      if (url === "/api/projets" && init.method === "PUT")
+        return Promise.resolve(
+          Response.json({ index: [{ id: "p", modifie: saved().modifie, supprime: false }], refus: [] }),
+        );
+      return enLigne(url);
+    });
+    button("acOpen").click();
+    await settle();
+    field("acEmail").value = compte.email;
+    document.getElementById("acEmailForm")!.dispatchEvent(new Event("submit", { cancelable: true }));
+    await settle();
+    document.getElementById("acCodeForm")!.dispatchEvent(new Event("submit", { cancelable: true }));
+    await settle();
+    expect(document.getElementById("devisView")!.classList.contains("cache")).toBe(false);
+    expect(field("dvNom").value).toBe("M. Martin");
+    expect(saved().params.H).toBe(3100);
+  });
+});
+
 describe("horloge en retard sur l'escalier ouvert", () => {
   const avance = 3_600_000;
   beforeEach(async () => {
