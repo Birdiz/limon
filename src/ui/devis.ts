@@ -10,6 +10,7 @@ import {
   memesParams,
   mentionsManquantes,
   newDevis,
+  enDouble,
   noterReponse,
   remettre,
   versionRemise,
@@ -57,6 +58,7 @@ const eur = (v: number) => `${fmt(v, 2)}\u00a0€`;
 const num = (v: number | null, d = 2) => (v === null ? "" : String(Math.round(v * 10 ** d) / 10 ** d));
 const tauxTxt = (t: number) => `${fmt(t, t % 1 ? 1 : 0)}\u00a0%`;
 const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
+const heure = (ms: number) => new Date(ms).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const CHIP: Record<EtatDevis, string> = {
   brouillon: "",
   remis: "warn",
@@ -130,16 +132,16 @@ export class DevisView {
     view.addEventListener("change", (e) => this.changed(e.target as HTMLElement));
     view.addEventListener("click", (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-act]");
-      if (b?.dataset.act === "pdf") this.pdfVersion(Number(b.dataset.v));
-      else if (b) this.act(b);
+      if (b?.dataset.act === "pdf") {
+        const r = this.d.remis.find((x) => x.version === Number(b.dataset.v) && x.remisLe === Number(b.dataset.le));
+        if (r) this.pdfVersion(r);
+      } else if (b) this.act(b);
     });
-    byId("dvPdf").addEventListener("click", () =>
-      this.fige ? this.pdfVersion(this.fige.version) : this.pdfBrouillon(),
-    );
+    byId("dvPdf").addEventListener("click", () => (this.fige ? this.pdfVersion(this.fige) : this.pdfBrouillon()));
     byId("dvRemettre").addEventListener("click", () => void this.remettre());
     const reponse = (etat: EtatRemis) => () => {
       if (!this.fige) return;
-      this.d = noterReponse(this.d, this.fige.version, etat, Date.now());
+      this.d = noterReponse(this.d, this.fige, etat, Date.now());
       this.save();
     };
     byId("dvAccepte").addEventListener("click", reponse("accepte"));
@@ -339,7 +341,7 @@ export class DevisView {
     const last = this.d.remis.at(-1);
     const v = versionSuivante(this.d);
     byId("dvEtatTxt").textContent = f
-      ? `N° ${f.numero}${f.version > 1 ? `, version ${f.version}` : ""}, remis le ${day(f.remisLe)}` +
+      ? `N° ${f.numero}${f.version > 1 ? `, version ${f.version}` : ""}, remis le ${this.quand(f)}` +
         (etat === "accepte" || etat === "refuse"
           ? `, ${etat === "accepte" ? "accepté" : "refusé"} le ${day(f.etatLe)}.`
           : `, ${etat === "expire" ? "validité passée le" : "valable jusqu'au"} ${day(finValidite(f))}.`)
@@ -372,6 +374,11 @@ export class DevisView {
         : "");
   }
 
+  /** Date d'une remise, avec l'heure quand une autre porte le même numéro : c'est ce qui les distingue. */
+  private quand(r: DevisRemis): string {
+    return day(r.remisLe) + (enDouble(this.d, r) ? ` à ${heure(r.remisLe)}` : "");
+  }
+
   /** Versions déjà remises, la plus récente en tête, chacune avec son document. */
   private renderVersions(): void {
     const box = byId("dvVersions");
@@ -383,19 +390,20 @@ export class DevisView {
           .map((r) => {
             const e = etatRemis(r, now);
             return (
-              `<li><span>N° ${esc(r.numero)}${r.version > 1 ? ` v${r.version}` : ""}, remis le ${day(r.remisLe)}</span>` +
+              `<li><span>N° ${esc(r.numero)}${r.version > 1 ? ` v${r.version}` : ""}, remis le ${this.quand(r)}</span>` +
               `<span class="chip ${CHIP[e]}">${ETAT_DEVIS_LABEL[e]}</span><span class="dvv-tot">${eur(r.chiffrage.totalTTC)} TTC</span>` +
-              `<button class="lnk" type="button" data-act="pdf" data-v="${r.version}">PDF</button></li>`
+              `<button class="lnk" type="button" data-act="pdf" data-v="${r.version}" data-le="${r.remisLe}">PDF</button></li>`
             );
           })
-          .join("")}</ul>`
+          .join("")}</ul>` +
+        (list.some((r) => enDouble(this.d, r))
+          ? `<div class="note warn">Plusieurs versions portent le même numéro : elles ont été remises en parallèle sur deux appareils. Chacune reste telle que le client l'a reçue. Précisez-lui laquelle compte.</div>`
+          : "")
       : "";
   }
 
   /** Document d'une version remise, refait depuis sa copie figée. */
-  private pdfVersion(version: number): void {
-    const r = this.d.remis.find((x) => x.version === version);
-    if (!r) return;
+  private pdfVersion(r: DevisRemis): void {
     const c = compute(r.params, false);
     const R = c.ok ? c.stair : null;
     const vue3d = R ? this.host.vue3d(R) : null;
@@ -488,7 +496,7 @@ export class DevisView {
       { numero, nom: p.nom, params: R.params, tarifs: T, entreprise: E, chiffrage: D },
       Date.now(),
     );
-    const version = this.d.remis.at(-1)!.version;
+    const version = this.d.remis.at(-1)!;
     this.save();
     this.pdfVersion(version);
   }

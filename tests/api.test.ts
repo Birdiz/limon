@@ -1081,6 +1081,84 @@ describe("poids d'un escalier", () => {
     expect((await lu(f))!.devis!.remis).toHaveLength(n);
   });
 
+  describe("versions remises de deux copies", () => {
+    const leger = devis(Q, TARIFS_VIDES, SAISIE_DEFAUT);
+    const remise = (le: number, d = newDevis()) => remettre(d, { ...version, chiffrage: leger }, le);
+    const dates = async (f: typeof fetch) => (await lu(f))!.devis!.remis.map((r) => r.remisLe);
+    const connecte = async () => {
+      const f = browser(s);
+      await login(s, f, "a@exemple.fr");
+      return f;
+    };
+
+    it("une version plus récente garde ce que seule la ligne a remis, et se date après", async () => {
+      const f = await connecte();
+      expect(await envoi(f, { id: "a", projet: projet(10, remise(100)) })).toEqual([]);
+      expect(await envoi(f, { id: "a", projet: { ...projet(20, remise(200)), nom: "b" } })).toEqual([]);
+      expect(await dates(f)).toEqual([100, 200]);
+      expect(await lu(f)).toMatchObject({ modifie: 21, nom: "b" });
+    });
+
+    it("une version plus ancienne, ou de même date, rejoint la ligne sans la remplacer", async () => {
+      const f = await connecte();
+      expect(await envoi(f, { id: "a", projet: { ...projet(20, remise(200)), nom: "ligne" } })).toEqual([]);
+      expect(await envoi(f, { id: "a", projet: { ...projet(10, remise(100)), nom: "vieille" } })).toEqual([]);
+      expect(await dates(f)).toEqual([100, 200]);
+      expect(await lu(f)).toMatchObject({ modifie: 21, nom: "ligne" });
+      expect(await envoi(f, { id: "a", projet: projet(21, remise(300)) })).toEqual([]);
+      expect(await dates(f)).toEqual([100, 200, 300]);
+      expect(await lu(f)).toMatchObject({ modifie: 22, nom: "ligne" });
+    });
+
+    it("renvoyer une version déjà connue ne change rien", async () => {
+      const f = await connecte();
+      const d = remise(100);
+      expect(await envoi(f, { id: "a", projet: projet(10, d) })).toEqual([]);
+      expect(await envoi(f, { id: "a", projet: projet(10, d) })).toEqual([]);
+      expect(await envoi(f, { id: "a", projet: projet(9, d) })).toEqual([]);
+      expect(await lu(f)).toMatchObject({ modifie: 10 });
+      expect(await dates(f)).toEqual([100]);
+    });
+
+    it("une ancienne version de l'outil, sans numéro, n'efface pas les remises en envoyant un devis vide", async () => {
+      const f = await connecte();
+      expect(await envoi(f, { id: "a", projet: projet(10, remise(100)) })).toEqual([]);
+      const sansNumero = { ...projet(20, null), schema: undefined };
+      expect(await envoi(f, { id: "a", projet: sansNumero })).toEqual([]);
+      expect(await dates(f)).toEqual([100]);
+      expect((await lu(f))!.modifie).toBe(21);
+    });
+
+    it("une ligne écrite par une version plus récente que ce serveur n'est pas relue : refus dit, rien d'écrit", async () => {
+      const f = await connecte();
+      await s.db.query(
+        `insert into projets (compte, id, modifie, supprime, donnees)
+         select id, 'a', 10, false, $1::jsonb from comptes`,
+        [JSON.stringify({ ...projet(10), schema: SCHEMA + 1 })],
+      );
+      const [refus] = await envoi(f, { id: "a", projet: projet(20, remise(100)) });
+      expect(refus!.raison).toContain("version plus récente");
+      expect((await lu(f))!.devis).toBeNull();
+    });
+
+    it("réunies trop lourdes : refus nommé des deux côtés, rien d'écrit", async () => {
+      const f = await connecte();
+      const plein = { ...newDevis(), client: clientPlein, saisie: saisiePleine };
+      const unePleine = (le: number) => remettre(plein, { ...version, chiffrage: D }, le).remis[0]!;
+      const avec = (debut: number) => ({
+        ...plein,
+        remis: Array.from({ length: 6 }, (_, i) => unePleine(debut + i)),
+      });
+      expect(await envoi(f, { id: "a", projet: projet(10, avec(100)) })).toEqual([]);
+      const [plusRecente] = await envoi(f, { id: "a", projet: projet(20, avec(200)) });
+      expect(plusRecente!.raison).toContain("trop lourd");
+      const [plusAncienne] = await envoi(f, { id: "a", projet: projet(5, avec(300)) });
+      expect(plusAncienne!.raison).toContain("trop lourd");
+      expect((await lu(f))!.modifie).toBe(10);
+      expect(await dates(f)).toEqual([100, 101, 102, 103, 104, 105]);
+    });
+  });
+
   it("arrête la remise à la dernière version gardée, plutôt que d'effacer la première", () => {
     const pleine = remettre(newDevis(), { ...version, chiffrage: devis(Q, TARIFS_VIDES, SAISIE_DEFAUT) }, 1).remis[0]!;
     expect(manqueDeLaPlace({ ...newDevis(), remis: Array<typeof pleine>(49).fill(pleine) })).toBe(false);

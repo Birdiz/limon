@@ -30,9 +30,9 @@ import {
   type AtelierDates,
   type AtelierDefauts,
 } from "../src/core/atelier";
-import { MAX_OCTETS } from "../src/core/devis";
+import { MAX_OCTETS, sanitizeDevis } from "../src/core/devis";
 import type { Entreprise, Tarifs } from "../src/core/tarifs";
-import { fromNewerVersion, isProjectId, sanitizeProject, type Project } from "../src/core/project";
+import { avecRemis, fromNewerVersion, isProjectId, sanitizeProject, schemaOf, type Project } from "../src/core/project";
 import { sansControles } from "../src/core/texte";
 import type { Db } from "./db";
 import type { SendCode } from "./mail";
@@ -69,8 +69,11 @@ const SCHEMA_PLUS_HAUT =
 const SCHEMA_INCONNU = "Il vient d'une version de l'outil que votre compte ne connaît pas encore.";
 const COMPTE_PLEIN = `Votre compte garde au plus ${MAX_PROJETS} escaliers, supprimés compris : celui-ci n'y entre plus.`;
 const TROP_LOURD = "Il est trop lourd pour votre compte, avec les versions remises de son devis. Aucune n'est perdue.";
+const OCCUPE = "Il a changé sur un autre appareil au même moment : il repartira au prochain chargement de la page.";
 const PAS_ARRIVE =
   "Cet escalier n'a pas encore rejoint votre compte, qui donne les numéros. Réessayez dans un instant : le brouillon reste enregistré.";
+
+const pese = (p: Project) => Buffer.byteLength(JSON.stringify(p));
 
 /**
  * Ce qu'un envoi sans numéro de schéma contient vraiment : `sanitizeProject` a rempli le reste, qu'une version de
@@ -487,51 +490,78 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const ch = (raw ?? {}) as Record<string, unknown>;
     const id = ch.id;
     if (!isProjectId(id)) return "Cet escalier a un identifiant que le compte ne peut pas garder.";
-    let modifie: number, supprime: boolean, donnees: string | null;
     // Sans numéro, l'envoi est fusionné dans la ligne ; avec, il la remplace, sauf si elle a un numéro plus haut.
     // Une suppression n'en a pas : elle est un geste voulu, et ne dépend pas des champs connus.
-    let partie: string | null = null;
-    let schema = 0;
+    let recu: Project | null = null;
+    let recuBrut: Record<string, unknown> | null = null;
     if (ch.supprime === true) {
       if (!validDate(ch.modifie)) return DATE_REFUSEE;
-      [modifie, supprime, donnees] = [ch.modifie, true, null];
     } else {
       if (fromNewerVersion(ch.projet)) return SCHEMA_INCONNU;
-      const raw = ch.projet && typeof ch.projet === "object" ? { ...ch.projet, id } : null;
-      const p = raw && sanitizeProject(raw);
-      if (!p) return ILLISIBLE;
-      if (!validDate(p.modifie)) return DATE_REFUSEE;
-      p.nom = sansControles(p.nom.slice(0, 80));
-      const json = JSON.stringify(p);
-      if (Buffer.byteLength(json) > MAX_OCTETS) return TROP_LOURD;
-      [modifie, supprime, donnees, schema] = [p.modifie, false, json, p.schema];
-      if (!schema) partie = JSON.stringify(sent(raw!, p));
+      recuBrut = ch.projet && typeof ch.projet === "object" ? { ...ch.projet, id } : null;
+      recu = recuBrut && sanitizeProject(recuBrut);
+      if (!recu) return ILLISIBLE;
+      if (!validDate(recu.modifie)) return DATE_REFUSEE;
+      recu.nom = sansControles(recu.nom.slice(0, 80));
+      if (pese(recu) > MAX_OCTETS) return TROP_LOURD;
     }
     try {
-      // Le plafond est relu à chaque ligne : deux envois en même temps ne le dépassent que de quelques lignes.
-      const rows = await db.query(
-        `insert into projets (compte, id, modifie, supprime, donnees)
-         select $1::uuid, $2, $3::bigint, $4::boolean, $5::jsonb
-         where exists (select 1 from projets where compte = $1::uuid and id = $2)
-           or (select count(*) from projets where compte = $1::uuid) < ${MAX_PROJETS}
-         on conflict (compte, id) do update
-           set modifie = excluded.modifie, supprime = excluded.supprime,
-             donnees = case when $6::jsonb is null or projets.donnees is null then excluded.donnees
-               else projets.donnees || $6::jsonb || jsonb_build_object('params',
-                 coalesce(projets.donnees->'params', '{}'::jsonb) || coalesce($6::jsonb->'params', '{}'::jsonb)) end
-           where projets.modifie < excluded.modifie
-             and ($7::int = 0 or coalesce((projets.donnees->>'schema')::int, 0) <= $7::int)
-         returning id`,
-        [compte, id, modifie, supprime, donnees, partie, schema],
-      );
-      if (rows.length) return null;
-      // Rien de rangé : une version plus récente est déjà là, ou de schéma plus haut, ou le compte est plein.
-      const [there] = await db.query<{ plus_vieille: boolean }>(
-        "select modifie < $3::bigint as plus_vieille from projets where compte = $1 and id = $2",
-        [compte, id, modifie],
-      );
-      if (!there) return COMPTE_PLEIN;
-      return there.plus_vieille ? SCHEMA_PLUS_HAUT : null;
+      // Deux envois en même temps : celui qui ne retrouve pas la ligne qu'il a lue n'écrit rien et recommence.
+      for (let essai = 0; essai < 5; essai++) {
+        const [ligne] = await db.query<{ modifie: number; donnees: Project | null }>(
+          "select modifie, donnees from projets where compte = $1 and id = $2",
+          [compte, id],
+        );
+        const schema = recu?.schema ?? 0;
+        const passe = !ligne || ligne.modifie < (recu?.modifie ?? (ch.modifie as number));
+        // Une ligne de schéma plus haut que ce serveur n'est pas relue : elle y perdrait des champs.
+        const lue =
+          ligne?.donnees && !fromNewerVersion(ligne.donnees)
+            ? { ...ligne.donnees, modifie: ligne.modifie, devis: sanitizeDevis(ligne.donnees.devis) }
+            : null;
+        const schemaHaut = !!recu && !!schema && schemaOf(ligne?.donnees) > schema;
+        if (recu && (!passe || schemaHaut)) {
+          // Cette version ne remplace pas la ligne : ce qu'elle a remis la rejoint quand même.
+          const reprise = lue && avecRemis(lue, recu.devis);
+          if (reprise && reprise !== lue) {
+            if (pese(reprise) > MAX_OCTETS) return TROP_LOURD;
+            const ecrit = await db.query(
+              `update projets set modifie = $3::bigint, donnees = $4::jsonb
+               where compte = $1 and id = $2 and modifie = $5::bigint returning id`,
+              [compte, id, reprise.modifie, JSON.stringify(reprise), ligne!.modifie],
+            );
+            if (!ecrit.length) continue;
+          }
+          return passe ? SCHEMA_PLUS_HAUT : null;
+        }
+        if (!passe) return null;
+        // Elle remplace la ligne : ce que seule la ligne a remis reste.
+        const p = recu && avecRemis(recu, lue?.devis ?? null);
+        if (p && pese(p) > MAX_OCTETS) return TROP_LOURD;
+        const partie = p && !schema ? JSON.stringify(sent(recuBrut!, p)) : null;
+        // Le plafond est relu à chaque ligne : deux envois en même temps ne le dépassent que de quelques lignes.
+        const rows = await db.query(
+          `insert into projets (compte, id, modifie, supprime, donnees)
+           select $1::uuid, $2, $3::bigint, $4::boolean, $5::jsonb
+           where exists (select 1 from projets where compte = $1::uuid and id = $2)
+             or (select count(*) from projets where compte = $1::uuid) < ${MAX_PROJETS}
+           on conflict (compte, id) do update
+             set modifie = excluded.modifie, supprime = excluded.supprime,
+               donnees = case when $6::jsonb is null or projets.donnees is null then excluded.donnees
+                 else projets.donnees || $6::jsonb || jsonb_build_object('params',
+                   coalesce(projets.donnees->'params', '{}'::jsonb) || coalesce($6::jsonb->'params', '{}'::jsonb)) end
+             where projets.modifie is not distinct from $7::bigint
+           returning id`,
+          [compte, id, p?.modifie ?? ch.modifie, !p, p ? JSON.stringify(p) : null, partie, ligne?.modifie ?? null],
+        );
+        if (rows.length) return null;
+        if (!ligne) {
+          // Rien de rangé : le compte est plein, ou un autre envoi vient de créer la ligne.
+          const [la] = await db.query("select 1 from projets where compte = $1 and id = $2", [compte, id]);
+          if (!la) return COMPTE_PLEIN;
+        }
+      }
+      return OCCUPE;
     } catch (e) {
       if (!isDataError(e)) throw e;
       return ILLISIBLE;
