@@ -17,7 +17,7 @@ description: Serveur et /api (server/), base et migrations, compte, passkeys, se
 
 ## Connexion
 
-Sans mot de passe : passkey (SimpleWebAuthn, `@simplewebauthn/browser` chargé à part), vérification de la personne exigée partout, à la connexion comme à l'ajout (décision du propriétaire : l'outil ne les propose que là où l'appareil en a) ; code à 6 chiffres par e-mail (Brevo, `server/mail.ts`) pour créer le compte et en secours, haché avec un sel propre au processus.
+Sans mot de passe : passkey (SimpleWebAuthn, `@simplewebauthn/browser` chargé à part), vérification de la personne exigée partout, à la connexion comme à l'ajout (décision du propriétaire : l'outil ne les propose que là où l'appareil en a) ; code à 8 chiffres par e-mail (`CODE_CHIFFRES`, suivi par les champs de `app/index.html`) (Brevo, `server/mail.ts`) pour créer le compte et en secours, haché avec un sel propre au processus.
 
 Session : cookie `limon-session` (`HttpOnly`, `Path=/api`). 90 jours sans usage la ferment (`SESSION_DAYS`) ; un usage la prolonge, une fois par jour au plus, sans dépasser un an après son ouverture (`SESSION_MAX_DAYS`), et le cookie ne promet que ce qui reste. Requêtes qui modifient : origine du site exigée.
 
@@ -32,7 +32,7 @@ Session : cookie `limon-session` (`HttpOnly`, `Path=/api`). 90 jours sans usage 
 
 - **Demandes** : 3 par heure par adresse IP et e-mail (`CODES_PAR_IP_EMAIL`), jusqu'au plafond de la boîte. Une ligne par code dans `codes` : un code demandé ne remplace pas le précédent, un essai est comparé aux 3 derniers encore valables (`CODES_VALABLES`). Les plus anciens ne comptent plus, et sont retirés par la connexion ou la purge.
 - **Essais** : 5 par heure par adresse IP et e-mail (`CODE_TRIES`), 30 par heure sur l'e-mail, toutes adresses confondues (`ESSAIS_PAR_EMAIL`). Un essai faux n'efface aucun code. Le plafond de l'e-mail refuse tout, bon code compris, et n'use alors pas les essais de la personne.
-- **Deux valeurs liées** : `ESSAIS_PAR_EMAIL` et `CODES_VALABLES` font à elles deux ce que vaut un code à 6 chiffres. À revoir ensemble, jamais l'une sans l'autre. Les autres limites ne font que répartir.
+- **Deux valeurs liées** : `ESSAIS_PAR_EMAIL` et `CODES_VALABLES` font à elles deux ce que vaut un code à 8 chiffres : 90 chances sur 100 millions par heure pour un e-mail. À revoir ensemble, jamais l'une sans l'autre. Les autres limites ne font que répartir.
 - **Comptés en mémoire** : le sel des codes meurt avec le processus, les compteurs aussi, donc un redémarrage ne rend d'essais sur aucun code. Comptés seulement là où un code attend : `CODES_PAR_HEURE` borne le nombre d'e-mails, et ces deux tables ne se remplissent pas.
 - **Une connexion** retire tous les codes de l'adresse, un code ne servant qu'une fois.
 

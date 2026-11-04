@@ -48,6 +48,31 @@ describe("connexion par code", () => {
     expect(b.id).toBe(a.id);
   });
 
+  it("envoie un code à 8 chiffres sur les trois chemins, et refuse un code plus court", async () => {
+    const f = browser(s);
+    await login(s, f, "a@exemple.fr");
+    expect(s.codes.get("a@exemple.fr")).toMatch(/^\d{8}$/);
+    await post(f, "/api/preuve/code", {});
+    expect(s.codesPreuve.get("a@exemple.fr")).toMatch(/^\d{8}$/);
+    await post(f, "/api/compte/email/code", { email: "neuve@exemple.fr" });
+    expect(s.codesAdresse.get("neuve@exemple.fr")).toMatch(/^\d{8}$/);
+
+    const refus = { erreur: "Le code a 8 chiffres." };
+    const court = "123456";
+    expect(await (await post(f, "/api/code/verifier", { email: "a@exemple.fr", code: court })).json()).toEqual(refus);
+    expect(await (await post(f, "/api/preuve/code/verifier", { code: court })).json()).toEqual(refus);
+    const change = await post(f, "/api/compte/email", { email: "neuve@exemple.fr", code: court }, "PUT");
+    expect(await change.json()).toEqual(refus);
+  });
+
+  it("accepte un code recopié avec une espace", async () => {
+    const f = browser(s);
+    await post(f, "/api/code", { email: "a@exemple.fr" });
+    const code = s.codes.get("a@exemple.fr")!;
+    const espace = `${code.slice(0, 4)} ${code.slice(4)}`;
+    expect((await post(f, "/api/code/verifier", { email: "a@exemple.fr", code: espace })).status).toBe(200);
+  });
+
   it("répond pareil qu'un compte existe ou non", async () => {
     await login(s, browser(s), "a@exemple.fr");
     const known = await post(browser(s), "/api/code", { email: "a@exemple.fr" });
@@ -59,7 +84,7 @@ describe("connexion par code", () => {
     const f = browser(s);
     await post(f, "/api/code", { email: "a@exemple.fr" });
     const good = s.codes.get("a@exemple.fr")!;
-    const bad = good === "000000" ? "111111" : "000000";
+    const bad = good === "00000000" ? "11111111" : "00000000";
     for (let i = 0; i < 5; i++) {
       const r = await post(f, "/api/code/verifier", { email: "a@exemple.fr", code: bad });
       expect(await r.json()).toEqual({ erreur: "Code incorrect." });
@@ -778,7 +803,7 @@ describe("refus à l'envoi des projets", () => {
     const f = await signedIn();
     expect((await post(browser(s), "/api/code", { email: "a\u0000b@exemple.fr" })).status).toBe(400);
     expect(
-      (await post(browser(s), "/api/code/verifier", { email: "a\u0000b@exemple.fr", code: "123456" })).status,
+      (await post(browser(s), "/api/code/verifier", { email: "a\u0000b@exemple.fr", code: "12345678" })).status,
     ).toBe(400);
     expect((await post(f, "/api/projets/lire", { ids: ["a\u0000"] })).status).toBe(400);
     expect((await post(f, "/api/devis/numero", { projet: "a\u0000" })).status).toBe(400);
@@ -1558,7 +1583,7 @@ describe("changer d'adresse", () => {
     post(f, "/api/compte/email", { email, code }, "PUT");
   const adresse = async (id: string) =>
     (await s.db.query<{ email: string }>("select email from comptes where id = $1", [id]))[0]?.email;
-  const autreCode = (code: string) => (code === "000000" ? "111111" : "000000");
+  const autreCode = (code: string) => (code === "00000000" ? "11111111" : "00000000");
 
   it("change l'adresse avec le bon code : même compte, mêmes escaliers, mêmes appareils", async () => {
     const f = browser(s);
@@ -1671,7 +1696,7 @@ describe("changer d'adresse", () => {
   it("refuse sans session, une adresse mal formée, et l'adresse du compte", async () => {
     const anonyme = browser(s);
     expect((await demande(anonyme, "neuve@exemple.fr")).status).toBe(401);
-    expect((await change(anonyme, "neuve@exemple.fr", "123456")).status).toBe(401);
+    expect((await change(anonyme, "neuve@exemple.fr", "12345678")).status).toBe(401);
     const f = browser(s);
     await login(s, f, "a@exemple.fr");
     expect((await demande(f, "pas-une-adresse")).status).toBe(400);
@@ -1894,7 +1919,7 @@ describe("preuve récente", () => {
       await sansPreuve();
       await post(f, "/api/preuve/code", {});
       const bon = s.codesPreuve.get("a@exemple.fr")!;
-      const mauvais = bon === "000000" ? "111111" : "000000";
+      const mauvais = bon === "00000000" ? "11111111" : "00000000";
       for (let i = 0; i < 5; i++) {
         const r = await post(f, "/api/preuve/code/verifier", { code: mauvais });
         expect(await r.json()).toEqual({ erreur: "Code incorrect." });
@@ -1951,7 +1976,7 @@ describe("preuve récente", () => {
 
     it("demande une session, et limite les envois à 5 par heure", async () => {
       expect((await post(browser(s), "/api/preuve/code", {})).status).toBe(401);
-      expect((await post(browser(s), "/api/preuve/code/verifier", { code: "123456" })).status).toBe(401);
+      expect((await post(browser(s), "/api/preuve/code/verifier", { code: "12345678" })).status).toBe(401);
       const f = browser(s);
       await login(s, f, "a@exemple.fr");
       const statuts = [];
@@ -2664,12 +2689,12 @@ describe("comptes sans connexion", () => {
       envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
       return new Response("{}", { status: 201 });
     });
-    await brevoCodeAdresse("cle")("neuve@exemple.fr", "123456");
+    await brevoCodeAdresse("cle")("neuve@exemple.fr", "12345678");
     expect(envoi.to).toEqual([{ email: "neuve@exemple.fr" }]);
     expect(envoi.subject).toContain("changer d'adresse");
-    expect(envoi.textContent).toContain("123456");
+    expect(envoi.textContent).toContain("12345678");
     expect(envoi.textContent).not.toContain("connexion");
-    expect(envoi.htmlContent).toContain("123456");
+    expect(envoi.htmlContent).toContain("12345678");
   });
 
   it("le code de preuve dit à quoi il sert et que faire s'il n'a pas été demandé", async () => {
@@ -2678,11 +2703,11 @@ describe("comptes sans connexion", () => {
       envoi = JSON.parse(String(init.body)) as Record<string, unknown>;
       return new Response("{}", { status: 201 });
     });
-    await brevoCodePreuve("cle")("a@exemple.fr", "123456");
+    await brevoCodePreuve("cle")("a@exemple.fr", "12345678");
     expect(envoi.to).toEqual([{ email: "a@exemple.fr" }]);
-    expect(envoi.subject).toContain("123456");
+    expect(envoi.subject).toContain("12345678");
     for (const texte of [envoi.textContent, envoi.htmlContent]) {
-      expect(texte).toContain("123456");
+      expect(texte).toContain("12345678");
       expect(texte).toContain("supprimer le compte");
       expect(texte).toContain("Déconnectez-le dans Mon compte");
     }
@@ -2727,7 +2752,7 @@ describe("limites de débit", () => {
   const adresse = (i: number) => `9.${i >> 16}.${(i >> 8) & 255}.${i & 255}`;
   const demandeCode = (ip: string | null, email: string) => envoi("/api/code", ip, { email });
   const verifie = (ip: string | null, email: string, code: unknown) => envoi("/api/code/verifier", ip, { email, code });
-  const autreQue = (code: string) => (code === "000000" ? "111111" : "000000");
+  const autreQue = (code: string) => (code === "00000000" ? "11111111" : "00000000");
   /** Le plafond de la boîte atteint, chaque adresse à sa limite. */
   const boitePleine = async (email: string) => {
     for (let i = 0; i < CODES_PAR_EMAIL; i++)
@@ -2793,7 +2818,7 @@ describe("limites de débit", () => {
     await demandeCode("1.1.1.1", "a@exemple.fr");
     const bon = s.codes.get("a@exemple.fr")!;
     for (let i = 0; i < VERIFICATIONS_PAR_IP; i++)
-      expect((await verifie("2.2.2.2", `p${i}@exemple.fr`, "000000")).status).toBe(400);
+      expect((await verifie("2.2.2.2", `p${i}@exemple.fr`, "00000000")).status).toBe(400);
     const refus = await verifie("2.2.2.2", "a@exemple.fr", bon);
     expect(refus.status).toBe(429);
     expect(await refus.json()).toEqual({ erreur: "Trop d'essais. Réessayez dans une heure." });
@@ -2860,7 +2885,7 @@ describe("limites de débit", () => {
   });
 
   it("ne compte d'essais que là où un code attend", async () => {
-    for (let i = 0; i < 10; i++) expect((await verifie("1.1.1.1", `p${i}@exemple.fr`, "000000")).status).toBe(400);
+    for (let i = 0; i < 10; i++) expect((await verifie("1.1.1.1", `p${i}@exemple.fr`, "00000000")).status).toBe(400);
     expect([s.limites.essaisParIpEmail.taille, s.limites.essaisParEmail.taille]).toEqual([0, 0]);
   });
 

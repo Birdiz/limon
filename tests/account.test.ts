@@ -165,9 +165,19 @@ describe("connexion par code", () => {
     expect(enErreur()).toBe(true);
   });
 
+  it.each(["acCode", "acNewCode", "acProofCode"])("le champ %s prend un code à 8 chiffres, espace comprise", (id) => {
+    monter({});
+    const champ = el<HTMLInputElement>(id);
+    expect(champ.maxLength).toBe(9);
+    const forme = new RegExp(`^(?:${champ.pattern})$`);
+    expect(forme.test("12345678")).toBe(true);
+    expect(forme.test("1234 5678")).toBe(true);
+    expect(forme.test("123456")).toBe(false);
+  });
+
   it("un code refusé reste à l'étape du code, sans connecter", async () => {
     const { store } = await auCode({ "POST code/verifier": refus(400, "Code incorrect.") });
-    el<HTMLInputElement>("acCode").value = "000000";
+    el<HTMLInputElement>("acCode").value = "00000000";
     soumettre("acCodeForm");
     await vi.waitFor(() => expect(msg().textContent).toBe("Code incorrect."));
     expect(store.account()).toBeNull();
@@ -177,7 +187,7 @@ describe("connexion par code", () => {
 
   it("« Changer d'adresse » revient à l'adresse et vide le code", async () => {
     await auCode();
-    el<HTMLInputElement>("acCode").value = "123456";
+    el<HTMLInputElement>("acCode").value = "12345678";
     el("acBack").click();
     expect(el("acEmailForm").hidden).toBe(false);
     expect(el("acCodeForm").hidden).toBe(true);
@@ -187,12 +197,12 @@ describe("connexion par code", () => {
   it("un bon code connecte et fait monter les escaliers de l'appareil", async () => {
     const { store, appels } = await auCode({ "POST code/verifier": () => json(COMPTE) });
     await store.save(newProject("a", "Dupont", "complet", 1));
-    el<HTMLInputElement>("acCode").value = "123456";
+    el<HTMLInputElement>("acCode").value = "12345678";
     soumettre("acCodeForm");
     await vi.waitFor(() => expect(vue()).toEqual(["acAccount"]));
     expect(appels).toContainEqual({
       route: "POST code/verifier",
-      corps: { email: "a@exemple.fr", code: "123456", appareil: "Ordinateur" },
+      corps: { email: "a@exemple.fr", code: "12345678", appareil: "Ordinateur" },
     });
     expect(store.account()).toEqual(COMPTE);
     expect(el("acMe").textContent).toBe(COMPTE.email);
@@ -350,12 +360,12 @@ describe("appareils connectés", () => {
   it("le nom de cet appareil part avec le code", async () => {
     const { appels } = await auCode({ "POST code/verifier": () => json(COMPTE) });
     vi.stubGlobal("navigator", { userAgent: "iPhone", maxTouchPoints: 5 });
-    el<HTMLInputElement>("acCode").value = "123456";
+    el<HTMLInputElement>("acCode").value = "12345678";
     soumettre("acCodeForm");
     await vi.waitFor(() => expect(appels.some((a) => a.route === "POST code/verifier")).toBe(true));
     expect(appels).toContainEqual({
       route: "POST code/verifier",
-      corps: { email: "a@exemple.fr", code: "123456", appareil: "iPhone" },
+      corps: { email: "a@exemple.fr", code: "12345678", appareil: "iPhone" },
     });
   });
 });
@@ -444,10 +454,10 @@ describe("changer d'adresse", () => {
     const { store, appels } = await auCodeNeuf();
     expect(el("acNewCodeTo").textContent).toBe(NEUVE);
     expect(appels.find((a) => a.route === "POST compte/email/code")?.corps).toEqual({ email: NEUVE });
-    el<HTMLInputElement>("acNewCode").value = "123456";
+    el<HTMLInputElement>("acNewCode").value = "12345678";
     soumettre("acNewCodeForm");
     await vi.waitFor(() => expect(el("acMe").textContent).toBe(NEUVE));
-    expect(appels.find((a) => a.route === "PUT compte/email")?.corps).toEqual({ email: NEUVE, code: "123456" });
+    expect(appels.find((a) => a.route === "PUT compte/email")?.corps).toEqual({ email: NEUVE, code: "12345678" });
     expect(store.account()).toMatchObject({ id: COMPTE.id, email: NEUVE });
     expect(el("acOpen").querySelector(".avatar")?.textContent).toBe("N");
     expect(msg().textContent).toContain("connectez-vous désormais");
@@ -459,7 +469,7 @@ describe("changer d'adresse", () => {
   it("une adresse qui a déjà un compte : le refus est dit, et l'adresse reste", async () => {
     const non = "Cette adresse a déjà son propre compte. Votre compte garde son adresse actuelle.";
     const { store } = await auCodeNeuf({ "PUT compte/email": refus(409, non) });
-    el<HTMLInputElement>("acNewCode").value = "123456";
+    el<HTMLInputElement>("acNewCode").value = "12345678";
     soumettre("acNewCodeForm");
     await vi.waitFor(() => expect(msg().textContent).toBe(non));
     expect(enErreur()).toBe(true);
@@ -472,7 +482,7 @@ describe("changer d'adresse", () => {
 
   it("un mauvais code : on reste sur le code, pour réessayer", async () => {
     await auCodeNeuf({ "PUT compte/email": refus(400, "Code incorrect.") });
-    el<HTMLInputElement>("acNewCode").value = "000000";
+    el<HTMLInputElement>("acNewCode").value = "00000000";
     soumettre("acNewCodeForm");
     await vi.waitFor(() => expect(msg().textContent).toBe("Code incorrect."));
     expect(el("acNewCodeForm").hidden).toBe(false);
@@ -778,7 +788,7 @@ describe("preuve récente", () => {
     await supprimer({ "POST preuve/code/verifier": refus(400, "Code incorrect.") });
     el("acProofMail").click();
     await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
-    el<HTMLInputElement>("acProofCode").value = "000000";
+    el<HTMLInputElement>("acProofCode").value = "00000000";
     soumettre("acProofCodeForm");
     await vi.waitFor(() => expect(msg().textContent).toBe("Code incorrect."));
     expect(enErreur()).toBe(true);
@@ -847,7 +857,7 @@ describe("preuve récente", () => {
     await supprimer({ "DELETE compte": demandee });
     el("acProofMail").click();
     await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
-    el<HTMLInputElement>("acProofCode").value = "123456";
+    el<HTMLInputElement>("acProofCode").value = "12345678";
     soumettre("acProofCodeForm");
     await vi.waitFor(() => expect(el("acProofDone").hidden).toBe(false));
     el("acProofGo").click();
@@ -865,7 +875,7 @@ describe("preuve récente", () => {
     await vi.waitFor(() => expect(vue()).toEqual(["acProof"]));
     el("acProofMail").click();
     await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
-    el<HTMLInputElement>("acProofCode").value = "123456";
+    el<HTMLInputElement>("acProofCode").value = "12345678";
     soumettre("acProofCodeForm");
     await vi.waitFor(() => expect(el("acProofDone").hidden).toBe(false));
     el("acProofGo").click();
@@ -887,7 +897,7 @@ describe("preuve récente", () => {
     await vi.waitFor(() => expect(vue()).toEqual(["acProof"]));
     el("acProofMail").click();
     await vi.waitFor(() => expect(el("acProofCodeForm").hidden).toBe(false));
-    el<HTMLInputElement>("acProofCode").value = "123456";
+    el<HTMLInputElement>("acProofCode").value = "12345678";
     soumettre("acProofCodeForm");
     await vi.waitFor(() => expect(el("acProofDone").hidden).toBe(false));
     await settled();

@@ -63,6 +63,14 @@ const SESSION_DAYS = 90;
 const SESSION_MAX_DAYS = 365;
 const CODE_MINUTES = 10;
 const CODE_TRIES = 5;
+/** Chiffres d'un code envoyé par e-mail. Les champs de code de `app/index.html` (`pattern`, `maxlength`) le suivent. */
+const CODE_CHIFFRES = 8;
+const CODE_FORME = new RegExp(`^\\d{${CODE_CHIFFRES}}$`);
+const CODE_MAL_FORME = `Le code a ${CODE_CHIFFRES} chiffres.`;
+const nouveauCode = () =>
+  randomInt(0, 10 ** CODE_CHIFFRES)
+    .toString()
+    .padStart(CODE_CHIFFRES, "0");
 /** Codes de connexion par heure, pour une adresse IP et un e-mail : qui ne reçoit rien réessaie, sans plus. */
 const CODES_PAR_IP_EMAIL = 3;
 /** Codes par heure à un même e-mail, d'où qu'ils viennent : la protection de sa boîte, pas une limite pour la personne. */
@@ -363,7 +371,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
       [limites.codesParEmail, email],
     );
     if (refus) return refus;
-    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    const code = nouveauCode();
     await db.query(
       `insert into codes (email, hash, expire) values ($1, $2, now() + interval '${CODE_MINUTES} minutes')`,
       [email, codeHash(email, code).toString("hex")],
@@ -382,7 +390,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const b = await body(c);
     const email = cleanEmail(b.email);
     const code = typeof b.code === "string" ? b.code.replace(/\s/g, "") : "";
-    if (!email || !/^\d{6}$/.test(code)) return err(c, 400, "Le code a 6 chiffres.");
+    if (!email || !CODE_FORME.test(code)) return err(c, 400, CODE_MAL_FORME);
     if (!limites.verificationsParIp.hit(ip(c))) return err(c, 429, TROP_D_ESSAIS);
     const valables = await db.query<{ hash: string }>(
       `select hash from codes where email = $1 and expire > now() order by id desc limit ${CODES_VALABLES}`,
@@ -591,7 +599,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const compte = c.get("compte");
     const refus = refusCode(c, [limites.codesPreuveParCompte, compte]);
     if (refus) return refus;
-    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    const code = nouveauCode();
     await db.query(
       `insert into codes_preuve (compte, hash, expire, essais)
        values ($1, $2, now() + interval '${CODE_MINUTES} minutes', 0)
@@ -610,7 +618,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
   app.post("/preuve/code/verifier", auth, async (c) => {
     const b = await body(c);
     const code = typeof b.code === "string" ? b.code.replace(/\s/g, "") : "";
-    if (!/^\d{6}$/.test(code)) return err(c, 400, "Le code a 6 chiffres.");
+    if (!CODE_FORME.test(code)) return err(c, 400, CODE_MAL_FORME);
     const compte = c.get("compte");
     const [row] = await db.query<{ hash: string; essais: number }>(
       "update codes_preuve set essais = essais + 1 where compte = $1 and expire > now() returning hash, essais",
@@ -643,7 +651,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     if (email === (await compteOf(compte))!.email) return err(c, 400, "C'est déjà l'adresse de votre compte.");
     const refus = refusCode(c, [limites.codesAdresseParCompte, compte], [limites.codesAdresseParEmail, email]);
     if (refus) return refus;
-    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    const code = nouveauCode();
     await db.query(
       `insert into changements_adresse (compte, email, hash, expire, essais)
        values ($1, $2, $3, now() + interval '${CODE_MINUTES} minutes', 0)
@@ -663,7 +671,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const b = await body(c);
     const email = cleanEmail(b.email);
     const code = typeof b.code === "string" ? b.code.replace(/\s/g, "") : "";
-    if (!email || !/^\d{6}$/.test(code)) return err(c, 400, "Le code a 6 chiffres.");
+    if (!email || !CODE_FORME.test(code)) return err(c, 400, CODE_MAL_FORME);
     const compte = c.get("compte");
     const [row] = await db.query<{ hash: string; essais: number }>(
       `update changements_adresse set essais = essais + 1
