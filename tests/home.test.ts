@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import fs from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { newDevis } from "../src/core/devis";
 import { DEFAULTS } from "../src/core/params";
 import { newProject, projectFile, withEtat, type Project } from "../src/core/project";
 import { compute } from "../src/core/stair";
@@ -416,6 +417,131 @@ describe("gestes de l'accueil, sur un vrai magasin en mémoire", () => {
     it("sans escalier ouvert : pas de copie à garder", async () => {
       await ouvrir({}, dupont());
       expect(el("pjExport").hidden).toBe(true);
+    });
+
+    it("un fichier qui ne se lit pas le dit, sans rien enregistrer ni ouvrir", async () => {
+      await ouvrir({}, dupont());
+      const file = el<HTMLInputElement>("pjFile");
+      const text = () => Promise.reject(new DOMException("Fichier parti", "NotFoundError"));
+      Object.defineProperty(file, "files", { configurable: true, value: [{ text }] });
+      file.dispatchEvent(new Event("change"));
+      await vi.waitFor(() => expect(el("pjMsg").hidden).toBe(false));
+      expect(el("pjMsg").classList.contains("err")).toBe(true);
+      expect(el("pjMsg").textContent).toContain("n'a pas pu être lu");
+      expect(el("pjMsg").textContent).not.toContain("NotFoundError");
+      await settled();
+      expect(await noms()).toEqual(["Dupont"]);
+      expect(opened).toEqual([]);
+    });
+
+    describe("le client dans la copie", () => {
+      const client = { nom: "Mme Durand", adresse: "3 rue des Lilas", chantier: "" };
+      const chiffre = () => ({ ...dupont(), devis: { ...newDevis(), client } });
+      let telecharges: Blob[];
+
+      beforeEach(() => {
+        telecharges = [];
+        URL.createObjectURL = (b) => (telecharges.push(b as Blob), "blob:x");
+        URL.revokeObjectURL = () => {};
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+      });
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      /** L'accueil ouvert sur cet escalier, le bouton de copie cliqué. */
+      async function copier(p: Project): Promise<void> {
+        current = p;
+        await ouvrir({}, p);
+        el("pjExport").click();
+      }
+      const lu = async (i = 0) => JSON.parse(await telecharges[i]!.text()) as { projet: { devis: unknown } };
+
+      it("avec un client : pose la question, sans rien télécharger encore", async () => {
+        await copier(chiffre());
+        expect(el("pjAsk").hidden).toBe(false);
+        expect(el("pjAskQ").textContent).toContain("« Dupont »");
+        expect(el("pjAvec").textContent).toBe("Avec le devis et le client");
+        expect(el("pjSeul").textContent).toBe("L'escalier seul");
+        expect(document.activeElement).toBe(el("pjAvec"));
+        expect(telecharges).toEqual([]);
+        expect(el("pjMsg").hidden).toBe(true);
+      });
+
+      it("« Avec le devis et le client » : le fichier les porte", async () => {
+        await copier(chiffre());
+        el("pjAvec").click();
+        expect(telecharges).toHaveLength(1);
+        expect(await lu()).toMatchObject({ projet: { nom: "Dupont", devis: { client } } });
+        expect(el("pjAsk").hidden).toBe(true);
+        expect(document.activeElement).toBe(el("pjExport"));
+        expect(el("pjMsg").textContent).toBe("Copie enregistrée, avec le devis et le client");
+      });
+
+      it("« L'escalier seul » : le fichier ne porte ni client, ni devis", async () => {
+        const p = chiffre();
+        await copier(p);
+        el("pjSeul").click();
+        expect(telecharges).toHaveLength(1);
+        const text = await telecharges[0]!.text();
+        expect(text).not.toContain("Durand");
+        expect(text).not.toContain("Lilas");
+        expect((await lu()).projet.devis).toBeNull();
+        expect(el("pjAsk").hidden).toBe(true);
+        expect(el("pjMsg").textContent).toBe("Copie enregistrée, sans le devis ni le client");
+        // La copie seule : l'escalier gardé sur l'appareil garde son devis.
+        expect(await store.get("a")).toEqual(p);
+      });
+
+      it("« Annuler » : pas de fichier", async () => {
+        await copier(chiffre());
+        el("pjNon").click();
+        expect(el("pjAsk").hidden).toBe(true);
+        expect(telecharges).toEqual([]);
+        expect(el("pjMsg").hidden).toBe(true);
+        expect(document.activeElement).toBe(el("pjExport"));
+      });
+
+      it("sans client : pas de question, le devis vide suit", async () => {
+        for (const p of [dupont(), { ...dupont(), devis: newDevis() }]) {
+          telecharges = [];
+          await copier(p);
+          expect(el("pjAsk").hidden).toBe(true);
+          expect(telecharges).toHaveLength(1);
+          expect((await lu()).projet.devis).toEqual(p.devis);
+          expect(el("pjMsg").textContent).toBe("Copie enregistrée");
+        }
+      });
+
+      it("quitter l'accueil retire la question : elle ne revient pas seule", async () => {
+        current = chiffre();
+        const home = await ouvrir({}, current);
+        el("pjExport").click();
+        home.hide();
+        await home.show();
+        expect(el("pjAsk").hidden).toBe(true);
+      });
+
+      it("l'escalier ouvert remplacé d'ailleurs : la question posée sur l'autre disparaît", async () => {
+        current = chiffre();
+        const home = await ouvrir({}, current);
+        el("pjExport").click();
+        current = { ...chiffre(), id: "b", nom: "Martin" };
+        await home.refreshIfOpen();
+        expect(el("pjAsk").hidden).toBe(true);
+      });
+
+      it("une version reçue d'ailleurs garde la question, et le client effacé la retire", async () => {
+        const p = chiffre();
+        current = p;
+        const home = await ouvrir({}, p);
+        el("pjExport").click();
+        await home.refreshIfOpen();
+        expect(el("pjAsk").hidden).toBe(false);
+        current = { ...p, devis: newDevis() };
+        await home.refreshIfOpen();
+        expect(el("pjAsk").hidden).toBe(true);
+      });
     });
   });
 

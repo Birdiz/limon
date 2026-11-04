@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { newDevis, type DevisRemis } from "../src/core/devis";
 import { DEFAULTS } from "../src/core/params";
 import {
   canFinish,
   edited,
   fileBase,
   fromNewerVersion,
+  hasClient,
   newProject,
   NOM_PAR_DEFAUT,
   parseProjectFile,
@@ -72,6 +74,58 @@ describe("textes d'un projet relu", () => {
 
   it("un nom fait seulement de caractères de contrôle prend le nom par défaut", () => {
     expect(sanitizeProject({ id: "a", nom: "\u0000 \u0001" })!.nom).toBe(NOM_PAR_DEFAUT);
+  });
+});
+
+describe("le client dans la copie en fichier", () => {
+  const client = { nom: "Mme Durand", adresse: "3 rue des Lilas", chantier: "Le Moulin" };
+  const seul = newProject("a", "Escalier", "complet", 1);
+  const chiffre = {
+    ...seul,
+    devis: {
+      ...newDevis(),
+      client,
+      saisie: {
+        ...newDevis().saisie,
+        libres: [{ designation: "Dépose", q: 1, unite: "u", pu: 4321, tva: 20 }],
+      },
+      remis: [{ client: { ...client, adresse: "9 impasse Vieille" } } as DevisRemis],
+    },
+  };
+
+  it("emporte le devis, le client et le prix par défaut et sur demande", () => {
+    for (const text of [projectFile(chiffre), projectFile(chiffre, true)]) {
+      expect(text).toContain("Mme Durand");
+      const back = parseProjectFile(text, "z");
+      expect(back).toMatchObject({ projet: { devis: { client, saisie: { libres: [{ pu: 4321 }] } } } });
+    }
+  });
+
+  it("l'escalier seul n'emporte ni client, ni adresse, ni prix, des versions remises non plus", () => {
+    const text = projectFile(chiffre, false);
+    for (const mot of ["Durand", "Lilas", "Moulin", "Vieille", "4321", "Dépose", "client", "remis"])
+      expect(text).not.toContain(mot);
+    expect(JSON.parse(text).projet.devis).toBeNull();
+  });
+
+  it("l'escalier seul se relit, avec ses cotes et sans devis", () => {
+    const back = parseProjectFile(projectFile(chiffre, false), "z");
+    expect(back).toMatchObject({ projet: { nom: "Escalier", params: seul.params, devis: null }, ignores: [] });
+  });
+
+  it("sait quand un escalier a un client", () => {
+    const avec = (c: Partial<typeof client>) => ({
+      ...seul,
+      devis: { ...newDevis(), client: { ...newDevis().client, ...c } },
+    });
+    expect(hasClient(seul)).toBe(false);
+    expect(hasClient({ ...seul, devis: newDevis() })).toBe(false);
+    expect(hasClient(avec({ nom: "  \n" }))).toBe(false);
+    expect(hasClient(avec({ nom: "Durand" }))).toBe(true);
+    expect(hasClient(avec({ adresse: "3 rue des Lilas" }))).toBe(true);
+    expect(hasClient(avec({ chantier: "Le Moulin" }))).toBe(true);
+    // Effacé du devis en cours, il reste sur la version remise.
+    expect(hasClient({ ...chiffre, devis: { ...chiffre.devis, client: newDevis().client } })).toBe(true);
   });
 });
 

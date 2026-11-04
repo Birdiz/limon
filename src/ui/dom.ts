@@ -48,8 +48,9 @@ export function downloadBytes(data: Uint8Array<ArrayBuffer>, filename: string, t
 }
 
 /** Fait télécharger la copie d'un escalier, en fichier .escalier. */
-export function downloadProject(p: Project): void {
-  downloadBytes(new TextEncoder().encode(projectFile(p)), `${fileBase(p.nom)}.escalier`, "application/json");
+export function downloadProject(p: Project, avecDevis = true): void {
+  const text = projectFile(p, avecDevis);
+  downloadBytes(new TextEncoder().encode(text), `${fileBase(p.nom)}.escalier`, "application/json");
 }
 
 export const cssVar = (name: string): string =>

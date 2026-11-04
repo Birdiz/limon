@@ -1,4 +1,4 @@
-import { sanitizeDevis, type DevisProjet } from "./devis";
+import { sanitizeDevis, type Client, type DevisProjet } from "./devis";
 import { DEFAULTS, sanitizeParams, type Params } from "./params";
 import type { ComputeResult } from "./stair";
 import { sansControles, textesPropres } from "./texte";
@@ -87,14 +87,22 @@ export function sanitizeProject(raw: unknown): Project | null {
   };
 }
 
-/** Contenu d'un fichier .escalier (format nommé avant le renommage, gardé pour relire les fichiers .limon). */
-export function projectFile(p: Project): string {
-  const { nom, cree, modifie, mode, etape, etat, finiLe, params, devis } = p;
+/** Contenu d'un fichier .escalier (format nommé avant le renommage, gardé pour relire les fichiers .limon). Sans le
+    devis, le fichier ne porte ni le client, ni son adresse, ni les prix, qui n'ont pas à suivre l'escalier partout. */
+export function projectFile(p: Project, avecDevis = true): string {
+  const { nom, cree, modifie, mode, etape, etat, finiLe, params } = p;
+  const devis = avecDevis ? p.devis : null;
   return JSON.stringify(
     { format: FORMAT, version: VERSION, projet: { nom, cree, modifie, mode, etape, etat, finiLe, params, devis } },
     null,
     2,
   );
+}
+
+/** Le devis nomme un client, en cours ou sur une version déjà remise. */
+export function hasClient(p: Project): boolean {
+  const nomme = (c: Client) => [c.nom, c.adresse, c.chantier].some((t) => t.trim());
+  return !!p.devis && (nomme(p.devis.client) || p.devis.remis.some((r) => nomme(r.client)));
 }
 
 const PAS_UN_PROJET = "Ce fichier n'est pas un projet Quart de tour.";
