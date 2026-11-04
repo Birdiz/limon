@@ -2030,6 +2030,10 @@ describe("comptes sans connexion", () => {
     const tour = async () => {
       const essai: string[] = [];
       await purgeComptes(s.db, async (email, limite) => {
+        // Un envoi prend du temps : sans cette attente, l'horloge de PGlite, à la milliseconde, date plusieurs essais
+        // du même instant, et l'ordre des essais n'est plus défini entre eux.
+        const debut = performance.now();
+        while (performance.now() - debut < 1);
         essai.push(email);
         if (email.startsWith("rejet")) throw new Error("Brevo 400");
         avertis.push({ email, limite });
