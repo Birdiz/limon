@@ -35,6 +35,9 @@ export interface Entree {
 /** Version d'un projet envoyée au serveur : le projet entier, ou la trace de sa suppression. */
 export type Changement = { id: string; modifie: number; supprime: true } | { id: string; projet: Project };
 
+/** Raison d'un refus pour la date : la page y reconnaît ce qu'une horloge remise à l'heure peut réparer. */
+export const DATE_REFUSEE = "Sa date de modification est impossible.";
+
 /** Élément d'un envoi que le serveur n'a pas rangé, et pourquoi, en mots pour l'artisan. */
 export interface Refus {
   id: string;
