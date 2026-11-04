@@ -21,10 +21,10 @@ const origin = process.env.ORIGIN ?? (local ? `http://localhost:${port}` : "http
 const db = !local && url ? await pgDb(url) : await pgliteDb();
 await migrate(db);
 await purge(db);
-// Les comptes à part et sans attendre : les envois ne retardent pas le démarrage.
+// Les comptes à part et sans attendre : les envois ne retardent pas le démarrage. Le premier passage attend que le
+// serveur écoute : il note que le service tourne, et un artisan doit pouvoir se connecter dès lors.
 const avertir = key && !local ? brevoAvertissement(key) : consoleAvertissement;
 const purgeInactifs = () => void purgeComptes(db, avertir).catch(console.error);
-purgeInactifs();
 setInterval(() => {
   void purge(db).catch(console.error);
   purgeInactifs();
@@ -40,5 +40,8 @@ app.use(async (c, next) => {
 app.route("/", api({ db, origin, sendCode: key && !local ? brevo(key) : consoleMail }));
 app.use(await staticFiles(path.resolve(import.meta.dirname, "../dist")));
 
-const server = serve({ fetch: app.fetch, port }, () => console.log(`Quart de tour sur ${origin} (port ${port})`));
+const server = serve({ fetch: app.fetch, port }, () => {
+  console.log(`Quart de tour sur ${origin} (port ${port})`);
+  purgeInactifs();
+});
 process.on("SIGTERM", () => server.close(() => void db.close().then(() => process.exit(0))));

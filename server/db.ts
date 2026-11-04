@@ -124,6 +124,9 @@ const MIGRATIONS = [
     (select to_timestamp(greatest(0, least(modifie, extract(epoch from now()) * 1000)) / 1000.0)
      from ateliers where compte = c.id)
   ));`,
+  // Date du dernier passage de la purge, pour voir une coupure, et dernier envoi d'avertissement en échec.
+  `create table purge_passage (seul boolean primary key default true check (seul), dernier timestamptz not null);
+  alter table comptes add column essai timestamptz;`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */
@@ -136,13 +139,22 @@ export async function migrate(db: Db): Promise<void> {
 
 /** Durée de conservation sans connexion, décidée : celle d'un compte et celle d'une trace de suppression. */
 const CONSERVATION = "24 months";
-/** Temps laissé après l'avertissement, même s'il part en retard (panne de Brevo, du serveur). */
+/** Temps annoncé par l'avertissement, même s'il part en retard (panne de Brevo, du serveur). */
 const PREAVIS = "30 days";
+/** L'effacement vient un jour après la date annoncée : une coupure trop courte pour être vue ne prend rien au préavis. */
+const EFFACEMENT = "31 days";
+/** Au-delà, un avertissement ne vaut plus rien : il en faut un autre. */
+const PEREMPTION = "60 days";
+/** Sans passage depuis cette durée, le service était coupé : deux passages manqués, à un par heure ; un seul, non. */
+const COUPURE = "150 minutes";
 /** Avertissements par passage, pour ne pas prendre aux codes de connexion ce que Brevo accepte par jour. */
 const AVERTIS_PAR_PASSE = 10;
 /** Un compte dont les droits courent encore n'est ni averti ni effacé. */
 const SANS_DROITS = "(droits_jusqu_a is null or droits_jusqu_a < now())";
-const A_AVERTIR = `vu + interval '${CONSERVATION}' - interval '${PREAVIS}' < now() and ${SANS_DROITS}`;
+/** L'avertissement est récent, et postérieur à la dernière activité comme à la fin des droits. */
+const AVERTI_VALABLE = `(averti > greatest(vu, droits_jusqu_a) and averti + interval '${PEREMPTION}' > now())`;
+const A_AVERTIR = `vu + interval '${CONSERVATION}' - interval '${PREAVIS}' < now() and ${SANS_DROITS}
+  and not coalesce(${AVERTI_VALABLE}, false)`;
 
 /** Efface codes, défis et sessions expirés, et les traces de suppression anciennes. */
 export async function purge(db: Db): Promise<void> {
@@ -153,31 +165,48 @@ export async function purge(db: Db): Promise<void> {
 }
 
 /**
+ * Note le passage. Le service revient d'une coupure, ou le dernier passage est inconnu (base restaurée) : les
+ * avertissements déjà partis ne valent plus, chacun repartira avec un préavis entier. Dans cet ordre : un échec entre les
+ * deux laisse la coupure à voir au passage suivant.
+ */
+async function noteLePassage(db: Db): Promise<void> {
+  const [passage] = await db.query<{ coupe: boolean }>(
+    `select dernier + interval '${COUPURE}' < now() as coupe from purge_passage`,
+  );
+  if (passage?.coupe !== false) await db.query("update comptes set averti = null where averti is not null");
+  await db.query(
+    `insert into purge_passage (dernier) values (now()) on conflict (seul) do update set dernier = excluded.dernier`,
+  );
+}
+
+/**
  * Avertit les comptes qui approchent de la durée, puis efface ceux qui l'ont passée, avertis depuis le préavis.
- * Sans avertissement parti, rien n'est effacé : un envoi en échec recommence au passage suivant, quitte à partir deux
- * fois si l'enregistrement échoue après l'envoi. L'effacement n'arrive jamais avant la date annoncée : `averti` est
- * posé après son calcul.
+ * Sans avertissement valable, rien n'est effacé : un envoi en échec passe après les autres et recommence à son tour,
+ * quitte à partir deux fois si l'enregistrement échoue après l'envoi. L'effacement n'arrive jamais avant la date
+ * annoncée : `averti` est posé après son calcul.
  */
 export async function purgeComptes(db: Db, avertir: SendAvertissement): Promise<void> {
+  await noteLePassage(db);
   const comptes = await db.query<{ id: string; email: string; limite: Date }>(
     `select id, email, now() + interval '${PREAVIS}' as limite
-     from comptes where averti is null and ${A_AVERTIR} order by vu limit ${AVERTIS_PAR_PASSE}`,
+     from comptes where ${A_AVERTIR} order by essai nulls first, vu limit ${AVERTIS_PAR_PASSE}`,
   );
   for (const c of comptes) {
     try {
       await avertir(c.email, new Date(c.limite));
     } catch (e) {
       console.error(e);
+      await db.query("update comptes set essai = now() where id = $1", [c.id]);
       continue;
     }
     // Revenu pendant l'envoi : l'avertissement n'est pas retenu, il en faudra un autre le moment venu.
-    await db.query(`update comptes set averti = now() where id = $1 and averti is null and ${A_AVERTIR}`, [c.id]);
+    await db.query(`update comptes set averti = now(), essai = null where id = $1 and ${A_AVERTIR}`, [c.id]);
   }
   // Tout est relu par la base dans cette seule instruction : une connexion qui passe avant met `vu` à jour et l'épargne.
   const effaces = await db.query(
     `delete from comptes
-     where vu + interval '${CONSERVATION}' < now() and averti + interval '${PREAVIS}' < now() and averti > vu
-       and ${SANS_DROITS}
+     where vu + interval '${CONSERVATION}' < now() and averti + interval '${EFFACEMENT}' < now()
+       and ${AVERTI_VALABLE} and ${SANS_DROITS}
      returning id`,
   );
   if (effaces.length) console.log(`[purge] comptes inactifs effacés : ${effaces.length}`);

@@ -960,11 +960,12 @@ describe("numéros de devis", () => {
     // La base telle qu'elle était avant cette migration.
     await db.exec(
       `drop table devis_numeros; alter table ateliers drop column dates;
+       drop table purge_passage; alter table comptes drop column essai;
        alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 4;`,
     );
     await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000001', 'a@exemple.fr')");
     await migrate(db);
-    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 6 }]);
+    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 7 }]);
     expect(await db.query("select email from comptes")).toEqual([{ email: "a@exemple.fr" }]);
     await db.query(
       "insert into devis_numeros (compte, projet, annee, rang) values ('00000000-0000-0000-0000-000000000001', 'a', 2026, 1)",
@@ -1007,9 +1008,17 @@ describe("comptes sans connexion", () => {
   /** Avertissements envoyés par les passages de la purge. */
   let avertis: { email: string; limite: Date }[];
   const passe = () => purgeComptes(s.db, async (email, limite) => void avertis.push({ email, limite }));
-  beforeEach(() => {
+  /** Dernier passage de la purge il y a `depuis` : plus de 2 h 30, le service était coupé depuis. */
+  const passage = (depuis: string) =>
+    s.db.query(
+      `insert into purge_passage (dernier) values (now() - $1::interval)
+       on conflict (seul) do update set dernier = excluded.dernier`,
+      [depuis],
+    );
+  beforeEach(async () => {
     avertis = [];
     vi.spyOn(console, "log").mockImplementation(() => {});
+    await passage("1 hour");
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -1055,7 +1064,7 @@ describe("comptes sans connexion", () => {
     await passe();
     expect(avertis).toHaveLength(1);
 
-    await s.db.query("update comptes set averti = now() - interval '31 days'");
+    await s.db.query("update comptes set averti = now() - interval '32 days'");
     await passe();
     expect(await comptes()).toEqual([]);
     for (const t of tables) expect(await s.db.query(`select 1 from ${t}`), t).toEqual([]);
@@ -1126,6 +1135,9 @@ describe("comptes sans connexion", () => {
     await passe();
     expect(await comptes()).toContain("tard@exemple.fr");
     await date("tard@exemple.fr", "30 months", "30 days 1 minute");
+    await passe();
+    expect(await comptes()).toContain("tard@exemple.fr");
+    await date("tard@exemple.fr", "30 months", "31 days 1 minute");
     await passe();
     expect(await comptes()).not.toContain("tard@exemple.fr");
     expect(await comptes()).toContain("dans@exemple.fr");
@@ -1198,6 +1210,173 @@ describe("comptes sans connexion", () => {
     expect(avertis).toEqual([]);
   });
 
+  it("un préavis fini pendant une coupure repart entier au retour du service", async () => {
+    // Averti il y a 35 jours pour il y a 5 jours ; le service était coupé depuis 6 jours.
+    await login(s, browser(s), "a@exemple.fr");
+    await date("a@exemple.fr", "25 months", "35 days");
+    await passage("6 days");
+    await passe();
+    expect(await comptes()).toEqual(["a@exemple.fr"]);
+    expect(avertis.map((v) => v.email)).toEqual(["a@exemple.fr"]);
+    expect((avertis[0]!.limite.getTime() - Date.now()) / 86_400_000).toBeCloseTo(30, 0);
+
+    // Le service tourne de nouveau : ni nouvel e-mail ni effacement avant la nouvelle date.
+    await passe();
+    expect(avertis).toHaveLength(1);
+    expect(await comptes()).toEqual(["a@exemple.fr"]);
+    await s.db.query("update comptes set averti = now() - interval '32 days'");
+    await passe();
+    expect(await comptes()).toEqual([]);
+  });
+
+  it("une coupure en plein préavis laisse aussi un préavis entier", async () => {
+    await login(s, browser(s), "a@exemple.fr");
+    await date("a@exemple.fr", "25 months", "20 days");
+    await passage("1 day");
+    await passe();
+    expect(avertis).toHaveLength(1);
+    expect((avertis[0]!.limite.getTime() - Date.now()) / 86_400_000).toBeCloseTo(30, 0);
+  });
+
+  it("au retour du service, Brevo en panne : rien n'est effacé, l'avertissement repart ensuite", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await login(s, browser(s), "a@exemple.fr");
+    await date("a@exemple.fr", "25 months", "35 days");
+    await passage("6 days");
+    await purgeComptes(s.db, () => Promise.reject(new Error("Brevo 500")));
+    expect(await comptes()).toEqual(["a@exemple.fr"]);
+    expect((await etat("a@exemple.fr")).averti).toBeNull();
+    await passe();
+    expect(avertis).toHaveLength(1);
+  });
+
+  it("sans passage connu (base restaurée, ou première fois) : compté comme une coupure", async () => {
+    await login(s, browser(s), "a@exemple.fr");
+    await date("a@exemple.fr", "25 months", "35 days");
+    await s.db.query("delete from purge_passage");
+    await passe();
+    expect(await comptes()).toEqual(["a@exemple.fr"]);
+    expect(avertis).toHaveLength(1);
+  });
+
+  it("une coupure trop courte pour être vue ne prend rien à la date annoncée", async () => {
+    await login(s, browser(s), "a@exemple.fr");
+    await date("a@exemple.fr", "25 months", "30 days 1 hour");
+    await passage("2 hours");
+    await passe();
+    expect(await comptes()).toEqual(["a@exemple.fr"]);
+    expect(avertis).toEqual([]);
+    await date("a@exemple.fr", "25 months", "31 days 1 minute");
+    await passage("1 hour");
+    await passe();
+    expect(await comptes()).toEqual([]);
+  });
+
+  it("un avertissement d'avant la fin des droits ne sert pas : il en faut un nouveau", async () => {
+    await login(s, browser(s), "ancien@exemple.fr");
+    await login(s, browser(s), "recent@exemple.fr");
+    await date("ancien@exemple.fr", "25 months", "400 days");
+    await date("recent@exemple.fr", "25 months", "35 days");
+    await s.db.query("update comptes set droits_jusqu_a = now() - interval '1 hour'");
+    await passe();
+    expect(await comptes()).toEqual(["ancien@exemple.fr", "recent@exemple.fr"]);
+    expect(avertis.map((v) => v.email).sort()).toEqual(["ancien@exemple.fr", "recent@exemple.fr"]);
+    expect((await etat("ancien@exemple.fr")).averti).not.toBeNull();
+    await passe();
+    expect(avertis).toHaveLength(2);
+
+    // Le nouvel avertissement, lui, sert une fois son préavis passé.
+    await s.db.query(
+      "update comptes set averti = now() - interval '32 days', droits_jusqu_a = now() - interval '33 days'",
+    );
+    await passe();
+    expect(await comptes()).toEqual([]);
+  });
+
+  it("un avertissement périmé ne sert pas, même sans droits", async () => {
+    await login(s, browser(s), "garde@exemple.fr");
+    await login(s, browser(s), "part@exemple.fr");
+    await date("garde@exemple.fr", "25 months", "61 days");
+    await date("part@exemple.fr", "25 months", "59 days");
+    await passe();
+    expect(await comptes()).toEqual(["garde@exemple.fr"]);
+    expect(avertis.map((v) => v.email)).toEqual(["garde@exemple.fr"]);
+    const [a] = await s.db.query<{ recent: boolean }>(
+      "select averti > now() - interval '1 minute' as recent from comptes",
+    );
+    expect(a!.recent).toBe(true);
+  });
+
+  it("dix adresses refusées ne bloquent pas les suivantes", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    for (let i = 0; i < 10; i++) {
+      await login(s, browser(s), `rejet${i}@exemple.fr`);
+      await date(`rejet${i}@exemple.fr`, "30 months");
+    }
+    await login(s, browser(s), "bonne@exemple.fr");
+    await date("bonne@exemple.fr", "25 months");
+    const essais: string[][] = [];
+    const tour = async () => {
+      const essai: string[] = [];
+      await purgeComptes(s.db, async (email, limite) => {
+        essai.push(email);
+        if (email.startsWith("rejet")) throw new Error("Brevo 400");
+        avertis.push({ email, limite });
+      });
+      essais.push(essai);
+    };
+    await tour();
+    await tour();
+    expect(avertis.map((v) => v.email)).toEqual(["bonne@exemple.fr"]);
+    expect(essais.map((e) => e.length)).toEqual([10, 10]);
+    // La bonne adresse passe devant dès qu'elle n'a jamais été essayée ; ensuite, le plus ancien essai d'abord.
+    expect(essais[1]![0]).toBe("bonne@exemple.fr");
+    expect(essais[1]!.slice(1)).toEqual(essais[0]!.slice(0, 9));
+    // Le suivant : celui qui restait, puis les autres. Nul n'est effacé sans avertissement.
+    await tour();
+    expect(essais[2]![0]).toBe(essais[0]![9]);
+    expect(await comptes()).toHaveLength(11);
+  });
+
+  it("une adresse qui repasse après des refus est avertie, et l'échec n'est plus noté", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await login(s, browser(s), "a@exemple.fr");
+    await date("a@exemple.fr", "25 months");
+    await purgeComptes(s.db, () => Promise.reject(new Error("Brevo 400")));
+    expect(await s.db.query<{ note: boolean }>("select essai is not null as note from comptes")).toEqual([
+      { note: true },
+    ]);
+    await passe();
+    expect(await s.db.query<{ note: boolean }>("select essai is not null as note from comptes")).toEqual([
+      { note: false },
+    ]);
+  });
+
+  it("aucun compte actif n'est effacé, quel que soit l'état de l'avertissement ou du service", async () => {
+    const actifs = ["0 days", "1 day", "23 months", "23 months 29 days"];
+    const avertissements = [null, "1 day", "31 days", "32 days", "59 days", "61 days", "400 days"];
+    const droits = [null, "now() - interval '1 hour'", "now() + interval '1 month'"];
+    const ajoute = (email: string, vu: string, averti: string | null, d: string | null) =>
+      s.db.query(
+        `insert into comptes (id, email, vu, averti, droits_jusqu_a)
+         values (gen_random_uuid(), $1, now() - $2::interval, now() - $3::interval, ${d ?? "null"})`,
+        [email, vu, averti],
+      );
+    let n = 0;
+    for (const vu of actifs)
+      for (const averti of avertissements) for (const d of droits) await ajoute(`c${n++}@exemple.fr`, vu, averti, d);
+    // Le témoin : la même purge efface bien un compte inactif et averti.
+    await ajoute("inactif@exemple.fr", "25 months", "32 days", null);
+    await passe();
+    expect(await comptes()).not.toContain("inactif@exemple.fr");
+    expect(await comptes()).toHaveLength(n);
+    for (const depuis of ["2 hours", "6 days"]) {
+      await passage(depuis);
+      await passe();
+      expect(await comptes()).toHaveLength(n);
+    }
+  });
+
   it("purge retire les traces de suppression anciennes, et rien d'autre", async () => {
     const a = await login(s, browser(s), "a@exemple.fr");
     const il_y_a = (mois: number) => Date.now() - mois * 31 * 86_400_000;
@@ -1229,7 +1408,10 @@ describe("comptes sans connexion", () => {
   it("la migration date un compte existant de sa dernière activité connue", async () => {
     const db = await pgliteDb();
     await migrate(db);
-    await db.exec("alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 6;");
+    await db.exec(
+      `drop table purge_passage; alter table comptes drop column essai;
+       alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 6;`,
+    );
     const compte = async (n: number, age: string) => {
       const id = `00000000-0000-0000-0000-00000000000${n}`;
       await db.query("insert into comptes (id, email, cree) values ($1, $2, now() - $3::interval)", [
