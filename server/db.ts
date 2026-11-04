@@ -127,6 +127,15 @@ const MIGRATIONS = [
   // Date du dernier passage de la purge, pour voir une coupure, et dernier envoi d'avertissement en échec.
   `create table purge_passage (seul boolean primary key default true check (seul), dernier timestamptz not null);
   alter table comptes add column essai timestamptz;`,
+  // Appareils connectés : un identifiant à montrer, l'empreinte ne sortant jamais, le nom de l'appareil et le dernier
+  // usage. Une session ouverte part du sien, connu à un jour près par son échéance d'un an : 90 jours à partir de là,
+  // sans dépasser un an après sa création.
+  `alter table sessions
+    add column id uuid not null default gen_random_uuid() unique,
+    add column appareil text not null default 'Appareil',
+    add column utilise timestamptz not null default now();
+  update sessions set utilise = least(now(), greatest(cree, expire - interval '365 days'));
+  update sessions set expire = least(utilise + interval '90 days', cree + interval '365 days');`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */

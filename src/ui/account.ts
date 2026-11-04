@@ -1,4 +1,4 @@
-import type { Compte, CompteDetail } from "../core/account";
+import type { Appareil, Compte, CompteDetail } from "../core/account";
 import type { Project } from "../core/project";
 import { ApiError, NotSignedIn, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
@@ -10,7 +10,7 @@ const hasWebAuthn = () => typeof window.PublicKeyCredential === "function";
 const PERSON =
   '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.5"/><path d="M3.5 17c1-3.2 3.5-4.8 6.5-4.8s5.5 1.6 6.5 4.8"/></svg>';
 
-/** Appareil qui crée une passkey, pour la reconnaître dans la liste. L'iPad se présente comme un Mac. */
+/** Appareil qui se connecte ou crée une passkey, pour le reconnaître dans les listes. L'iPad se présente comme un Mac. */
 function deviceName(): string {
   const ua = navigator.userAgent;
   if (/iPhone/.test(ua)) return "iPhone";
@@ -68,6 +68,13 @@ function wipeWords(all: Project[]): string {
     : `Votre escalier${devis ? ", avec son devis et son client" : ""}. Sinon, il reste ici. Effacé, il ne sera plus nulle part.`;
 }
 
+/** Mon compte : un appareil connecté. Celui-ci n'a pas de bouton : « Se déconnecter » envoie d'abord ce qui attend. */
+const deviceItem = (a: Appareil) =>
+  a.actuel
+    ? `<li class="cur"><div><b>${esc(a.nom)}</b><small>cet appareil · connecté le ${day(a.cree)}</small></div></li>`
+    : `<li><div><b>${esc(a.nom)}</b><small>connecté le ${day(a.cree)} · utilisé le ${day(a.utilise)}</small></div>` +
+      `<button class="btn" type="button" data-device="${esc(a.id)}">Déconnecter</button></li>`;
+
 type View = "login" | "offer" | "account";
 
 /**
@@ -99,6 +106,11 @@ export class AccountPanel {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-key]");
       if (b) void this.run(() => this.removePasskey(b.dataset.key!));
     });
+    byId("acDevices").addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-device]");
+      if (b) void this.run(() => this.closeDevice(b.dataset.device!));
+    });
+    byId("acCloseOthers").addEventListener("click", () => void this.run(() => this.closeOthers()));
     byId("acRefus").addEventListener("click", (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-copie]");
       if (b) void this.run(() => this.keepCopy(b.dataset.copie!));
@@ -221,7 +233,7 @@ export class AccountPanel {
   }
 
   private async checkCode(): Promise<void> {
-    const compte = await this.api.checkCode(this.email, byId<HTMLInputElement>("acCode").value);
+    const compte = await this.api.checkCode(this.email, byId<HTMLInputElement>("acCode").value, deviceName());
     await this.signedIn(compte);
     // Proposer la passkey seulement là où Face ID, l'empreinte ou Windows Hello existent.
     const w = await webauthn();
@@ -233,7 +245,7 @@ export class AccountPanel {
     const w = await webauthn();
     const optionsJSON = await this.api.passkeyOptions<Parameters<typeof w.startAuthentication>[0]["optionsJSON"]>();
     const reponse = await w.startAuthentication({ optionsJSON, useBrowserAutofill: autofill });
-    await this.signedIn(await this.api.passkeyLogin(reponse));
+    await this.signedIn(await this.api.passkeyLogin(reponse, deviceName()));
     await this.showAccount();
   }
 
@@ -252,7 +264,22 @@ export class AccountPanel {
 
   private async removePasskey(id: string): Promise<void> {
     if (!confirm("Retirer cette passkey ? Vous pourrez toujours vous connecter avec un code par e-mail.")) return;
-    this.render(await this.api.passkeyRemove(id));
+    const d = await this.api.passkeyRemove(id);
+    this.render(d);
+    // Une passkey retirée, c'est souvent un appareil perdu : il reste connecté tant qu'on ne le déconnecte pas.
+    const n = d.appareils.filter((a) => !a.actuel).length;
+    const qui = n > 1 ? `vos ${n} autres appareils` : "votre autre appareil";
+    if (n && confirm(`Passkey retirée. Déconnecter aussi ${qui} ? Celui-ci reste connecté.`)) await this.closeOthers();
+  }
+
+  private async closeDevice(id: string): Promise<void> {
+    this.render(await this.api.closeDevice(id));
+    flash(this.msg, "Appareil déconnecté");
+  }
+
+  private async closeOthers(): Promise<void> {
+    this.render(await this.api.closeOtherDevices());
+    flash(this.msg, "Autres appareils déconnectés");
   }
 
   private async showAccount(): Promise<void> {
@@ -262,11 +289,14 @@ export class AccountPanel {
     byId("acMe").textContent = compte.email;
     void this.refreshLine();
     byId("acKeys").innerHTML = '<li class="empty">…</li>';
+    byId("acDevices").innerHTML = '<li class="empty">…</li>';
+    byId("acCloseOthers").hidden = true;
     try {
       this.render(await this.api.account());
     } catch (e) {
       if (!(e instanceof TypeError)) throw e;
       byId("acKeys").innerHTML = '<li class="empty">Liste indisponible sans réseau.</li>';
+      byId("acDevices").innerHTML = '<li class="empty">Liste indisponible sans réseau.</li>';
     }
   }
 
@@ -283,6 +313,8 @@ export class AccountPanel {
           .join("")
       : '<li class="empty">Aucune pour l\'instant : vous vous connectez avec un code par e-mail.</li>';
     byId("acAddKey").hidden = !hasWebAuthn();
+    byId("acDevices").innerHTML = d.appareils.map(deviceItem).join("");
+    byId("acCloseOthers").hidden = !d.appareils.some((a) => !a.actuel);
   }
 
   private async keepCopy(id: string): Promise<void> {

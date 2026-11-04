@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as webauthn from "@simplewebauthn/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Changement, CompteDetail, Passkey } from "../src/core/account";
+import type { Appareil, Changement, CompteDetail, Passkey } from "../src/core/account";
 import { newDevis } from "../src/core/devis";
 import { newProject } from "../src/core/project";
 import { AccountPanel } from "../src/ui/account";
@@ -24,7 +24,16 @@ const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
 
 const COMPTE = { id: "c", email: "a@exemple.fr", statut: "testeur" as const };
 const CLE: Passkey = { id: "k/1", nom: "iPhone", cree: Date.UTC(2026, 0, 15), utilise: null };
-const detail = (...passkeys: Passkey[]): CompteDetail => ({ ...COMPTE, passkeys });
+const detail = (...passkeys: Passkey[]): CompteDetail => ({ ...COMPTE, passkeys, appareils: [ICI] });
+const ICI: Appareil = {
+  id: "ici",
+  nom: "Mac",
+  cree: Date.UTC(2026, 0, 10),
+  utilise: Date.UTC(2026, 0, 12),
+  actuel: true,
+};
+const LOIN: Appareil = { ...ICI, id: "loin/1", nom: "iPhone", utilise: Date.UTC(2026, 1, 20), actuel: false };
+const avec = (...autres: Appareil[]): CompteDetail => ({ ...detail(), appareils: [ICI, ...autres] });
 
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
 const vide = () => new Response(null, { status: 204 });
@@ -183,7 +192,7 @@ describe("connexion par code", () => {
     await vi.waitFor(() => expect(vue()).toEqual(["acAccount"]));
     expect(appels).toContainEqual({
       route: "POST code/verifier",
-      corps: { email: "a@exemple.fr", code: "123456" },
+      corps: { email: "a@exemple.fr", code: "123456", appareil: "Ordinateur" },
     });
     expect(store.account()).toEqual(COMPTE);
     expect(el("acMe").textContent).toBe(COMPTE.email);
@@ -235,7 +244,10 @@ describe("connexion par passkey", () => {
     el("acPk").click();
     await vi.waitFor(() => expect(vue()).toEqual(["acAccount"]));
     expect(store.account()).toEqual(COMPTE);
-    expect(appels).toContainEqual({ route: "POST passkey/connexion", corps: { reponse: { id: "r" } } });
+    expect(appels).toContainEqual({
+      route: "POST passkey/connexion",
+      corps: { reponse: { id: "r" }, appareil: "Ordinateur" },
+    });
     expect(webauthn.startAuthentication).toHaveBeenCalledWith({
       optionsJSON: { challenge: "x" },
       useBrowserAutofill: false,
@@ -270,6 +282,81 @@ describe("connexion par passkey", () => {
     await vi.waitFor(() =>
       expect(webauthn.startAuthentication).toHaveBeenCalledWith(expect.objectContaining({ useBrowserAutofill: true })),
     );
+  });
+});
+
+describe("appareils connectés", () => {
+  it("liste les appareils, leur nom échappé, et leur dernier usage ; celui-ci sans bouton", async () => {
+    const nom = '<img data-intrus="1">';
+    await connecte({ "GET compte": () => json(avec({ ...LOIN, nom })) });
+    const list = el("acDevices");
+    await vi.waitFor(() => expect(list.querySelectorAll("button[data-device]")).toHaveLength(1));
+    expect(list.querySelector("[data-intrus]")).toBeNull();
+    expect(list.children[0]!.textContent).toContain("Mac");
+    expect(list.children[0]!.textContent).toContain("cet appareil");
+    expect(list.children[0]!.querySelector("button")).toBeNull();
+    expect(list.children[1]!.querySelector("b")!.textContent).toBe(nom);
+    expect(list.children[1]!.textContent).toContain("utilisé le 20/02/2026");
+    expect(el("acCloseOthers").hidden).toBe(false);
+  });
+
+  it("seul connecté : pas de quoi déconnecter les autres", async () => {
+    await connecte();
+    await vi.waitFor(() => expect(el("acDevices").querySelector("li.cur")).not.toBeNull());
+    expect(el("acCloseOthers").hidden).toBe(true);
+  });
+
+  it("en déconnecte un, identifiant encodé, sans quitter ce compte", async () => {
+    const route = `DELETE sessions/${encodeURIComponent(LOIN.id)}`;
+    const { routes, store } = await connecte({ "GET compte": () => json(avec(LOIN)), [route]: () => json(detail()) });
+    await vi.waitFor(() => expect(el("acDevices").querySelector("button[data-device]")).not.toBeNull());
+    el("acDevices").querySelector<HTMLButtonElement>("button[data-device]")!.click();
+    await vi.waitFor(() => expect(routes()).toContain(route));
+    await vi.waitFor(() => expect(el("acDevices").querySelector("button[data-device]")).toBeNull());
+    expect(msg().textContent).toBe("Appareil déconnecté");
+    expect(store.account()).toEqual(COMPTE);
+    expect(el("acCloseOthers").hidden).toBe(true);
+  });
+
+  it("déconnecte les autres d'un coup", async () => {
+    const { routes, store } = await connecte({
+      "GET compte": () => json(avec(LOIN, { ...LOIN, id: "loin2" })),
+      "DELETE sessions": () => json(detail()),
+    });
+    await vi.waitFor(() => expect(el("acCloseOthers").hidden).toBe(false));
+    el("acCloseOthers").click();
+    await vi.waitFor(() => expect(routes()).toContain("DELETE sessions"));
+    await vi.waitFor(() => expect(el("acDevices").querySelector("button[data-device]")).toBeNull());
+    expect(store.account()).toEqual(COMPTE);
+  });
+
+  it("hors ligne : la liste dit pourquoi elle manque", async () => {
+    await connecte({ "GET compte": coupure });
+    expect(el("acDevices").textContent).toContain("sans réseau");
+    expect(el("acCloseOthers").hidden).toBe(true);
+  });
+
+  it("cet appareil déconnecté d'ailleurs : l'appel suivant rend la session perdue", async () => {
+    const route = `DELETE sessions/${encodeURIComponent(LOIN.id)}`;
+    const { store } = await connecte({
+      "GET compte": () => json(avec(LOIN)),
+      [route]: refus(401, "Vous n'êtes plus connecté."),
+    });
+    await vi.waitFor(() => expect(el("acDevices").querySelector("button[data-device]")).not.toBeNull());
+    el("acDevices").querySelector<HTMLButtonElement>("button[data-device]")!.click();
+    await vi.waitFor(() => expect(store.account()).toBeNull());
+  });
+
+  it("le nom de cet appareil part avec le code", async () => {
+    const { appels } = await auCode({ "POST code/verifier": () => json(COMPTE) });
+    vi.stubGlobal("navigator", { userAgent: "iPhone", maxTouchPoints: 5 });
+    el<HTMLInputElement>("acCode").value = "123456";
+    soumettre("acCodeForm");
+    await vi.waitFor(() => expect(appels.some((a) => a.route === "POST code/verifier")).toBe(true));
+    expect(appels).toContainEqual({
+      route: "POST code/verifier",
+      corps: { email: "a@exemple.fr", code: "123456", appareil: "iPhone" },
+    });
   });
 });
 
@@ -416,6 +503,43 @@ describe("passkeys du compte", () => {
     retirer.click();
     await vi.waitFor(() => expect(routes()).toContain(route));
     await vi.waitFor(() => expect(el("acKeys").querySelector("button[data-key]")).toBeNull());
+  });
+
+  it("sa passkey retirée, propose de déconnecter les autres appareils, et s'en tient à la réponse", async () => {
+    const route = `DELETE passkeys/${encodeURIComponent(CLE.id)}`;
+    const reste = () => json({ ...detail(), appareils: [ICI, LOIN, { ...LOIN, id: "loin2" }] });
+    const { routes } = await connecte({ "GET compte": () => json(detail(CLE)), [route]: reste });
+    await vi.waitFor(() => expect(el("acKeys").querySelector("button[data-key]")).not.toBeNull());
+    vi.mocked(confirm).mockReturnValueOnce(true).mockReturnValueOnce(false);
+    el("acKeys").querySelector<HTMLButtonElement>("button[data-key]")!.click();
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(confirm).mock.lastCall![0]).toContain("vos 2 autres appareils");
+    await settled();
+    expect(routes()).not.toContain("DELETE sessions");
+    expect(el("acDevices").querySelectorAll("button[data-device]")).toHaveLength(2);
+  });
+
+  it("sa passkey retirée, accepte de déconnecter les autres ; rien à proposer s'il n'y en a pas", async () => {
+    const route = `DELETE passkeys/${encodeURIComponent(CLE.id)}`;
+    const seul = await connecte({ "GET compte": () => json(detail(CLE)), [route]: () => json(detail()) });
+    await vi.waitFor(() => expect(el("acKeys").querySelector("button[data-key]")).not.toBeNull());
+    el("acKeys").querySelector<HTMLButtonElement>("button[data-key]")!.click();
+    await vi.waitFor(() => expect(seul.routes()).toContain(route));
+    await settled();
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(seul.routes()).not.toContain("DELETE sessions");
+
+    vi.mocked(confirm).mockClear();
+    const { routes } = await connecte({
+      "GET compte": () => json(detail(CLE)),
+      [route]: () => json(avec(LOIN)),
+      "DELETE sessions": () => json(detail()),
+    });
+    await vi.waitFor(() => expect(el("acKeys").querySelector("button[data-key]")).not.toBeNull());
+    el("acKeys").querySelector<HTMLButtonElement>("button[data-key]")!.click();
+    await vi.waitFor(() => expect(routes()).toContain("DELETE sessions"));
+    expect(vi.mocked(confirm).mock.lastCall![0]).toContain("votre autre appareil");
+    await vi.waitFor(() => expect(el("acDevices").querySelector("button[data-device]")).toBeNull());
   });
 
   it("un retrait refusé par le serveur laisse la passkey à l'écran", async () => {

@@ -130,7 +130,7 @@ describe("état de l'enregistrement dans l'en-tête", () => {
       };
       const api = new Api(async (input, init) => {
         if (init?.method === "PUT") return reponse();
-        const body = String(input).endsWith("compte") ? { ...COMPTE, passkeys: [] } : [];
+        const body = String(input).endsWith("compte") ? { ...COMPTE, passkeys: [], appareils: [] } : [];
         return new Response(JSON.stringify(body), { status: 200 });
       });
       const store = new SyncStore(new LocalStore(storage), api, storage);
