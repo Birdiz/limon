@@ -198,6 +198,8 @@ export const balayeLimites = (limites: Limites) => Object.values(limites).forEac
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const ms = (d: unknown) => (d ? new Date(d as string).getTime() : null);
+/** Moyens de joindre une passkey, en base séparés par des virgules. */
+const transportsOf = (p: { transports: string }) => (p.transports ? p.transports.split(",") : []);
 const err = (c: Context, status: ContentfulStatusCode, erreur: string) => c.json({ erreur }, status);
 /** Erreur de Postgres qui tient à la donnée reçue, pas à la base (classe 22). */
 const isDataError = (e: unknown) => /^22/.test(String((e as { code?: unknown } | null)?.code));
@@ -404,7 +406,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
           id: reponse.id,
           publicKey: Buffer.from(pk.cle, "base64url"),
           counter: pk.compteur,
-          transports: pk.transports ? pk.transports.split(",") : [],
+          transports: transportsOf(pk),
         },
         requireUserVerification: true,
       });
@@ -455,7 +457,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
       userName: compte.email,
       userDisplayName: compte.email,
       userID: new TextEncoder().encode(compte.id),
-      excludeCredentials: existing.map((p) => ({ id: p.id, transports: p.transports ? p.transports.split(",") : [] })),
+      excludeCredentials: existing.map((p) => ({ id: p.id, transports: transportsOf(p) })),
       authenticatorSelection: { residentKey: "required", userVerification: "required" },
     });
     await db.query("insert into defis (defi, compte, expire) values ($1, $2, now() + interval '5 minutes')", [
@@ -531,7 +533,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const options = await generateAuthenticationOptions({
       rpID,
       userVerification: "required",
-      allowCredentials: cles.map((p) => ({ id: p.id, transports: p.transports ? p.transports.split(",") : [] })),
+      allowCredentials: cles.map((p) => ({ id: p.id, transports: transportsOf(p) })),
     });
     await db.query("insert into defis (defi, compte, expire) values ($1, $2, now() + interval '5 minutes')", [
       options.challenge,

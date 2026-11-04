@@ -14,7 +14,7 @@ import { DEFAULTS, sanitizeParams, type Params } from "../core/params";
 import { stamped } from "../core/project";
 import { ESSENCE_LABEL, GC_LABEL } from "../core/summary";
 import { byId, flash } from "./dom";
-import { browserStorage, read, write, type KeyValue } from "./store";
+import { browserStorage, readJSON, write, type KeyValue } from "./store";
 
 const ATELIER_KEY = "limon-atelier";
 
@@ -27,13 +27,7 @@ export class AtelierStore {
   private listeners: (() => void)[] = [];
 
   constructor(private storage: KeyValue | null = browserStorage()) {
-    let raw: unknown;
-    try {
-      raw = JSON.parse(read(storage, ATELIER_KEY) ?? "null");
-    } catch {
-      raw = null;
-    }
-    this.a = sanitizeAtelier(raw);
+    this.a = sanitizeAtelier(readJSON(storage, ATELIER_KEY));
   }
 
   /** Null tant que l'artisan n'a rien gardé : les nouveaux escaliers partent alors de l'exemple. */

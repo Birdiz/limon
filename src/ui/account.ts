@@ -1,10 +1,10 @@
 import type { Appareil, Compte, CompteDetail } from "../core/account";
+import { day } from "../core/format";
 import type { Project } from "../core/project";
 import { ApiError, NotSignedIn, ProofNeeded, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
 import type { RefusVu, SyncStatus, SyncStore } from "./sync";
 
-const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
 const webauthn = () => import("@simplewebauthn/browser");
 const hasWebAuthn = () => typeof window.PublicKeyCredential === "function";
 const PERSON =

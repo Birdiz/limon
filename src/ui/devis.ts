@@ -24,7 +24,7 @@ import {
   type Ligne,
   type Quantites,
 } from "../core/devis";
-import { fmt } from "../core/format";
+import { day, fmt } from "../core/format";
 import { fileBase, type Project } from "../core/project";
 import { compute, type Stair } from "../core/stair";
 import { POSTE_LABEL, isEmptyTarifs, type Entreprise, type Tarifs } from "../core/tarifs";
@@ -57,7 +57,6 @@ export interface DevisHost {
 const eur = (v: number) => `${fmt(v, 2)}\u00a0€`;
 const num = (v: number | null, d = 2) => (v === null ? "" : String(Math.round(v * 10 ** d) / 10 ** d));
 const tauxTxt = (t: number) => `${fmt(t, t % 1 ? 1 : 0)}\u00a0%`;
-const day = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
 const heure = (ms: number) => new Date(ms).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const CHIP: Record<EtatDevis, string> = {
   brouillon: "",
