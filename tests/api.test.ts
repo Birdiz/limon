@@ -7,7 +7,16 @@ import { quantites } from "../src/cnc/quantites";
 import { MAX_OCTETS, SAISIE_DEFAUT, bloquants, devis, newDevis, remettre, type DevisProjet } from "../src/core/devis";
 import { compute } from "../src/core/stair";
 import { newProject, NOM_PAR_DEFAUT, SCHEMA, type Project } from "../src/core/project";
-import { api, balayeLimites, CODES_PAR_HEURE, Limiter, VERIFICATIONS_PAR_IP } from "../server/api";
+import {
+  api,
+  balayeLimites,
+  CODES_PAR_EMAIL,
+  CODES_PAR_HEURE,
+  CODES_VALABLES,
+  ESSAIS_PAR_EMAIL,
+  Limiter,
+  VERIFICATIONS_PAR_IP,
+} from "../server/api";
 import { migrate, pgliteDb, purge, purgeComptes } from "../server/db";
 import {
   brevoAdresseChangee,
@@ -46,7 +55,7 @@ describe("connexion par code", () => {
     expect([known.status, unknown.status]).toEqual([204, 204]);
   });
 
-  it("refuse un mauvais code, puis tout code après 5 essais", async () => {
+  it("refuse un mauvais code, puis tout code après 5 essais de la même adresse", async () => {
     const f = browser(s);
     await post(f, "/api/code", { email: "a@exemple.fr" });
     const good = s.codes.get("a@exemple.fr")!;
@@ -56,7 +65,7 @@ describe("connexion par code", () => {
       expect(await r.json()).toEqual({ erreur: "Code incorrect." });
     }
     const r = await post(f, "/api/code/verifier", { email: "a@exemple.fr", code: good });
-    expect(r.status).toBe(400);
+    expect(r.status).toBe(429);
     expect((await f("/api/compte")).status).toBe(401);
   });
 
@@ -74,14 +83,58 @@ describe("connexion par code", () => {
     expect(again.status).toBe(400);
   });
 
-  it("limite les envois à 3 par heure et par adresse", async () => {
+  it("limite les envois à 3 par heure, pour une adresse IP et un e-mail", async () => {
+    const f = browser(s);
     const statuses = [];
-    for (let i = 0; i < 4; i++) statuses.push((await post(browser(s), "/api/code", { email: "x@exemple.fr" })).status);
+    for (let i = 0; i < 4; i++) statuses.push((await post(f, "/api/code", { email: "x@exemple.fr" })).status);
     expect(statuses).toEqual([204, 204, 204, 429]);
+    expect((await post(f, "/api/code", { email: "y@exemple.fr" })).status).toBe(204);
+    expect((await post(browser(s), "/api/code", { email: "x@exemple.fr" })).status).toBe(204);
   });
 
   it("refuse une adresse mal formée", async () => {
     expect((await post(browser(s), "/api/code", { email: "pas une adresse" })).status).toBe(400);
+  });
+
+  it("garde un code demandé avant un autre, puis les retire tous à la connexion", async () => {
+    const f = browser(s);
+    const verifie = (code: string | undefined) => post(f, "/api/code/verifier", { email: "a@exemple.fr", code });
+    await post(f, "/api/code", { email: "a@exemple.fr" });
+    const premier = s.codes.get("a@exemple.fr");
+    await post(f, "/api/code", { email: "a@exemple.fr" });
+    const second = s.codes.get("a@exemple.fr");
+    expect((await verifie(premier)).status).toBe(200);
+    expect(await (await verifie(second)).json()).toEqual({ erreur: "Ce code a expiré : demandez-en un nouveau." });
+    expect(await s.db.query("select id from codes")).toEqual([]);
+  });
+
+  it(`ne compare un essai qu'aux ${CODES_VALABLES} derniers codes`, async () => {
+    const envoye: string[] = [];
+    for (let i = 0; i <= CODES_VALABLES; i++) {
+      await post(browser(s), "/api/code", { email: "a@exemple.fr" });
+      envoye.push(s.codes.get("a@exemple.fr")!);
+    }
+    const f = browser(s);
+    const verifie = (code: string) => post(f, "/api/code/verifier", { email: "a@exemple.fr", code });
+    expect(await (await verifie(envoye[0]!)).json()).toEqual({ erreur: "Code incorrect." });
+    expect((await verifie(envoye[1]!)).status).toBe(200);
+  });
+
+  it("arrive par migration dans une base à un code par adresse, sans les codes d'avant", async () => {
+    const db = await pgliteDb();
+    await migrate(db);
+    await db.exec(
+      `drop table codes;
+       create table codes (email text primary key, hash text not null, expire timestamptz not null, essais int not null default 0);
+       insert into codes (email, hash, expire) values ('a@exemple.fr', 'h', now() + interval '1 minute');
+       delete from schema_version where v >= 11;`,
+    );
+    await migrate(db);
+    expect(await db.query("select id from codes")).toEqual([]);
+    for (const hash of ["h1", "h2"])
+      await db.query("insert into codes (email, hash, expire) values ('a@exemple.fr', $1, now())", [hash]);
+    expect(await db.query("select hash from codes order by id")).toEqual([{ hash: "h1" }, { hash: "h2" }]);
+    await db.close();
   });
 });
 
@@ -1283,7 +1336,7 @@ describe("numéros de devis", () => {
     );
     await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000001', 'a@exemple.fr')");
     await migrate(db);
-    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 10 }]);
+    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 11 }]);
     expect(await db.query("select email from comptes")).toEqual([{ email: "a@exemple.fr" }]);
     await db.query(
       "insert into devis_numeros (compte, projet, annee, rang) values ('00000000-0000-0000-0000-000000000001', 'a', 2026, 1)",
@@ -1630,18 +1683,26 @@ describe("changer d'adresse", () => {
   });
 
   it("limite les codes par adresse et par compte, sans toucher à ceux de connexion", async () => {
-    const f = browser(s);
-    await login(s, f, "a@exemple.fr");
-    for (let i = 0; i < 3; i++) expect((await demande(f, "neuve@exemple.fr")).status).toBe(204);
+    const compte = async (email: string) => {
+      const f = browser(s);
+      await login(s, f, email);
+      return f;
+    };
+    const f = await compte("a@exemple.fr");
+    for (let i = 0; i < 5; i++) expect((await demande(f, "neuve@exemple.fr")).status).toBe(204);
     expect((await demande(f, "neuve@exemple.fr")).status).toBe(429);
     expect((await post(browser(s), "/api/code", { email: "neuve@exemple.fr" })).status).toBe(204);
 
-    const g = browser(s);
-    await login(s, g, "b@exemple.fr");
-    // Ce refus compte pour le compte, qui ne peut donc pas user l'adresse d'un autre une fois à sa limite.
-    expect((await demande(g, "neuve@exemple.fr")).status).toBe(429);
-    for (let i = 0; i < 4; i++) expect((await demande(g, `n${i}@exemple.fr`)).status).toBe(204);
-    expect((await demande(g, "n9@exemple.fr")).status).toBe(429);
+    // Un autre compte ne dépend pas de ce qu'a demandé le premier, jusqu'au plafond de la boîte.
+    for (let n = 1; n * 5 < CODES_PAR_EMAIL; n++) {
+      const g = await compte(`b${n}@exemple.fr`);
+      for (let i = 0; i < 5; i++) expect((await demande(g, "neuve@exemple.fr")).status).toBe(204);
+    }
+    const h = await compte("c@exemple.fr");
+    expect((await demande(h, "neuve@exemple.fr")).status).toBe(429);
+    // Ce refus n'use pas la limite du compte.
+    for (let i = 0; i < 5; i++) expect((await demande(h, `n${i}@exemple.fr`)).status).toBe(204);
+    expect((await demande(h, "n9@exemple.fr")).status).toBe(429);
   });
 
   it("dit quand le code n'a pas pu partir", async () => {
@@ -2665,6 +2726,20 @@ describe("limites de débit", () => {
     });
   const adresse = (i: number) => `9.${i >> 16}.${(i >> 8) & 255}.${i & 255}`;
   const demandeCode = (ip: string | null, email: string) => envoi("/api/code", ip, { email });
+  const verifie = (ip: string | null, email: string, code: unknown) => envoi("/api/code/verifier", ip, { email, code });
+  const autreQue = (code: string) => (code === "000000" ? "111111" : "000000");
+  /** Le plafond de la boîte atteint, chaque adresse à sa limite. */
+  const boitePleine = async (email: string) => {
+    for (let i = 0; i < CODES_PAR_EMAIL; i++)
+      expect((await demandeCode(`4.4.4.${Math.floor(i / 3)}`, email)).status).toBe(204);
+  };
+  /** Le plafond des essais atteint, chaque adresse à sa limite. */
+  const essaisFaux = async (email: string, code: string, n = ESSAIS_PAR_EMAIL) => {
+    for (let i = 0; i < n; i++)
+      expect(await (await verifie(`5.5.5.${Math.floor(i / 5)}`, email, autreQue(code))).json()).toEqual({
+        erreur: "Code incorrect.",
+      });
+  };
   const plusTard = (ms: number) => {
     const t = Date.now() + ms;
     vi.spyOn(Date, "now").mockImplementation(() => t);
@@ -2694,12 +2769,12 @@ describe("limites de débit", () => {
       expect((await options("2.2.2.2")).status).toBe(429);
       expect(s.limites.codesParEmail.taille).toBe(1);
       expect(s.limites.codesParIp.taille).toBe(1);
-      expect((await demandeCode("1.1.1.2", "cible@exemple.fr")).status).toBe(429);
+      expect((await demandeCode("1.1.1.1", "cible@exemple.fr")).status).toBe(429);
     },
   );
 
   it("garde une limite par e-mail et par adresse quand leur table déborde", async () => {
-    for (let i = 0; i < 3; i++) await demandeCode(`1.1.1.${i}`, "cible@exemple.fr");
+    await boitePleine("cible@exemple.fr");
     for (let i = 0; i < 20; i++) await demandeCode("2.2.2.2", `p${i}@exemple.fr`);
     expect((await demandeCode("2.2.2.2", "autre@exemple.fr")).status).toBe(429);
 
@@ -2715,20 +2790,78 @@ describe("limites de débit", () => {
   });
 
   it("limite les vérifications de code par adresse, sans compter un code mal formé", async () => {
-    const verifie = (ip: string, code: string) => envoi("/api/code/verifier", ip, { email: "a@exemple.fr", code });
     await demandeCode("1.1.1.1", "a@exemple.fr");
     const bon = s.codes.get("a@exemple.fr")!;
-    const mauvais = bon === "000000" ? "111111" : "000000";
-    for (let i = 0; i < VERIFICATIONS_PAR_IP; i++) expect((await verifie("2.2.2.2", mauvais)).status).toBe(400);
-    const refus = await verifie("2.2.2.2", bon);
+    for (let i = 0; i < VERIFICATIONS_PAR_IP; i++)
+      expect((await verifie("2.2.2.2", `p${i}@exemple.fr`, "000000")).status).toBe(400);
+    const refus = await verifie("2.2.2.2", "a@exemple.fr", bon);
     expect(refus.status).toBe(429);
     expect(await refus.json()).toEqual({ erreur: "Trop d'essais. Réessayez dans une heure." });
 
-    for (let i = 0; i < VERIFICATIONS_PAR_IP + 1; i++) expect((await verifie("3.3.3.3", "douze")).status).toBe(400);
+    for (let i = 0; i < VERIFICATIONS_PAR_IP + 1; i++)
+      expect((await verifie("3.3.3.3", "a@exemple.fr", "douze")).status).toBe(400);
     expect(s.limites.verificationsParIp.taille).toBe(1);
 
+    expect((await verifie("3.3.3.3", "a@exemple.fr", bon)).status).toBe(200);
+  });
+
+  it("laisse le titulaire obtenir un code après des demandes venues d'autres adresses", async () => {
+    for (let i = 0; i < CODES_PAR_EMAIL - 1; i++) await demandeCode(`4.4.4.${Math.floor(i / 3)}`, "a@exemple.fr");
+    s.codes.clear();
+    expect((await demandeCode("1.1.1.1", "a@exemple.fr")).status).toBe(204);
+    expect((await verifie("1.1.1.1", "a@exemple.fr", s.codes.get("a@exemple.fr"))).status).toBe(200);
+  });
+
+  it("protège la boîte au plafond de l'e-mail, sans user les limites de la personne", async () => {
+    await boitePleine("a@exemple.fr");
+    s.codes.clear();
+    expect((await demandeCode("1.1.1.1", "a@exemple.fr")).status).toBe(429);
+    expect(s.codes.size).toBe(0);
+    expect(s.limites.codesParIp.atteinte("1.1.1.1")).toBe(false);
+    plusTard(HEURE);
+    for (let i = 0; i < 3; i++) expect((await demandeCode("1.1.1.1", "a@exemple.fr")).status).toBe(204);
+  });
+
+  it("laisse le titulaire se servir de son code après des essais faux venus d'autres adresses", async () => {
     await demandeCode("1.1.1.1", "a@exemple.fr");
-    expect((await verifie("3.3.3.3", s.codes.get("a@exemple.fr")!)).status).toBe(200);
+    const bon = s.codes.get("a@exemple.fr")!;
+    await essaisFaux("a@exemple.fr", bon, ESSAIS_PAR_EMAIL - 1);
+    expect((await verifie("1.1.1.1", "a@exemple.fr", bon)).status).toBe(200);
+  });
+
+  it("n'use pas le plafond des essais pour un essai refusé à une adresse", async () => {
+    await demandeCode("1.1.1.1", "a@exemple.fr");
+    const bon = s.codes.get("a@exemple.fr")!;
+    const faux = autreQue(bon);
+    for (let i = 0; i < 5; i++) expect((await verifie("2.2.2.2", "a@exemple.fr", faux)).status).toBe(400);
+    for (let i = 0; i < 30; i++) expect((await verifie("2.2.2.2", "a@exemple.fr", bon)).status).toBe(429);
+    await essaisFaux("a@exemple.fr", bon, ESSAIS_PAR_EMAIL - 6);
+    expect((await verifie("1.1.1.1", "a@exemple.fr", bon)).status).toBe(200);
+  });
+
+  it("refuse tout essai au-delà du plafond de l'e-mail, sans user ceux de la personne", async () => {
+    plusTard(0);
+    await demandeCode("1.1.1.1", "a@exemple.fr");
+    const bon = s.codes.get("a@exemple.fr")!;
+    await essaisFaux("a@exemple.fr", bon);
+
+    plusTard(1000);
+    for (let i = 0; i < 6; i++) {
+      const refus = await verifie("1.1.1.1", "a@exemple.fr", bon);
+      expect(refus.status).toBe(429);
+      expect(((await refus.json()) as { erreur: string }).erreur).toContain("pas forcément les vôtres");
+    }
+    expect(await s.db.query("select email from codes")).toEqual([{ email: "a@exemple.fr" }]);
+
+    // Une heure après les essais faux, moins d'une heure après les refus : le code a expiré, il en faut un autre.
+    plusTard(HEURE - 500);
+    await demandeCode("1.1.1.1", "a@exemple.fr");
+    expect((await verifie("1.1.1.1", "a@exemple.fr", s.codes.get("a@exemple.fr"))).status).toBe(200);
+  });
+
+  it("ne compte d'essais que là où un code attend", async () => {
+    for (let i = 0; i < 10; i++) expect((await verifie("1.1.1.1", `p${i}@exemple.fr`, "000000")).status).toBe(400);
+    expect([s.limites.essaisParIpEmail.taille, s.limites.essaisParEmail.taille]).toEqual([0, 0]);
   });
 
   it("plafonne les codes de tous les chemins, puis les laisse repartir", async () => {
@@ -2760,7 +2893,7 @@ describe("limites de débit", () => {
   });
 
   it("n'use pas le plafond pour un code refusé à une personne", async () => {
-    for (let i = 0; i < 3; i++) await demandeCode("1.1.1.1", "cible@exemple.fr");
+    await boitePleine("cible@exemple.fr");
     for (let i = 0; i <= CODES_PAR_HEURE; i++) {
       const refus = await demandeCode(adresse(i), "cible@exemple.fr");
       expect(await refus.json()).toEqual({ erreur: "Trop de codes demandés. Réessayez dans une heure." });

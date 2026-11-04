@@ -153,6 +153,16 @@ const MIGRATIONS = [
     expire timestamptz not null,
     essais int not null default 0
   );`,
+  // Plusieurs codes de connexion valables à la fois pour une adresse. Leur sel meurt avec le processus : ceux d'avant
+  // ne servent plus à rien, et les essais se comptent en mémoire, sur la même durée de vie.
+  `drop table codes;
+  create table codes (
+    id int generated always as identity primary key,
+    email text not null,
+    hash text not null,
+    expire timestamptz not null
+  );
+  create index on codes (email);`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */
