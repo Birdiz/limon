@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Quart de tour",
   "short_name": "Quart de tour",
-  "description": "Calcul et dessin d'escaliers bois : droit et quart tournant, 3D, échappée, export CNC DXF.",
+  "description": "Calcul et dessin d'escaliers bois : droit, quart tournant, double quart et demi-tournant, 3D, échappée, export CNC DXF.",
   "lang": "fr",
   "start_url": "app/",
   "scope": "./",

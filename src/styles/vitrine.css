@@ -294,7 +294,7 @@ html {
 }
 .ftext ul,
 .card ul,
-.soon ul {
+.offre ul {
   margin: 18px 0 0;
   padding: 0;
   list-style: none;
@@ -371,19 +371,19 @@ html {
   font-size: 15px;
   color: var(--muted);
 }
-.soon {
+.offre {
   padding: 26px 0 0;
 }
-.soon h3 {
+.offre h3 {
   font-size: 24px;
   text-transform: uppercase;
 }
-.soon li {
+.offre li {
   padding: 10px 0;
   border-bottom: 1px solid var(--rule);
   color: var(--muted);
 }
-.soon li b {
+.offre li b {
   color: var(--ink);
 }
 
