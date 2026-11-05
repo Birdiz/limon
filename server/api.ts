@@ -34,7 +34,15 @@ import {
 import { MAX_OCTETS, sanitizeDevis } from "../src/core/devis";
 import type { Entreprise, Tarifs } from "../src/core/tarifs";
 import { avecRemis, fromNewerVersion, isProjectId, sanitizeProject, schemaOf, type Project } from "../src/core/project";
-import { DROITS, ESSAI_RESTE_MIN, LIMITES_ACTIVES, isOffre, isRythme, niveauDe, statutReel } from "../src/core/niveaux";
+import {
+  DROITS,
+  ESSAI_RESTE_MIN,
+  ABONNEMENT_OUVERT,
+  isOffre,
+  isRythme,
+  niveauDe,
+  statutReel,
+} from "../src/core/niveaux";
 import { sansControles } from "../src/core/texte";
 import type { Db } from "./db";
 import type { SendAdresseChangee, SendCode, SendPasskeyAjoutee } from "./mail";
@@ -57,7 +65,7 @@ export interface ApiConfig {
   sendPasskeyAjoutee: SendPasskeyAjoutee;
   /** Stripe ; sans lui, le paiement en ligne reste fermé. */
   paiements?: Paiements;
-  /** Les services du serveur suivent le niveau du compte ; `LIMITES_ACTIVES` sinon. */
+  /** Les services du serveur suivent le niveau du compte ; `ABONNEMENT_OUVERT` sinon. */
   limitesActives?: boolean;
 }
 
@@ -372,7 +380,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
   });
 
   /** Service du serveur réservé à un niveau. 402 : la page y reconnaît l'offre, ni une panne ni le réseau. */
-  const limitesActives = cfg.limitesActives ?? LIMITES_ACTIVES;
+  const limitesActives = cfg.limitesActives ?? ABONNEMENT_OUVERT;
   const exige = (droit: "atelier" | "devis", refus: string) =>
     createMiddleware<Env>(async (c, next) => {
       if (limitesActives && !DROITS[niveauDe(statutReel(c.get("droits"), Date.now()))][droit])
@@ -468,10 +476,13 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const [pris] = await db.query("delete from codes where email = $1 and hash = $2 returning id", [email, bon.hash]);
     if (!pris) return err(c, 400, "Ce code a expiré : demandez-en un nouveau.");
     await db.query("delete from codes where email = $1", [email]);
-    await db.query("insert into comptes (id, email) values ($1, $2) on conflict (email) do nothing", [
-      randomUUID(),
-      email,
-    ]);
+    // 30 jours d'essai dès que le paiement est ouvert ; avant, un compte naît testeur : le compteur ne tourne pas pour rien.
+    await db.query(
+      `insert into comptes (id, email, statut, droits_jusqu_a)
+       values ($1, $2, ${cfg.paiements ? "'essai', now() + interval '30 days'" : "'testeur', null"})
+       on conflict (email) do nothing`,
+      [randomUUID(), email],
+    );
     const [compte] = await db.query<CompteLigne>(`select ${COMPTE_COLONNES} from comptes where email = $1`, [email]);
     await startSession(c, compte!.id, b.appareil);
     return c.json(compteDe(compte!));

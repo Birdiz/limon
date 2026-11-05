@@ -40,15 +40,14 @@ beforeEach(() => s.reset());
 
 /** Défait la dernière migration, pour partir d'une base d'avant. */
 const SANS_ABONNEMENT = `drop table paiements_evenements;
-  alter table comptes alter column statut set default 'testeur', alter column droits_jusqu_a drop default,
-    drop column client_stripe, drop column abonnement, drop column abonnement_evenement, drop column resilie;
+  alter table comptes drop column client_stripe, drop column abonnement, drop column abonnement_evenement, drop column resilie;
   delete from schema_version where v >= 12;`;
 
 describe("connexion par code", () => {
   it("crée le compte au premier code, puis le retrouve", async () => {
     const f = browser(s);
     const a = await login(s, f, " Jean@Exemple.fr ");
-    expect(a).toMatchObject({ email: "jean@exemple.fr", statut: "essai" });
+    expect(a).toMatchObject({ email: "jean@exemple.fr", statut: "testeur" });
     expect(await (await f("/api/compte")).json()).toMatchObject({ id: a.id, passkeys: [] });
     const b = await login(s, browser(s), "jean@exemple.fr");
     expect(b.id).toBe(a.id);
@@ -2231,7 +2230,7 @@ describe("comptes sans connexion", () => {
   const date = (email: string, depuis: string, averti: string | null = null) =>
     s.db.query(
       `update comptes set vu = now() - $2::interval, cree = now() - $2::interval,
-         droits_jusqu_a = null, averti = now() - $3::interval where email = $1`,
+         averti = now() - $3::interval where email = $1`,
       [email, depuis, averti],
     );
   const comptes = async () =>

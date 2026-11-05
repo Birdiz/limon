@@ -86,12 +86,12 @@ const evenement = (
 });
 
 describe("comptes d'avant l'abonnement", () => {
-  it("restent testeurs, sans date de fin, et un compte neuf part en essai", async () => {
+  it("restent testeurs, sans date de fin", async () => {
     const db = await pgliteDb();
     await migrate(db);
     await db.exec(
       `drop table paiements_evenements;
-       alter table comptes alter column statut set default 'testeur', alter column droits_jusqu_a drop default,
+       alter table comptes
          drop column client_stripe, drop column abonnement, drop column abonnement_evenement, drop column resilie;
        delete from schema_version where v >= 12;`,
     );
@@ -100,11 +100,6 @@ describe("comptes d'avant l'abonnement", () => {
     expect(await db.query("select statut, droits_jusqu_a from comptes")).toEqual([
       { statut: "testeur", droits_jusqu_a: null },
     ]);
-    await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000002', 'b@exemple.fr')");
-    const [neuf] = await db.query<{ statut: string; ok: boolean }>(
-      `select statut, droits_jusqu_a > now() + interval '29 days' as ok from comptes where email = 'b@exemple.fr'`,
-    );
-    expect(neuf).toEqual({ statut: "essai", ok: true });
     await db.close();
   });
 });
@@ -363,7 +358,7 @@ describe("abonnement", () => {
       const ferme = await testServer({});
       const f = browser(ferme);
       await login(ferme, f, "a@exemple.fr");
-      expect((await detail(f)).paiement).toBe(false);
+      expect(await detail(f)).toMatchObject({ paiement: false, statut: "testeur", droitsJusquA: null });
       expect((await post(f, "/api/abonnement/paiement", { offre: "payant", rythme: "mois" })).status).toBe(503);
       expect((await ferme.app.request("/api/stripe", { method: "POST", body: "{}" })).status).toBe(503);
       await ferme.db.close();

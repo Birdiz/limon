@@ -319,14 +319,21 @@ html {
 
 /* Prix */
 .price {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px 48px;
+  align-items: start;
   border-top: 1px solid var(--rule);
+}
+.price h2,
+.prix3 {
+  grid-column: 1 / -1;
 }
 .cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
   align-items: start;
-  margin-top: 24px;
 }
 .card h3 {
   margin: 0 0 12px;
@@ -346,7 +353,7 @@ html {
 }
 .amount b {
   font-family: var(--f-display);
-  font-size: 60px;
+  font-size: 76px;
   line-height: 1;
   color: var(--ink);
 }
@@ -357,8 +364,14 @@ html {
 .year b {
   color: var(--ink);
 }
+.cards .amount b {
+  font-size: 60px;
+}
+.prix3 > .trial {
+  margin-top: 24px;
+}
 .trial {
-  margin: 24px 0 0;
+  margin: 10px 0 0;
   font-weight: 600;
   color: var(--chalk);
 }
@@ -515,6 +528,7 @@ html {
   .feature,
   .feature:has(.phone, .paper),
   .feature.flip:has(.phone, .paper),
+  .price,
   .cards {
     grid-template-columns: minmax(0, 1fr);
     gap: 32px;

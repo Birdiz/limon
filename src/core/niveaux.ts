@@ -60,11 +60,25 @@ export function niveauDe(statut: Statut | null): Niveau {
 }
 
 /**
- * L'interrupteur de l'activation, pour la page comme pour le serveur : tant qu'il est faux, tout reste ouvert, car un
- * artisan limité n'aurait aucun moyen de s'abonner. Le passer à vrai demande un paiement essayé et l'accord de Thomas
- * (skill `serveur-compte`, Activation).
+ * L'interrupteur de l'abonnement, tant que Thomas n'a pas de compte Stripe. Faux : tout reste ouvert, car un artisan
+ * limité n'aurait aucun moyen de s'abonner, et les pages gardent leurs textes d'avant (`textesAbonnement`). Le passer à
+ * vrai demande un paiement essayé et l'accord de Thomas (skill `serveur-compte`, Activation).
  */
-export const LIMITES_ACTIVES: boolean = false;
+export const ABONNEMENT_OUVERT: boolean = false;
+
+/**
+ * Garde dans une page, au build, les blocs `<!-- abonnement: ouvert -->` ou `<!-- abonnement: ferme -->` selon
+ * l'interrupteur, jusqu'à leur `<!-- /abonnement -->`. Les pages n'ont pas de script pour le faire à l'ouverture.
+ */
+export function textesAbonnement(html: string, ouvert = ABONNEMENT_OUVERT): string {
+  return html.replace(
+    /[ \t]*<!-- abonnement: (ouvert|ferme) -->\n?([\s\S]*?)[ \t]*<!-- \/abonnement -->\n?/g,
+    (_, etat, bloc) => {
+      const [o = "", f = ""] = String(bloc).split(/[ \t]*<!-- abonnement: ferme -->\n?/);
+      return etat === "ouvert" ? (ouvert ? o : f) : ouvert ? "" : o;
+    },
+  );
+}
 
 const RANG: Record<Niveau, number> = { gratuit: 0, payant: 1, premium: 2 };
 
@@ -72,7 +86,7 @@ const RANG: Record<Niveau, number> = { gratuit: 0, payant: 1, premium: 2 };
  * Niveau appliqué sur cet appareil : celui du compte, ou tout tant que les limites dorment. La préférence ?niveau= sert à
  * l'essayer : « compte » suit le compte, un niveau forcé ne peut que baisser, jamais donner plus que ce qui est payé.
  */
-export function niveauActif(preference: string | null, statut: Statut | null, actives = LIMITES_ACTIVES): Niveau {
+export function niveauActif(preference: string | null, statut: Statut | null, actives = ABONNEMENT_OUVERT): Niveau {
   const base = actives || preference === "compte" ? niveauDe(statut) : "premium";
   return (preference === "gratuit" || preference === "payant") && RANG[preference] < RANG[base] ? preference : base;
 }

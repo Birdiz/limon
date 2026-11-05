@@ -163,11 +163,9 @@ const MIGRATIONS = [
     expire timestamptz not null
   );
   create index on codes (email);`,
-  // Abonnement : un compte neuf part avec 30 jours d'essai, ceux d'avant restent testeurs. Le client et l'abonnement
-  // chez Stripe, la date de son dernier événement pris en compte, et les événements déjà traités.
+  // Abonnement : le client et l'abonnement chez Stripe, la date de son dernier événement pris en compte, et les
+  // événements déjà traités. Les comptes existants restent testeurs.
   `alter table comptes
-    alter column statut set default 'essai',
-    alter column droits_jusqu_a set default now() + interval '30 days',
     add column client_stripe text unique,
     add column abonnement text,
     add column abonnement_evenement bigint,

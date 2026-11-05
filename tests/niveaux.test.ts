@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   DROITS,
@@ -8,6 +9,7 @@ import {
   offreVue,
   prixEuros,
   statutReel,
+  textesAbonnement,
   PRIX,
 } from "../src/core/niveaux";
 
@@ -67,6 +69,36 @@ describe("niveaux", () => {
       "12,50 €",
       "140 €",
     ]);
+  });
+
+  describe("textes des pages selon l'interrupteur", () => {
+    const page = `a
+    <!-- abonnement: ouvert -->
+    <p>Prix</p>
+    <!-- abonnement: ferme -->
+    <p>Essai ouvert</p>
+    <!-- /abonnement -->
+    b
+    <!-- abonnement: ferme -->
+    <p>Seul</p>
+    <!-- /abonnement -->
+    c`;
+    it("garde le bloc de l'état demandé, sans ses marques", () => {
+      expect(textesAbonnement(page, true).replace(/\s+/g, " ")).toBe("a <p>Prix</p> b c");
+      expect(textesAbonnement(page, false).replace(/\s+/g, " ")).toBe("a <p>Essai ouvert</p> b <p>Seul</p> c");
+    });
+    it("sur les vraies pages : aucune marque ne reste, et les prix ne se montrent qu'à l'ouverture", () => {
+      const lire = (f: string) => fs.readFileSync(f, "utf8");
+      for (const f of ["index.html", "app/index.html", "mentions-legales/index.html"])
+        for (const ouvert of [true, false]) expect(textesAbonnement(lire(f), ouvert)).not.toContain("abonnement:");
+      const accueil = lire("index.html");
+      expect(textesAbonnement(accueil, false)).not.toContain("12,50");
+      expect(textesAbonnement(accueil, false)).toContain("essai ouvert");
+      expect(textesAbonnement(accueil, true)).toContain("12,50 €");
+      expect(textesAbonnement(accueil, true)).toContain("140 € TTC");
+      expect(textesAbonnement(accueil, true)).not.toContain("En ce moment");
+      expect(textesAbonnement(lire("mentions-legales/index.html"), false)).not.toContain("140");
+    });
   });
 
   describe("l'offre dans Mon compte", () => {

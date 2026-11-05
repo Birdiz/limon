@@ -13,7 +13,15 @@ import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "./core/tarifs";
 import { DEFAULTS, changeForme, type Params } from "./core/params";
-import { DROITS, LIMITES_ACTIVES, enLecture, formeOuverte, niveauActif, statutReel, type Droits } from "./core/niveaux";
+import {
+  DROITS,
+  ABONNEMENT_OUVERT,
+  enLecture,
+  formeOuverte,
+  niveauActif,
+  statutReel,
+  type Droits,
+} from "./core/niveaux";
 import {
   NOM_PAR_DEFAUT,
   canFinish,
@@ -425,8 +433,8 @@ function applyNiveau(): void {
   droits = DROITS[niveauActif(read(prefs, NIVEAU_KEY), statutReel(store.account(), Date.now()))];
   document.body.classList.toggle("payant", droits.fabrication);
   // Avant l'activation, le devis attend encore sa préférence ; ensuite, il va avec le niveau.
-  document.body.classList.toggle("devis", droits.devis && (LIMITES_ACTIVES || read(prefs, DEVIS_KEY) === "1"));
-  byId("acEssai").hidden = !LIMITES_ACTIVES;
+  document.body.classList.toggle("devis", droits.devis && (ABONNEMENT_OUVERT || read(prefs, DEVIS_KEY) === "1"));
+  byId("acEssai").hidden = !ABONNEMENT_OUVERT;
   if (!droits.devis && tabs.current === "devis") tabs.show("reglages");
   document.querySelectorAll<HTMLInputElement>('input[name="forme"]').forEach((r) => {
     r.disabled = !formeOuverte(droits, r.value === "droit" ? "droit" : (`${r.value}-d` as Params["forme"]));
