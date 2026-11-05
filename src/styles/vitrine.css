@@ -503,15 +503,6 @@ html {
 .legal b {
   color: var(--ink);
 }
-/* Ce qui reste à remplir avant la mise en ligne */
-.trou {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--warn) 22%, transparent);
-  color: var(--ink);
-  font-weight: 600;
-}
-
 @media (max-width: 920px) {
   .vitrine main > section {
     padding-block: 52px;
