@@ -1,4 +1,3 @@
-import { buildCNC } from "../cnc/build";
 import { quantites } from "../cnc/quantites";
 import {
   ETAT_DEVIS_LABEL,
@@ -25,6 +24,7 @@ import {
   type Quantites,
 } from "../core/devis";
 import { day, fmt } from "../core/format";
+import { pieces } from "../core/pieces";
 import { fileBase, type Project } from "../core/project";
 import { compute, type Stair } from "../core/stair";
 import { POSTE_LABEL, isEmptyTarifs, type Entreprise, type Tarifs } from "../core/tarifs";
@@ -184,7 +184,7 @@ export class DevisView {
     // Une copie : le devis enregistré ne change que par `save`.
     this.d = structuredClone(p?.devis ?? newDevis());
     this.fige = p ? versionRemise(this.d, p.params) : null;
-    this.Q = R && !this.fige ? quantites(R, buildCNC(R)) : null;
+    this.Q = R && !this.fige ? quantites(R, pieces(R)) : null;
     byId("dvLead").textContent = p ? `Pour « ${p.nom} ».` : "";
     byId("dvMsg").hidden = true;
     this.renderSaisie();

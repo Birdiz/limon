@@ -3,7 +3,7 @@ import { ceil10 } from "./format";
 import { ECHAPPEE, headroomUnder, type Headroom, type NoseSeg } from "./headroom";
 import { TOURS, type Params } from "./params";
 import { polyPath, type Poly } from "./poly";
-import type { NoseLine, Rect, Stair, TreDims } from "./stair";
+import type { NoseLine, Rect, Stair, TreDims } from "./stair-types";
 import { V, bbox, type Pt } from "./vec";
 
 /** Contour de la trémie, adossé au bord du plancher d'arrivée (reculé de la marche palière, mpD) ;

@@ -7,33 +7,25 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./styles/main.css";
 
-import { buildCNC, tightBoards, type CNC } from "./cnc/build";
+import { buildCNC, type CNC } from "./cnc/build";
 import { cutListCSV } from "./cnc/cutlist";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
+import { pieces, tightBoards } from "./core/pieces";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "./core/tarifs";
 import { DEFAULTS, changeForme, type Params } from "./core/params";
-import {
-  DROITS,
-  ABONNEMENT_OUVERT,
-  enLecture,
-  formeOuverte,
-  niveauActif,
-  statutReel,
-  type Droits,
-} from "./core/niveaux";
+import { DROITS, ABONNEMENT_OUVERT, formeOuverte, niveauActif, statutReel, type Droits } from "./core/niveaux";
 import {
   NOM_PAR_DEFAUT,
   canFinish,
-  edited,
   fileBase,
-  newProject,
-  touched,
+  renamed,
   withDevis,
+  withEtape,
   withEtat,
   type Project,
 } from "./core/project";
-import { linkOpensNew, paramsFromHash, paramsToHash, sameLink } from "./core/share";
+import { paramsFromHash, paramsToHash } from "./core/share";
 import { treadsCSV } from "./core/sheet";
 import { fichePDF } from "./pdf/fiche";
 import { compute, turnLengths, type ComputeResult, type Stair } from "./core/stair";
@@ -56,7 +48,8 @@ import { startPWA } from "./ui/pwa";
 import { missingErrors, readInputs, showFieldErrors, syncInputs, writeInputs } from "./ui/settings";
 import { Steps } from "./ui/steps";
 import { leaveOldHost } from "./ui/move";
-import { LocalStore, browserStorage, newId, read, write } from "./ui/store";
+import { EscalierOuvert, type Raison } from "./ui/ouvert";
+import { LocalStore, browserStorage, read, write } from "./ui/store";
 import { SyncStore } from "./ui/sync";
 import { Tabs } from "./ui/tabs";
 import { Undo } from "./ui/undo";
@@ -71,15 +64,32 @@ const sharedAtStart = paramsFromHash(location.hash);
     « Mes escaliers » (?accueil). Mon compte (?compte), au retour de la page de paiement (?compte=paye). */
 const asked = new URLSearchParams(location.search);
 if (asked.size) history.replaceState(null, "", location.pathname + location.hash);
-let project: Project | null = null;
-/** Identifiant de l'escalier reçu par lien, à l'écran mais ni enregistré ni envoyé au compte tant que l'artisan n'y a pas touché. */
-let received: string | null = null;
-/** Droits du niveau appliqué sur cet appareil. */
-let droits: Droits = DROITS.premium;
-/** Escaliers en lecture seule, et nombre d'escaliers gardés, relus avec la liste. */
-let lecture = new Set<string>();
-let gardes = 0;
-const enLectureSeule = () => project !== null && project.id !== received && lecture.has(project.id);
+
+/** Préférences de l'appareil : une écriture refusée ne dit rien à l'artisan, le choix vaut pour cette visite. */
+const prefs = browserStorage();
+
+/** Devis, en préparation : visible sur l'appareil ouvert une fois avec ?devis, masqué de nouveau avec ?devis=0. */
+const DEVIS_KEY = "limon-devis";
+if (asked.has("devis")) write(prefs, DEVIS_KEY, asked.get("devis") !== "0" ? "1" : "0");
+
+/** Niveau, pour l'essayer avant le paiement en ligne : ?niveau=gratuit, payant, premium ou compte ; ?niveau=0 l'enlève. */
+const NIVEAU_KEY = "limon-niveau";
+if (asked.has("niveau")) write(prefs, NIVEAU_KEY, asked.get("niveau") === "0" ? null : asked.get("niveau"));
+/** Droits du niveau de cet appareil ; suivent le compte quand celui-ci change. */
+const droitsIci = (): Droits => DROITS[niveauActif(read(prefs, NIVEAU_KEY), statutReel(store.account(), Date.now()))];
+
+/** L'escalier à l'écran, et ce qui en est gardé : la page ne fait que le montrer. */
+const ouvert: EscalierOuvert = new EscalierOuvert(
+  store,
+  {
+    montrer,
+    affiche: showOuvert,
+    makeRoom: (): Promise<boolean> => home.makeRoom(),
+    atelier: () => atelier.params(),
+  },
+  droitsIci(),
+);
+/** Réglages des champs de l'escalier ouvert. */
 let params: Params = { ...DEFAULTS };
 let current: ComputeResult | null = null;
 let cnc: CNC | null = null;
@@ -88,15 +98,14 @@ let scene: Scene3D | null = null;
 let planCote = false;
 /** Onglet Devis de l'escalier ouvert ; recalculé seulement quand il est à l'écran. */
 const devisView = new DevisView({
-  project: () => project,
+  project: () => ouvert.projet,
   stair: () => (current?.ok ? current.stair : null),
   tarifs: () => atelier.get()?.tarifs ?? TARIFS_VIDES,
   entreprise: () => atelier.get()?.entreprise ?? ENTREPRISE_VIDE,
   clientsCaches: () => store.hidesClients(),
   saved: (d) => {
-    if (!project) return;
-    project = withDevis(project, d, Date.now());
-    saveProject();
+    if (!ouvert.projet) return;
+    ouvert.change((p) => withDevis(p, d, Date.now()));
     devisView.refresh();
   },
   openTarifs: () => void home.show("atelier"),
@@ -118,30 +127,16 @@ const devisView = new DevisView({
   download: (data, filename) => downloadBytes(data, filename, "application/pdf"),
 });
 
-/** Enregistre l'escalier ouvert après un geste de l'artisan ; le premier garde l'escalier reçu par lien. */
-function saveProject(): void {
-  if (!project || enLectureSeule()) return;
-  if (project.id === received) {
-    // Au gratuit, un escalier reçu ne prend la place du sien que par « Garder cet escalier ».
-    if (gardes >= droits.escaliers) return;
-    gardes++;
-    received = null;
-    byId("recu").hidden = true;
-    void store.setCurrent(project.id);
-  }
-  void store.save(project);
-}
-const keepReceived = () => {
-  if (project?.id === received) saveProject();
-};
-/** Tire de la liste ce qui dépend du nombre d'escaliers ; l'escalier à l'écran suit. */
-function listed(all: Project[]): void {
-  lecture = enLecture(droits, all);
-  gardes = all.length;
-  showLecture();
-}
-function showLecture(): void {
-  const on = enLectureSeule();
+/** Ligne de l'escalier pas encore gardé, et lecture seule. */
+function showOuvert(): void {
+  const recu = ouvert.recu;
+  byId("recu").hidden = !recu;
+  if (recu)
+    byId("recuTxt").textContent =
+      recu === "lien"
+        ? "Escalier reçu par lien : pas encore dans Mes escaliers."
+        : "Exemple : pas encore dans Mes escaliers.";
+  const on = ouvert.lectureSeule;
   byId("lecture").hidden = !on;
   // Les champs seulement : le pas à pas d'un escalier en lecture seule doit pouvoir mener à sa vue et à sa fiche.
   document.querySelectorAll<HTMLElement>(".side .sbody").forEach((el) => (el.inert = on));
@@ -150,7 +145,6 @@ function showLecture(): void {
   byId("undoBox").hidden = on;
   byId("etatBox").hidden = on;
 }
-const relire = async () => listed(await store.list());
 
 function render(result: ComputeResult): void {
   const errHTML = (e: string) => `<div class="errbox">${e}</div>`;
@@ -203,17 +197,9 @@ function update(): void {
   const next = changeForme(params, read.params);
   if (next !== read.params) writeInputs(next);
   params = next;
-  if (project) {
-    const changed = edited(project, params, Date.now());
-    if (changed !== project) {
-      if (changed.etat !== project.etat)
-        flash(byId("etatMsg"), "Modifié : l'escalier repasse en brouillon", false, 6000);
-      project = changed;
-      // Sans geste de l'artisan, un écart de relecture des champs n'enregistre pas un escalier reçu par lien.
-      if (project.id !== received && !enLectureSeule()) void store.save(project);
-      showEtat();
-    }
-  }
+  const regle = ouvert.regle(params);
+  if (regle === "brouillon") flash(byId("etatMsg"), "Modifié : l'escalier repasse en brouillon", false, 6000);
+  if (regle !== "inchange") showEtat();
   undo.record(params);
   const hash = paramsToHash(params);
   if (location.hash.slice(1) !== hash) history.replaceState(null, "", hash ? `#${hash}` : location.pathname);
@@ -241,8 +227,8 @@ function schedule(): void {
 
 /** Réglages changés d'un coup (correction d'une note, retour à l'exemple, annuler) : la saisie en attente passe avant. */
 function setParams(p: Params): void {
-  if (enLectureSeule()) return;
-  keepReceived();
+  if (ouvert.lectureSeule) return;
+  ouvert.geste();
   if (queued) update();
   undo.touched(null);
   params = p;
@@ -268,6 +254,7 @@ function sketches(focused = document.activeElement?.id): void {
 
 /** État de l'escalier ouvert : pastille de l'en-tête et bandeau au-dessus de la fiche. */
 function showEtat(): void {
+  const project = ouvert.projet;
   const fini = project?.etat === "fini";
   const badge = byId("pjEtat");
   badge.textContent = fini ? "Terminé" : "Brouillon";
@@ -276,16 +263,16 @@ function showEtat(): void {
   byId("etatTxt").innerHTML = fini
     ? `<b>Terminé le ${day(project!.finiLe)}.</b> La fiche est prête à remettre. Une modification le repasse en brouillon.`
     : "<b>Brouillon.</b> La fiche porte la mention « brouillon » tant que l'escalier n'est pas dit terminé.";
-  if (!droits.ficheComplete)
+  if (!ouvert.droits.ficheComplete)
     byId("etatTxt").innerHTML = fini
       ? `<b>Terminé le ${day(project!.finiLe)}.</b> La fiche de l'offre gratuite garde la mention « brouillon ».`
       : "<b>Brouillon.</b> La fiche de l'offre gratuite garde cette mention.";
   byId("etatBtn").textContent = fini ? "Repasser en brouillon" : "Escalier terminé";
 }
 byId("etatBtn").addEventListener("click", () => {
-  if (!project) return;
+  if (!ouvert.projet) return;
   if (queued) update();
-  const fini = project.etat === "fini";
+  const fini = ouvert.projet.etat === "fini";
   const can = fini ? "oui" : canFinish(current);
   if (can === "non") {
     flash(byId("etatMsg"), "Corrigez d'abord les cotes signalées en rouge", true, 6000);
@@ -296,20 +283,20 @@ byId("etatBtn").addEventListener("click", () => {
     !confirm("Des contrôles ne sont pas respectés (en rouge). Dire l'escalier terminé quand même ?")
   )
     return;
-  project = withEtat(project, fini ? "brouillon" : "fini", Date.now());
-  saveProject();
+  ouvert.change((p) => withEtat(p, fini ? "brouillon" : "fini", Date.now()));
   showEtat();
-  const finiMsg = droits.ficheComplete ? "Terminé : la fiche ne porte plus la mention brouillon" : "Terminé";
+  const finiMsg = ouvert.droits.ficheComplete ? "Terminé : la fiche ne porte plus la mention brouillon" : "Terminé";
   flash(byId("etatMsg"), fini ? "Repassé en brouillon" : finiMsg);
 });
 
+/** Un escalier est à l'écran. */
+let montre = false;
 /** Met un escalier à l'écran (état, champs, calcul), sans toucher à l'accueil ni à l'export. */
 function showProject(p: Project | null): void {
   // Le bouton « Reprendre » de Mon atelier suit la présence d'un escalier ; recharger ce panneau effacerait sa saisie.
-  const reprendre = !p !== !project;
-  project = p;
-  byId("recu").hidden = !p || p.id !== received;
-  showLecture();
+  const reprendre = !p !== !montre;
+  montre = !!p;
+  showOuvert();
   params = p ? { ...p.params } : { ...DEFAULTS };
   byId<HTMLInputElement>("pjName").value = p?.nom ?? "";
   writeInputs(params);
@@ -321,22 +308,22 @@ function showProject(p: Project | null): void {
   update();
 }
 
-/** Ouvre un escalier ; null quand il n'en reste aucun : l'accueil prend alors la page. */
-function openProject(p: Project | null): void {
-  void relire();
-  if (p) home.hide();
-  else void home.show();
-  setCNC(false);
+/** Un escalier prend l'écran ; null quand il n'en reste aucun : l'accueil prend alors la page. */
+function montrer(p: Project | null, raison: Raison): void {
+  if (raison === "devis") return devisView.refresh();
+  // Supprimé ailleurs pendant que l'artisan est sur l'accueil : il y reste, l'escalier suivant prend place derrière.
+  if (raison === "ouvert" || (raison === "supprime" && !home.visible)) {
+    if (p) home.hide();
+    else void home.show();
+  }
+  // Une version reçue d'ailleurs garde l'écran en cours, export compris.
+  if (raison !== "version") setCNC(false);
   showProject(p);
-  // L'historique appartient à l'escalier ouvert.
+  // L'historique appartient à l'escalier ouvert, et repart d'une version reçue.
   undo.reset(params);
 }
 
-const steps = new Steps((mode, etape) => {
-  if (!project) return;
-  project = { ...project, mode, etape, ...touched(project, Date.now()) };
-  saveProject();
-});
+const steps = new Steps((mode, etape) => ouvert.change((p) => withEtape(p, mode, etape, Date.now())));
 
 /** Ouvre ou replie l'export CNC. */
 function setCNC(on: boolean): void {
@@ -366,32 +353,20 @@ byId("devisBtn").addEventListener("click", () => tabs.show(tabs.current === "dev
 // Tarifs changés dans Mon atelier ou reçus du compte : le devis à l'écran suit.
 atelier.onChange(() => devisView.refresh());
 
-/** Réglages de départ : ceux de l'atelier quand le niveau les comprend. */
-const depart = (): Params => (droits.atelier ? atelier.params() : { ...DEFAULTS });
-
-/** Nouvel escalier : réglages de l'atelier, et toujours en pas à pas sauf choix contraire. */
-async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = depart()): Promise<void> {
-  if (!(await home.makeRoom())) return;
-  const q = newProject(newId(), nom, mode, Date.now(), p);
-  await store.save(q);
-  await store.setCurrent(q.id);
-  openProject(q);
-}
-
 const account = new AccountPanel(store, api, browserStorage());
 const home = new Home(store, {
-  current: () => project,
-  params: depart,
-  open: openProject,
-  example: () => void example(),
+  current: () => ouvert.projet,
+  params: () => ouvert.depart(),
+  open: (p) => ouvert.ouvrir(p),
+  example: () => void ouvert.exemple(),
   signedIn: () => store.account() !== null,
   known: () => store.known(),
   account: () => void account.show(),
-  droits: () => droits,
-  listed,
+  droits: () => ouvert.droits,
+  listed: (all) => ouvert.liste(all),
 });
 const atelierPanel = new AtelierPanel(atelier, {
-  params: () => (project ? params : null),
+  params: () => (ouvert.projet ? params : null),
   saved: () => store.atelierChanged(),
 });
 // Après Mon atelier, dont les lignes sont créées par le panneau.
@@ -400,25 +375,14 @@ new Aide(
   () => params.tForme,
 ).attach();
 new TarifsPanel(atelier, {
-  params: () => (project ? params : null),
+  params: () => (ouvert.projet ? params : null),
   saved: () => store.atelierChanged(),
 });
 byId("atKeep").addEventListener("click", () => atelierPanel.keep(byId("sharemsg")));
 byId("homeBtn").addEventListener("click", () => void home.show());
 byId("pjOpen").addEventListener("click", () => void home.show());
 byId("acOpen").addEventListener("click", () => void home.show("compte"));
-byId("pjNew").addEventListener("click", () => void startNew());
-
-/** Préférences de l'appareil : une écriture refusée ne dit rien à l'artisan, le choix vaut pour cette visite. */
-const prefs = browserStorage();
-
-/** Devis, en préparation : visible sur l'appareil ouvert une fois avec ?devis, masqué de nouveau avec ?devis=0. */
-const DEVIS_KEY = "limon-devis";
-if (asked.has("devis")) write(prefs, DEVIS_KEY, asked.get("devis") !== "0" ? "1" : "0");
-
-/** Niveau, pour l'essayer avant le paiement en ligne : ?niveau=gratuit, payant, premium ou compte ; ?niveau=0 l'enlève. */
-const NIVEAU_KEY = "limon-niveau";
-if (asked.has("niveau")) write(prefs, NIVEAU_KEY, asked.get("niveau") === "0" ? null : asked.get("niveau"));
+byId("pjNew").addEventListener("click", () => void ouvert.nouveau());
 
 /** Réglages avancés : une préférence de l'appareil, réglée dans l'onglet Mon compte. */
 const ADV_KEY = "limon-avance";
@@ -428,9 +392,9 @@ function setAdvanced(on: boolean): void {
   sketches();
 }
 
-/** Applique le niveau de cet appareil ; suit le compte quand celui-ci change. */
+/** Montre le niveau de cet appareil. */
 function applyNiveau(): void {
-  droits = DROITS[niveauActif(read(prefs, NIVEAU_KEY), statutReel(store.account(), Date.now()))];
+  const droits = ouvert.droits;
   document.body.classList.toggle("payant", droits.fabrication);
   // Avant l'activation, le devis attend encore sa préférence ; ensuite, il va avec le niveau.
   document.body.classList.toggle("devis", droits.devis && (ABONNEMENT_OUVERT || read(prefs, DEVIS_KEY) === "1"));
@@ -452,9 +416,8 @@ function applyNiveau(): void {
 }
 applyNiveau();
 store.onStatus(() => {
-  const avant = droits;
+  ouvert.niveau(droitsIci());
   applyNiveau();
-  if (droits !== avant) void relire();
 });
 byId<HTMLInputElement>("advToggle").addEventListener("change", (e) => {
   const on = (e.target as HTMLInputElement).checked;
@@ -491,38 +454,13 @@ for (const [id, plan] of [
 
 /** Projets changés sur un autre appareil ou dans un autre onglet : le projet ouvert se met à jour, ou laisse la place s'il a été supprimé. */
 store.onChange(async (ids) => {
-  await relire();
-  if (project && ids.includes(project.id)) {
-    const p = await store.get(project.id);
-    if (p) {
-      // Même escalier : l'écran en cours reste, seul l'historique repart de la version reçue.
-      if (p.modifie !== project.modifie) {
-        showProject(p);
-        undo.reset(params);
-      } else {
-        // Même version : seul son devis change, caché quand la session se perd, revenu à la reconnexion.
-        project = { ...project, devis: p.devis };
-        devisView.refresh();
-      }
-    } else {
-      const next = (await store.list())[0] ?? null;
-      if (home.visible) {
-        // Supprimé ailleurs pendant que l'artisan est sur l'accueil : il y reste, l'escalier suivant prend place derrière.
-        setCNC(false);
-        showProject(next);
-        undo.reset(params);
-      } else openProject(next);
-      if (next) void store.setCurrent(next.id);
-    }
-  }
+  await ouvert.ailleurs(ids);
   await home.refreshIfOpen();
 });
 byId<HTMLInputElement>("pjName").addEventListener("change", (e) => {
   const el = e.target as HTMLInputElement;
-  if (!project) return;
-  project = { ...project, nom: el.value.trim() || NOM_PAR_DEFAUT, ...touched(project, Date.now()) };
-  el.value = project.nom;
-  saveProject();
+  ouvert.change((p) => renamed(p, el.value, Date.now()));
+  if (ouvert.projet) el.value = ouvert.projet.nom;
 });
 // Avant un rechargement silencieux : la saisie en cours (nom du projet, réglage) est enregistrée.
 startPWA(() => {
@@ -532,7 +470,7 @@ startPWA(() => {
 
 /* ---------- Événements ---------- */
 const onEdit = (e: Event) => {
-  keepReceived();
+  ouvert.geste();
   undo.touched(e.target);
   schedule();
 };
@@ -560,40 +498,10 @@ byId("notes").addEventListener("click", (ev) => {
   if (!fix) return;
   setParams({ ...params, ...fix.set });
 });
-/** Un lien montre son escalier sans rien écrire. Déjà gardé, il le rouvre plutôt que d'en préparer une copie. */
-async function openShared(p: Params): Promise<void> {
-  if (!linkOpensNew(p, project?.params ?? null)) return;
-  const kept = (await store.list()).find((q) => sameLink(q.params, p));
-  if (kept) {
-    openProject(kept);
-    void store.setCurrent(kept.id);
-    return;
-  }
-  const q = newProject(newId(), "Escalier reçu par lien", "complet", Date.now(), p);
-  received = q.id;
-  byId("recuTxt").textContent = "Escalier reçu par lien : pas encore dans Mes escaliers.";
-  openProject(q);
-}
-byId("recuGarde").addEventListener("click", () => {
-  if (gardes < droits.escaliers) return keepReceived();
-  void home.makeRoom().then(async (place) => {
-    if (!place) return;
-    await relire();
-    keepReceived();
-  });
-});
-const example = async () => {
-  await relire();
-  if (gardes < droits.escaliers) return startNew("Exemple", "complet", { ...DEFAULTS });
-  // Au gratuit, l'exemple se regarde sans prendre la place de l'escalier gardé.
-  const q = newProject(newId(), "Exemple", "complet", Date.now(), { ...DEFAULTS });
-  received = q.id;
-  byId("recuTxt").textContent = "Exemple : pas encore dans Mes escaliers.";
-  openProject(q);
-};
+byId("recuGarde").addEventListener("click", () => void ouvert.garder());
 window.addEventListener("hashchange", () => {
   const p = paramsFromHash(location.hash);
-  if (p) void openShared(p);
+  if (p) void ouvert.lien(p);
 });
 byId("share").addEventListener("click", async () => {
   if (await copyText(location.href, byId<HTMLTextAreaElement>("linkfb")))
@@ -630,21 +538,20 @@ phone.addEventListener("change", () => {
 
 byId("ficheDl").addEventListener("click", async () => {
   if (!current?.ok) return;
-  const base = fileBase(project?.nom ?? NOM_PAR_DEFAUT);
+  const base = fileBase(ouvert.projet?.nom ?? NOM_PAR_DEFAUT);
   const kind = byId<HTMLSelectElement>("ficheFmt").value;
   const csv = (text: string, nom: string) =>
     downloadBytes(new TextEncoder().encode("\ufeff" + text), `${base} - ${nom}.csv`, "text/csv");
   if (kind === "csv") csv(treadsCSV(current.stair), "marches");
-  else if (kind === "debit") csv(cutListCSV(cnc ?? buildCNC(current.stair), current.stair), "liste de débit");
+  else if (kind === "debit") csv(cutListCSV(cnc ?? pieces(current.stair), current.stair), "liste de débit");
   else {
     // La fiche porte toujours la 3D : si elle se charge encore, on l'attend.
     await sceneReady;
     if (!current?.ok) return;
     const vue3d = scene?.snapshot() ?? undefined;
     const date = new Date().toLocaleDateString("fr-FR");
-    const nom = project?.nom ?? NOM_PAR_DEFAUT;
-    const brouillon = project?.etat !== "fini" || !droits.ficheComplete;
-    const extrait = !droits.ficheComplete;
+    const nom = ouvert.projet?.nom ?? NOM_PAR_DEFAUT;
+    const { brouillon, extrait } = ouvert.fiche();
     downloadBytes(
       fichePDF(current.stair, { nom, date, brouillon, extrait, ...(vue3d ? { vue3d } : {}) }),
       `${base}${brouillon ? " (brouillon)" : ""}.pdf`,
@@ -688,20 +595,17 @@ writeInputs(params);
 update();
 void (async () => {
   if (leaving) return;
-  await relire();
-  const id = await store.currentId();
-  const start = (id && (await store.get(id))) || (await store.list())[0] || null;
-  // Sur un appareil vide, l'accueil ne passe pas avant l'escalier du lien.
-  if (start || !sharedAtStart) openProject(start);
-  if (start) void store.setCurrent(start.id);
-  if (sharedAtStart) await openShared(sharedAtStart);
-  else if (asked.has("exemple")) await example();
-  else if (asked.has("nouveau")) await startNew();
-  else if (asked.has("accueil")) await home.show();
-  else if (asked.has("compte")) {
-    await home.show("compte");
-    if (asked.get("compte") === "paye") void account.paymentDone();
-  } else if (account.awaitsCode()) await home.show("compte");
+  await ouvert.demarrer(sharedAtStart);
+  // L'escalier du lien passe avant ce que demandent les boutons de la page publique.
+  if (!sharedAtStart) {
+    if (asked.has("exemple")) await ouvert.exemple();
+    else if (asked.has("nouveau")) await ouvert.nouveau();
+    else if (asked.has("accueil")) await home.show();
+    else if (asked.has("compte")) {
+      await home.show("compte");
+      if (asked.get("compte") === "paye") void account.paymentDone();
+    } else if (account.awaitsCode()) await home.show("compte");
+  }
   store.start();
 })();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.
@@ -720,6 +624,6 @@ const sceneReady = Promise.all([import("./ui/scene3d"), document.fonts.ready])
 // Accès console en développement : le panneau navigateur masqué ne fait pas tourner requestAnimationFrame.
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    limon: { compute, buildCNC, toDXF, exportZip, update, current: () => current, scene: () => scene },
+    limon: { compute, pieces, buildCNC, toDXF, exportZip, update, current: () => current, scene: () => scene },
   });
 }

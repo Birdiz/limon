@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildCNC, oversize, stockVolume, tightBoards } from "../src/cnc/build";
+import { buildCNC } from "../src/cnc/build";
 import { toDXF } from "../src/cnc/dxf";
 import { exportFiles, exportFilename, readme } from "../src/cnc/package";
+import { oversize, pieces, stockVolume, tightBoards } from "../src/core/pieces";
 import { treadsCSV } from "../src/core/sheet";
 import { PERCAGE, TENON } from "../src/core/stair";
 import { stringerOutline } from "../src/core/stringer";
@@ -49,6 +50,27 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
     expect(cut(cnc.boardEnts)).toHaveLength(R.stringers.length + chants);
     expect(cnc.riserParts).toHaveLength(R.params.cm ? R.n : 0);
     expect(cut(cnc.riserEnts)).toHaveLength(R.params.cm ? R.n : 0);
+  });
+
+  it("pose chaque marche et contremarche aux cotes de sa pièce", () => {
+    const P = pieces(R);
+    const sizes = (ents: typeof cnc.treadEnts) =>
+      ents.flatMap((e) => {
+        if (e.kind !== "poly" || e.layer !== "DECOUPE") return [];
+        const b = bbox(e.pts);
+        return [[b.x1 - b.x0, b.y1 - b.y0]];
+      });
+    // La pose décale chaque contour : ses cotes ne bougent qu'aux arrondis du calcul près.
+    const same = (ents: typeof cnc.treadEnts, ps: readonly { L: number; l: number }[]) => {
+      const got = sizes(ents);
+      expect(got).toHaveLength(ps.length);
+      got.forEach(([w, d], k) => {
+        expect(w).toBeCloseTo(ps[k]!.L, 6);
+        expect(d).toBeCloseTo(ps[k]!.l, 6);
+      });
+    };
+    same(cnc.treadEnts, [...P.treadParts, ...(P.mpPart ? [P.mpPart] : [])]);
+    same(cnc.riserEnts, P.riserParts);
   });
 
   it("met contremarches.dxf dans l'archive seulement s'il y a des contremarches", () => {

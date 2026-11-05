@@ -1,21 +1,12 @@
 /* Notes de contrôle de l'escalier et corrections qu'elles proposent.
-   compute les appelle, et la recherche de marches balancées rappelle compute : ce cycle d'import ne sert qu'à l'appel. */
+   Les types viennent de stair-types.ts. Reste un cycle d'appel avec stair.ts, réel : compute appelle stairNotes,
+   et la recherche de marches balancées rappelle compute pour essayer chaque réglage. Il ne joue qu'à l'exécution,
+   jamais au chargement des modules. */
 import { ceil10, fmt } from "./format";
 import type { Params } from "./params";
 import { BOIS_SOUS_LOGEMENT } from "./pockets";
-import {
-  CONFORT,
-  comfortStatus,
-  compute,
-  echWhere,
-  palierLayout,
-  pickN,
-  type Balance,
-  type Fix,
-  type Note,
-  type PalierLayout,
-  type Stair,
-} from "./stair";
+import { CONFORT, comfortStatus, compute, echWhere, palierLayout, pickN } from "./stair";
+import type { Balance, Fix, Note, PalierLayout, Stair } from "./stair-types";
 
 const comfortable = (H: number, Lw: number, n: number) =>
   Object.values(comfortStatus(H / n, Lw / (n - 1))).every((s) => s === "ok");

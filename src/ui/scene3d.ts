@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { handrailOutline, postOutline, railOutline } from "../cnc/railing";
+import { handrailOutline, postOutline, railOutline } from "../core/railing";
 import { isLeft, type Essence } from "../core/params";
 import type { StringerPiece, Stair, Tread } from "../core/stair";
 import { stringerOutline } from "../core/stringer";

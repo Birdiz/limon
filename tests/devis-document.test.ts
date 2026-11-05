@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildCNC } from "../src/cnc/build";
+import { pieces } from "../src/core/pieces";
 import { quantites } from "../src/cnc/quantites";
 import {
   SAISIE_DEFAUT,
@@ -27,7 +27,7 @@ import { TVA_REDUITE, devisPDF, type DevisPdf } from "../src/pdf/devis";
 const r = compute(DEFAULTS, false);
 if (!r.ok) throw new Error("exemple");
 const R = r.stair;
-const Q = quantites(R, buildCNC(R));
+const Q = quantites(R, pieces(R));
 
 const T: Tarifs = {
   ...TARIFS_VIDES,

@@ -1,8 +1,8 @@
 /* Garde-corps côté jour : main courante rampante, balustres ou montants et lisses.
    Chaque tronçon de main courante suit en plan un tronçon de limon de jour (même abscisse u, depuis sp.a) ;
    quand l'escalier tourne, il s'assemble dans chaque poteau à tenon et mortaise, comme le limon. */
-import type { Params, Pose } from "./params";
-import type { StringerPiece } from "./stair";
+import type { Params } from "./params";
+import type { Handrail, Post, Rail, Railing, StringerPiece } from "./stair-types";
 import { interp, type Pt } from "./vec";
 
 export const GC = {
@@ -27,67 +27,6 @@ export const GC = {
   /** Tête du poteau au-dessus de la main courante. */
   tete: 60,
 } as const;
-
-/** Tronçon de main courante au-dessus du tronçon de limon de jour idx, du bout u0 au bout u1 (pris au dessus). */
-export interface Handrail {
-  idx: number;
-  u0: number;
-  u1: number;
-  /** Coupe d'onglet en bout : décalage en u du dessous par rapport au dessus ; absent si le bout est d'aplomb. */
-  cut0?: number;
-  cut1?: number;
-  /** Retour horizontal au-dessus de la marche palière. */
-  retour?: boolean;
-  /** Dessus : z = z0 + b·u. */
-  z0: number;
-  b: number;
-  /** Épaisseur mesurée d'aplomb. */
-  hv: number;
-  /** Tenons dans les poteaux, au bout bas puis au bout haut : de u0 à u1, de z0 à z1,
-      de t0 à t1 depuis la face du limon côté marches. */
-  tenons: { u0: number; u1: number; z0: number; z1: number; t0: number; t1: number }[];
-}
-
-/** Balustre ou montant, d'axe u : bas et haut à l'axe, avec la pente de chaque coupe. */
-export interface Post {
-  idx: number;
-  u: number;
-  zb: number;
-  ab: number;
-  zt: number;
-  at: number;
-  /** Tenon en bas, dans le chant du limon (pose dans le chant). */
-  tenonBas: boolean;
-  /** Perçages traversants du limon (u, z), pose à l'anglaise. */
-  holes: Pt[];
-}
-
-/** Lisse entre deux appuis (montants ou poteau), de uA à uB ; dessus à z0 + b·u, épaisseur d'aplomb hv. */
-export interface Rail {
-  idx: number;
-  uA: number;
-  uB: number;
-  z0: number;
-  b: number;
-  hv: number;
-}
-
-export interface Railing {
-  type: "balustres" | "lisses";
-  pose: Pose;
-  /** Axe du garde-corps, depuis la face du limon de jour côté marches. */
-  off: number;
-  handrails: Handrail[];
-  posts: Post[];
-  rails: Rail[];
-  /** Hauteur de la main courante au-dessus des nez, au plus bas et au plus haut. */
-  hMin: number;
-  hMax: number;
-  /** Plus grand écart libre du remplissage. */
-  gap: number;
-  /** Écart le plus petit entre la lisse basse et le limon ; négatif si elle le touche. */
-  railLow: number;
-}
 
 export interface RailingInput {
   p: Params;
@@ -304,4 +243,83 @@ export function railing({ p, quart, jour, cum, noseS, noseZ, mpD = 0 }: RailingI
     gap,
     railLow: rails.length ? railLow : Infinity,
   };
+}
+
+/** Tenon carré en bout des balustres et montants : la moitié de leur section. */
+export const postTenon = (p: Params): number => Math.round(p.bs / 2);
+
+/** Contour d'une main courante dans son plan (u, z) : dessus, bouts d'aplomb ou d'onglet, tenon dans le poteau. */
+export function handrailOutline(hr: Handrail): Pt[] {
+  const top = (u: number) => hr.z0 + hr.b * u,
+    c0 = hr.cut0 ?? 0,
+    c1 = hr.cut1 ?? 0;
+  const tl: Pt = [hr.u0, top(hr.u0)],
+    tr: Pt = [hr.u1, top(hr.u1)],
+    br: Pt = [hr.u1 + c1, top(hr.u1 + c1) - hr.hv],
+    bl: Pt = [hr.u0 + c0, top(hr.u0 + c0) - hr.hv];
+  const hi = hr.tenons.find((t) => t.u0 >= hr.u1 - 1e-6),
+    lo = hr.tenons.find((t) => t !== hi);
+  return [
+    tl,
+    tr,
+    ...(hi
+      ? ([
+          [hi.u0, hi.z1],
+          [hi.u1, hi.z1],
+          [hi.u1, hi.z0],
+          [hi.u0, hi.z0],
+        ] as Pt[])
+      : []),
+    br,
+    bl,
+    ...(lo
+      ? ([
+          [lo.u1, lo.z0],
+          [lo.u0, lo.z0],
+          [lo.u0, lo.z1],
+          [lo.u1, lo.z1],
+        ] as Pt[])
+      : []),
+  ];
+}
+
+/** Contour d'un balustre ou montant dans le plan du garde-corps (u, z) : coupes biais, tenons en bout. */
+export function postOutline(q: Post, p: Params): Pt[] {
+  const w = p.bs / 2,
+    t = postTenon(p) / 2,
+    L = GC.tenon;
+  const zb = (u: number) => q.zb + q.ab * (u - q.u),
+    zt = (u: number) => q.zt + q.at * (u - q.u);
+  const bottom: Pt[] = q.tenonBas
+    ? [
+        [q.u - w, zb(q.u - w)],
+        [q.u - t, zb(q.u - t)],
+        [q.u - t, q.zb - L],
+        [q.u + t, q.zb - L],
+        [q.u + t, zb(q.u + t)],
+        [q.u + w, zb(q.u + w)],
+      ]
+    : [
+        [q.u - w, zb(q.u - w)],
+        [q.u + w, zb(q.u + w)],
+      ];
+  return [
+    ...bottom,
+    [q.u + w, zt(q.u + w)],
+    [q.u + t, zt(q.u + t)],
+    [q.u + t, q.zt + L],
+    [q.u - t, q.zt + L],
+    [q.u - t, zt(q.u - t)],
+    [q.u - w, zt(q.u - w)],
+  ];
+}
+
+export function railOutline(r: Rail): Pt[] {
+  const top = (u: number) => r.z0 + r.b * u;
+  return [
+    [r.uA, top(r.uA)],
+    [r.uB, top(r.uB)],
+    [r.uB, top(r.uB) - r.hv],
+    [r.uA, top(r.uA) - r.hv],
+  ];
 }
