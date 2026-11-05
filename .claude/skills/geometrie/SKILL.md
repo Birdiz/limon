@@ -39,6 +39,14 @@ En entrant dans une forme en U, `changeForme` reprend ses cotes d'exemple (`EXEM
 - Hauteur du tour : pas de réglage enregistré, elle découle de A et B (balancement centré sur l'angle). Le champ « Marches droites avant le tour » affiche `bal.a` ; le modifier recalcule A et B à A + B constant (`turnLengths`, bornes `turnRange`), donc même ligne de foulée et même confort.
 - Logements et hauteur nécessaire de chaque limon calculés dans `compute` (`stringerPockets`, `cncFrame` dans `src/core/pockets.ts`). Le limon de jour du quart tournant a sa propre hauteur `hlj` (automatique par défaut : `need` arrondi à 10 mm, 470 mm avec l'exemple) ; chaque pièce porte sa hauteur dans `sp.hl`.
 
+## Finitions des marches
+
+Profil du nez (`ProfilNez`, `src/core/nez.ts`) : arrondi dessus et dessous, quart-de-rond ou chanfrein sur l'arête du dessus (dessous vif), arêtes cassées (rayon fixe `ARETE_CASSEE`). `nezCote` donne la cote appliquée (`R.rn`, au plus et/2), `aretes` la forme de chaque arête, reprise par la 3D (`noseProfile`), les logements et la coupe de la fiche. `Tread.nose` est la bande du profil derrière la ligne de nez.
+
+Rainures antidérapantes (`rai`, `Tread.grooves`, marche palière comprise) : parallèles au nez, arrêtées à `RAINURE_ARRET` des faces des limons et de la ligne de nez suivante ; plus courtes que `RAINURE_MIN`, elles ne sont pas taillées (note). Validées derrière le profil du nez.
+
+Contremarche (`cmPose`, `cmEmb`) : posée sur la marche du bas (la marche va jusqu'à son dos) ou derrière elle (elle descend jusqu'au dessous de la marche du bas, qui s'arrête contre son parement) ; `arriereMarche` donne la coupe arrière des marches, partout (calcul, logements, DXF, vue de côté). L'embrèvement la monte dans une rainure sous la marche du haut, sauf la dernière sans marche palière (plancher d'arrivée).
+
 ## Garde-corps
 
 `stair.rail`, `src/core/railing.ts`, constantes `GC`. Réglages `gc` (aucun par défaut, ce qui garde les fichiers de référence d'origine), `gcPose`, `mcL`, `mcH`, `bs`. Contours des pièces dans leur plan (`handrailOutline`, `postOutline`, `railOutline`, tenon `postTenon`) au même endroit, pour la 3D comme pour `garde-corps.dxf`.

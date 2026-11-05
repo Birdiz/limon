@@ -1,5 +1,6 @@
 import { fmt } from "./format";
 import { inPolygon } from "./headroom";
+import { arriereMarche } from "./params";
 import type { PlanRole, PlanShape } from "./plan-shapes";
 import { echStatus, echWhere, type Stair, type Status } from "./stair";
 import type { Pt } from "./vec";
@@ -189,7 +190,7 @@ export function sideShapes(R: Stair, big = false): SideDrawing {
       const t = S.noses[i]![0] + p.deb;
       rect(t, t + p.ecm, r.z0, r.z1, "pl-tread");
     });
-  const bo = p.deb + (p.cm ? p.ecm : 0);
+  const bo = arriereMarche(p);
   for (const st of S.steps)
     rect(st.t0, st.t1 + bo, st.z - p.et, st.z, st.balanced || st.palier ? "pl-bal" : "pl-tread");
   if (R.mp) rect(R.Lw, R.Lw + R.mp.depth, H - R.mp.e, H, "pl-tread");

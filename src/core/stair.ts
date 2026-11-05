@@ -3,7 +3,8 @@
    Tournants calculés à droite (2e volée vers +x, 3e vers −y en double quart) ; la version gauche est un miroir. */
 import { fmt, ceil10 } from "./format";
 import { ECHAPPEE, ECHAPPEE_MIN, type Headroom } from "./headroom";
-import { COTE_MAX, H_MAX, TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
+import { nezCote } from "./nez";
+import { COTE_MAX, H_MAX, TOURS, arriereMarche, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
 import { cncFrame, stringerPockets } from "./pockets";
 import { makePoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import { GC, railing } from "./railing";
@@ -27,6 +28,12 @@ import type {
   Tread,
 } from "./stair-types";
 import { V, clamp, interp, type Pt } from "./vec";
+
+/** Rainures antidérapantes : au plus RAINURES_MAX, arrêtées à RAINURE_ARRET des limons et de la ligne de nez
+    suivante, une rainure plus courte que RAINURE_MIN n'est pas taillée. */
+export const RAINURES_MAX = 6;
+export const RAINURE_ARRET = 10;
+export const RAINURE_MIN = 50;
 
 /* Les types du modèle vivent dans stair-types.ts ; ils restent importables d'ici. */
 export type * from "./stair-types";
@@ -162,7 +169,8 @@ function cotesLues(p: Params, tours: number): NumericKey[] {
     "pW",
     ...(tours ? ["A", "B", "ps"] : ["L"]),
     ...(tours === 2 ? [isDemi(p.forme) ? "J" : "C"] : []),
-    ...(p.cm ? ["ecm"] : []),
+    ...(p.cm ? ["ecm", "cmEmb"] : []),
+    ...(p.rai ? ["raiN", "raiL", "raiP", "raiD", "raiE"] : []),
     ...(p.fAuto ? [] : ["f"]),
     ...(tours && !p.hljAuto ? ["hlj"] : []),
     ...(p.tAuto ? [] : tours ? ["tX", "tY", ...(p.tForme === "L" ? ["tbD", "tbA"] : [])] : ["tL"]),
@@ -221,6 +229,29 @@ function validate(p: Params, tours: number): InputError[] {
         "Les deux mains courantes se touchent contre le poteau : réduisez leur largeur ou élargissez le jour.",
       );
   }
+  if (p.rai) {
+    const r = nezCote(p.nez, p.rn, p.et);
+    if (!(Number.isInteger(p.raiN) && p.raiN >= 1 && p.raiN <= RAINURES_MAX))
+      err("raiN", `Un nombre entier de rainures, de 1 à ${RAINURES_MAX}.`);
+    if (!(p.raiL >= 2 && p.raiL <= 20)) err("raiL", "Les rainures doivent faire de 2 à 20 mm de large.");
+    if (!(p.raiP >= 0.5 && p.raiP <= p.et / 4))
+      err(
+        "raiP",
+        `Les rainures doivent faire de 0,5 mm au quart de l'épaisseur de marche (${fmt(p.et / 4, 1)} mm) de profondeur.`,
+      );
+    if (!(p.raiD - p.raiL / 2 >= r + 3))
+      err(
+        "raiD",
+        `La première rainure doit commencer derrière le profil du nez : axe à au moins ${fmt(Math.ceil(r + 3 + p.raiL / 2))} mm du nez.`,
+      );
+    if (p.raiN > 1 && !(p.raiE >= p.raiL + 3))
+      err(
+        "raiE",
+        `L'entraxe doit laisser au moins 3 mm de bois entre deux rainures : au moins ${fmt(Math.ceil(p.raiL + 3))} mm.`,
+      );
+  }
+  if (p.cm && !(p.cmEmb >= 0 && p.cmEmb <= p.et / 2))
+    err("cmEmb", `L'embrèvement doit rester entre 0 et la moitié de l'épaisseur de marche (${fmt(p.et / 2, 1)} mm).`);
   if (p.mp) {
     if (!(p.mpP >= 150)) err("mpP", "La marche palière doit faire au moins 150 mm de profondeur.");
     if (!(p.mpE >= 18)) err("mpE", "La marche palière doit faire au moins 18 mm d'épaisseur.");
@@ -247,6 +278,7 @@ function landingTread(
     cutOff: (ln: NoseLine, off: number) => Edge;
     region: (fr: Edge, bk: Edge) => Pt[];
     noseSpan: (ln: NoseLine, r: number) => NonNullable<Tread["nose"]>;
+    grooves: (ln: NoseLine, depth: number) => Pt[][];
   },
 ): LandingTread {
   const back = g.cutOff(ln, depth);
@@ -258,6 +290,7 @@ function landingTread(
     plan: g.region(ln, back),
     solid: g.region(r > 0 ? g.cutOff(ln, r) : ln, back),
     nose: r > 0 ? g.noseSpan(ln, r) : null,
+    grooves: g.grooves(ln, depth),
     nez: V.len(V.sub(ln.O, ln.Q)),
   };
 }
@@ -483,9 +516,9 @@ export function compute(p: Params, suggest = true): ComputeResult {
   };
   const region = (fr: Edge, bk: Edge) => [...polyPath(inner, fr.sIn, bk.sIn), ...polyPath(outer, bk.sOut, fr.sOut)];
 
-  const bo = p.deb + (p.cm ? p.ecm : 0);
-  // Nez arrondi : bande de largeur rn derrière la ligne de nez, dessinée à part en 3D.
-  const rn = clamp(p.rn, 0, p.et / 2);
+  const bo = arriereMarche(p);
+  // Nez profilé : bande de largeur rn derrière la ligne de nez, dessinée à part en 3D.
+  const rn = nezCote(p.nez, p.rn, p.et);
   const noseSpan = (ln: NoseLine, r = rn) => {
     const d2: Pt = [ln.nr[1], -ln.nr[0]],
       c = cutOff(ln, r);
@@ -495,6 +528,45 @@ export function compute(p: Params, suggest = true): ComputeResult {
     const u0 = Math.min(...us),
       u1 = Math.max(...us);
     return { o: V.add(ln.Q, V.mul(d2, u0)), len: u1 - u0, nr: ln.nr };
+  };
+  // Rainures antidérapantes parallèles au nez de fr, arrêtées avant les limons et avant la ligne de nez suivante bk
+  // (ou à depth derrière le nez) : sur les marches balancées, elles raccourcissent du côté où le giron se resserre.
+  const nRai = p.rai ? clamp(Math.round(p.raiN), 1, RAINURES_MAX) : 0;
+  const grooves = (fr: NoseLine, bk: NoseLine | null, depth = Infinity): Pt[][] => {
+    const out: Pt[][] = [];
+    const uOn = (o: number, P: Poly, side: "near" | "ahead") => {
+      const c = polyCut(P, V.add(fr.Q, V.mul(fr.nr, o)), fr.dir, side);
+      return c ? V.dot(V.sub(c.p, fr.Q), fr.dir) : null;
+    };
+    const X = (u: number, v: number) => V.add(V.add(fr.Q, V.mul(fr.dir, u)), V.mul(fr.nr, v));
+    for (let i = 0; i < nRai; i++) {
+      const c = p.raiD + i * p.raiE,
+        o1 = c - p.raiL / 2,
+        o2 = c + p.raiL / 2;
+      if (o2 > depth - RAINURE_ARRET) break;
+      const a1 = uOn(o1, inner, "near"),
+        a2 = uOn(o2, inner, "near"),
+        b1 = uOn(o1, outer, "ahead"),
+        b2 = uOn(o2, outer, "ahead");
+      if (a1 === null || a2 === null || b1 === null || b2 === null) continue;
+      let u0 = Math.max(a1, a2) + RAINURE_ARRET,
+        u1 = Math.min(b1, b2) - RAINURE_ARRET;
+      if (bk) {
+        // Distance de la ligne bk au nez de fr, le long de nr, à l'abscisse u : affine en u.
+        const den = V.dot(fr.nr, bk.nr),
+          vb = (u: number) => -V.dot(V.add(V.sub(fr.Q, bk.Q), V.mul(fr.dir, u)), bk.nr) / den;
+        const v0 = vb(0),
+          slope = vb(1) - v0,
+          need = o2 + RAINURE_ARRET;
+        if (Math.abs(slope) < 1e-9) {
+          if (v0 < need) continue;
+        } else if (slope > 0) u0 = Math.max(u0, (need - v0) / slope);
+        else u1 = Math.min(u1, (need - v0) / slope);
+      }
+      if (u1 - u0 < RAINURE_MIN) continue;
+      out.push([X(u0, o1), X(u1, o1), X(u1, o2), X(u0, o2)]);
+    }
+    return out;
   };
   const treads: Tread[] = [];
   for (let j = 1; j < n; j++) {
@@ -506,6 +578,7 @@ export function compute(p: Params, suggest = true): ComputeResult {
       plan: region(fr, bk),
       solid: region(rn > 0 ? cutOff(fr, rn) : fr, cutOff(bk, bo)),
       nose: rn > 0 ? noseSpan(fr) : null,
+      grooves: grooves(fr, bk),
       gIn: bk.sIn - fr.sIn,
       gOut: bk.sOut - fr.sOut,
       gWalk: isPalier(j) ? bk.t - fr.t : g,
@@ -527,14 +600,24 @@ export function compute(p: Params, suggest = true): ComputeResult {
       ],
     };
   const mp = mpD
-    ? landingTread(lines[n - 1]!, n * h, p.mpE, mpD, Math.min(rn, p.mpE / 2), { cutOff, region, noseSpan })
+    ? landingTread(lines[n - 1]!, n * h, p.mpE, mpD, Math.min(rn, nezCote(p.nez, p.rn, p.mpE)), {
+        cutOff,
+        region,
+        noseSpan,
+        grooves: (ln, depth) => grooves(ln, null, depth),
+      })
     : null;
+  // Contremarches : sous le nez de la marche du haut, rentrées de l'embrèvement dans sa rainure ; posées sur la
+  // marche du bas, ou descendues derrière elle jusqu'à son dessous. La dernière, sans marche palière, s'arrête
+  // sous le plancher d'arrivée, qui n'est pas rainuré.
   const risers: Riser[] = [];
   if (p.cm)
     for (let j = 1; j <= n; j++) {
       const ln = lines[j - 1]!;
-      const z1 = j * h - (j === n && mp ? mp.e : p.et);
-      risers.push({ z0: (j - 1) * h, z1, plan: region(cutOff(ln, p.deb), cutOff(ln, p.deb + p.ecm)) });
+      const emb = j === n && !mp ? 0 : p.cmEmb;
+      const z1 = j * h - (j === n && mp ? mp.e : p.et) + emb;
+      const z0 = (j - 1) * h - (p.cmPose === "derriere" && j > 1 ? p.et : 0);
+      risers.push({ z0, z1, plan: region(cutOff(ln, p.deb), cutOff(ln, p.deb + p.ecm)) });
     }
   if (treads.some((t) => t.gIn <= 1 || t.gOut <= 1)) {
     return {
@@ -897,6 +980,8 @@ export function compute(p: Params, suggest = true): ComputeResult {
       g,
       Lw,
       rn,
+      treads,
+      mp,
       hl,
       hlj,
       hljAuto,

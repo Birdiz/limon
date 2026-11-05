@@ -767,9 +767,52 @@
                 <input id="deb" type="number" inputmode="numeric" step="1" min="0" /><span>mm</span>
               </div>
             </div>
-            <div class="row" data-adv>
-              <label for="rn">Rayon du nez<small>arrondi dessus et dessous, 0 = vif</small></label>
+            <div class="row">
+              <label for="nez">Profil du nez</label
+              ><select id="nez">
+                <option value="arrondi">Arrondi</option>
+                <option value="quart">Quart-de-rond</option>
+                <option value="chanfrein">Chanfrein</option>
+                <option value="casse">Arêtes cassées</option>
+              </select>
+            </div>
+            <div class="row" data-adv data-rn>
+              <label for="rn"
+                ><span id="rnTxt">Rayon du nez</span><small id="rnSub">arrondi dessus et dessous, 0 = vif</small></label
+              >
               <div class="num"><input id="rn" type="number" inputmode="numeric" step="1" min="0" /><span>mm</span></div>
+            </div>
+            <div class="row">
+              <label for="rai">Rainures antidérapantes<small>près du nez</small></label
+              ><label class="check"><input type="checkbox" id="rai" /> avec</label>
+            </div>
+            <div class="row" data-adv data-rai>
+              <label for="raiN">Nombre de rainures</label>
+              <div class="num"><input id="raiN" type="number" inputmode="numeric" step="1" min="1" max="6" /></div>
+            </div>
+            <div class="row" data-adv data-rai>
+              <label for="raiL">Largeur des rainures</label>
+              <div class="num">
+                <input id="raiL" type="number" inputmode="numeric" step="1" min="2" /><span>mm</span>
+              </div>
+            </div>
+            <div class="row" data-adv data-rai>
+              <label for="raiP">Profondeur des rainures</label>
+              <div class="num">
+                <input id="raiP" type="number" inputmode="decimal" step="0.5" min="0.5" /><span>mm</span>
+              </div>
+            </div>
+            <div class="row" data-adv data-rai>
+              <label for="raiD">Première rainure<small>son axe, depuis le nez</small></label>
+              <div class="num">
+                <input id="raiD" type="number" inputmode="numeric" step="1" min="5" /><span>mm</span>
+              </div>
+            </div>
+            <div class="row" data-adv data-rai>
+              <label for="raiE">Entraxe des rainures</label>
+              <div class="num">
+                <input id="raiE" type="number" inputmode="numeric" step="1" min="5" /><span>mm</span>
+              </div>
             </div>
             <div class="row">
               <div>
@@ -778,6 +821,19 @@
               </div>
               <div class="num">
                 <input id="ecm" type="number" inputmode="numeric" step="1" min="10" /><span>mm</span>
+              </div>
+            </div>
+            <div class="row" data-cm>
+              <label for="cmPose">Pose de la contremarche<small>par rapport à la marche du bas</small></label
+              ><select id="cmPose">
+                <option value="sur">Sur la marche</option>
+                <option value="derriere">Derrière</option>
+              </select>
+            </div>
+            <div class="row" data-adv data-cm>
+              <label for="cmEmb">Embrèvement<small>rainure sous la marche du haut, 0 = sans</small></label>
+              <div class="num">
+                <input id="cmEmb" type="number" inputmode="numeric" step="1" min="0" /><span>mm</span>
               </div>
             </div>
             <div class="row">

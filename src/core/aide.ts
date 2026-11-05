@@ -1,4 +1,5 @@
 import { fmt } from "./format";
+import { ARETE_CASSEE } from "./nez";
 import { DEFAULTS, jourUnPoteau, type Params } from "./params";
 import { BOIS_SOUS_LOGEMENT } from "./pockets";
 import { GC } from "./railing";
@@ -164,11 +165,31 @@ export const AIDE: Partial<Record<AideKey, AideTexte>> = {
     texte: "Avancée du nez de marche devant la contremarche : le recouvrement d'une marche sur l'autre.",
     conseil: courant("deb"),
   },
+  nez: {
+    texte:
+      "Forme du nez de marche, à profiler à la toupie. Arrondi dessus et dessous (demi-rond au plus), quart-de-rond ou chanfrein sur l'arête du dessus, ou nez droit aux arêtes juste cassées.",
+    conseil: `Arêtes cassées : rayon de ${mm(ARETE_CASSEE)}.`,
+  },
   rn: {
     texte:
-      "Arrondi du nez de marche, dessus et dessous. 0 laisse l'arête vive ; au plus la moitié de l'épaisseur de marche, en demi-rond.",
+      "Rayon de l'arrondi du nez, ou côte du chanfrein à 45°. 0 laisse l'arête vive ; au plus la moitié de l'épaisseur de marche.",
     conseil: courant("rn"),
   },
+  rai: {
+    texte:
+      "Rainures parallèles au nez, sur le dessus de la marche, pour que le pied n'y glisse pas. Arrêtées avant les limons ; elles raccourcissent au jour sur les marches balancées.",
+  },
+  raiN: { texte: "Nombre de rainures sur chaque marche, en partant du nez.", conseil: `Courant : ${DEFAULTS.raiN}.` },
+  raiL: { texte: "Largeur de chaque rainure : celle de la fraise qui la taille.", conseil: courant("raiL") },
+  raiP: {
+    texte: "Profondeur des rainures dans le dessus de la marche, au plus le quart de son épaisseur.",
+    conseil: courant("raiP"),
+  },
+  raiD: {
+    texte: "Distance du nez à l'axe de la première rainure. Elle doit tomber derrière le profil du nez.",
+    conseil: courant("raiD"),
+  },
+  raiE: { texte: "Distance d'axe en axe entre deux rainures voisines.", conseil: courant("raiE") },
   cm: {
     texte: "Planches debout qui ferment l'escalier entre deux marches. Sans contremarches, l'escalier est ajouré.",
   },
@@ -176,6 +197,15 @@ export const AIDE: Partial<Record<AideKey, AideTexte>> = {
     texte:
       "Planches debout qui ferment l'escalier entre deux marches, et leur épaisseur. Sans contremarches, l'escalier est ajouré.",
     conseil: courant("ecm"),
+  },
+  cmPose: {
+    texte:
+      "Sur la marche du bas : la contremarche est posée sur l'arrière de la marche, qui passe dessous. Derrière la marche du bas : elle descend jusqu'à son dessous et la marche, plus courte, s'arrête contre elle (vissée dans son chant arrière).",
+  },
+  cmEmb: {
+    texte:
+      "Profondeur de la rainure de logement taillée sous la marche du haut, où entre le haut de la contremarche. 0 : contremarche simplement posée dessous.",
+    conseil: "Courant : 8\u00a0mm, au plus la moitié de l'épaisseur de marche.",
   },
   mp,
   mpP: mp,

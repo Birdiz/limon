@@ -1,6 +1,8 @@
 import { fmt } from "../core/format";
+import { nezTexte } from "../core/nez";
+import type { ProfilNez } from "../core/params";
 import { GC, postTenon } from "../core/railing";
-import { PERCAGE, TENON, type Newel, type Stair } from "../core/stair";
+import { PERCAGE, RAINURE_ARRET, TENON, type Newel, type Stair } from "../core/stair";
 import { treadsCSV } from "../core/sheet";
 import { buildCNC, type CNC } from "./build";
 import { cutListCSV } from "./cutlist";
@@ -27,6 +29,14 @@ const FORME_SLUG = {
 } as const;
 
 /** Section du poteau : carrée, ou largeur du jour × section pour le poteau unique du demi-tournant. */
+/** Bout avant des logements de marche, qui suit le profil du nez. */
+const BOUT_AVANT: Record<ProfilNez, string> = {
+  arrondi: "bout avant arrondi comme le nez (arcs)",
+  quart: "bout avant arrondi en haut comme le nez (arc)",
+  chanfrein: "bout avant chanfreiné en haut comme le nez",
+  casse: "bout avant aux arêtes cassées comme le nez (arcs)",
+};
+
 const section = (N: Newel) => `${Math.max(N.sx, N.sy)} x ${Math.min(N.sx, N.sy)}`;
 
 export function readme(R: Stair): string {
@@ -39,9 +49,20 @@ export function readme(R: Stair): string {
       "",
       "marches.dxf : chaque marche vue de dessus, nez en bas.",
       `  DECOUPE     contour de découpe, encastrement de ${p.enc} mm compris de chaque côté`,
-      "  CM_DESSUS   contremarche posée sur la marche (face supérieure)",
-      "  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)",
-      `  TEXTE       numéro de marche${R.paliers.length ? " (PALIER : plateau du palier, collé à chant, logé comme une marche)" : ""}${R.rn > 0 ? `, nez arrondi R${fmt(R.rn, 1)} dessus et dessous (à profiler, hors contour)` : ""}`,
+      ...(p.cmPose === "sur" ? ["  CM_DESSUS   contremarche posée sur la marche (face supérieure)"] : []),
+      ...(p.cm && p.cmEmb > 0
+        ? [
+            `  EMBREVEMENT rainure de logement de la contremarche sous le nez, à usiner sur la face inférieure :`,
+            `              profondeur ${fmt(p.cmEmb)} mm, largeur ${fmt(p.ecm + 2 * Math.max(0, p.jeu), 1)} mm (jeu compris), d'un bout à l'autre`,
+          ]
+        : ["  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)"]),
+      ...(p.rai
+        ? [
+            `  RAINURE     rainures antidérapantes sur le dessus : largeur ${fmt(p.raiL, 1)} mm, profondeur ${fmt(p.raiP, 1)} mm,`,
+            `              arrêtées à ${RAINURE_ARRET} mm des limons`,
+          ]
+        : []),
+      `  TEXTE       numéro de marche${R.paliers.length ? " (PALIER : plateau du palier, collé à chant, logé comme une marche)" : ""}${R.rn > 0 ? `, nez ${nezTexte(p.nez, R.rn)} (à profiler, hors contour)` : ""}`,
       ...(R.mp
         ? [
             `  La pièce MP est la marche palière : ${fmt(R.mp.e)} mm d'épaisseur, ${fmt(R.mp.depth)} mm de profondeur depuis le nez,`,
@@ -56,6 +77,18 @@ export function readme(R: Stair): string {
             "  DECOUPE     contour de découpe",
             "  TEXTE       numéro de contremarche ; dans le tournant, angle des bouts biais",
             "              et face la plus courte (parement = face vue depuis l'escalier, dos = face cachée)",
+            ...(p.cmPose === "derriere"
+              ? [
+                  "  Posées derrière la marche du bas, jusqu'à son dessous : la marche s'arrête contre le parement,",
+                  "  vissée dans son chant arrière à travers la contremarche (la première descend jusqu'au sol).",
+                ]
+              : []),
+            ...(p.cmEmb > 0
+              ? [
+                  `  Le haut entre de ${fmt(p.cmEmb)} mm dans la rainure de logement de la marche (EMBREVEMENT de marches.dxf)${R.mp ? "." : " ;"}`,
+                  ...(R.mp ? [] : ["  la dernière, sous le plancher d'arrivée, n'en a pas."]),
+                ]
+              : []),
             "",
           ]
         : []),
@@ -63,7 +96,7 @@ export function readme(R: Stair): string {
       "  couché dans le sens de la planche (cotes = plus petit rectangle de débit).",
       "  DECOUPE     contour du limon",
       `  DEFONCE     logements des marches et contremarches, profondeur ${p.enc} mm,`,
-      `              jeu de ${fmt(p.jeu, 1)} mm par côté compris${R.rn > 0 ? ", bout avant arrondi comme le nez (arcs)" : ""}`,
+      `              jeu de ${fmt(p.jeu, 1)} mm par côté compris${R.rn > 0 ? `, ${BOUT_AVANT[p.nez]}` : ""}`,
       ...(R.quart
         ? [
             `  TENON       tenon des limons de jour dans ${R.newels.length > 1 ? "les poteaux" : "le poteau"} : enlever les joues de part et d'autre`,

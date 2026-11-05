@@ -8,6 +8,8 @@ import {
   type GardeCorps,
   type NumericKey,
   type Pose,
+  type PoseCm,
+  type ProfilNez,
   type Tournant,
   type Params,
   TOURS,
@@ -44,6 +46,8 @@ export function writeInputs(p: Params): void {
   byId<HTMLSelectElement>("gcPose").value = p.gcPose;
   byId<HTMLSelectElement>("tForme").value = p.tForme;
   byId<HTMLSelectElement>("tournant").value = p.tournant;
+  byId<HTMLSelectElement>("nez").value = p.nez;
+  byId<HTMLSelectElement>("cmPose").value = p.cmPose;
 }
 
 /** Réglages lus dans le formulaire ; un champ vide ou invalide garde sa valeur précédente et figure dans missing.
@@ -66,6 +70,8 @@ export function readInputs(prev: Params): { params: Params; missing: NumericKey[
   p.gcPose = byId<HTMLSelectElement>("gcPose").value as Pose;
   p.tForme = byId<HTMLSelectElement>("tForme").value as FormeTremie;
   p.tournant = byId<HTMLSelectElement>("tournant").value as Tournant;
+  p.nez = byId<HTMLSelectElement>("nez").value as ProfilNez;
+  p.cmPose = byId<HTMLSelectElement>("cmPose").value as PoseCm;
   return { params: p, missing };
 }
 
@@ -99,6 +105,14 @@ export function showFieldErrors(errors: readonly InputError[]): void {
   });
 }
 
+/** Précision sous la cote du nez, selon son profil. */
+const RN_SUB: Record<ProfilNez, string> = {
+  arrondi: "arrondi dessus et dessous, 0 = vif",
+  quart: "arête du dessus, dessous vif, 0 = vif",
+  chanfrein: "à 45°, arête du dessus, 0 = vif",
+  casse: "",
+};
+
 /** Formes où se montre un élément [data-show] : droit, quart (qui tourne), quart1 (un tournant), u (deux tournants),
     dq (double quart, saisi par le côté fond), demi (demi-tournant, saisi par le jour). */
 const SHOW: Record<string, (f: Forme) => boolean> = {
@@ -123,6 +137,12 @@ export function syncInputs(p: Params, stair: Stair | null): void {
   byId<HTMLSelectElement>("tForme").querySelector<HTMLOptionElement>('option[value="L"]')!.textContent =
     TOURS[p.forme] === 2 ? "En U" : "En L";
   document.querySelectorAll<HTMLElement>("[data-mp]").forEach((el) => (el.hidden = !p.mp));
+  // Cote du nez : rayon ou côte du chanfrein ; les arêtes cassées ont leur rayon fixe.
+  document.querySelectorAll<HTMLElement>("[data-rn]").forEach((el) => (el.hidden = p.nez === "casse"));
+  byId("rnTxt").textContent = p.nez === "chanfrein" ? "Côte du chanfrein" : "Rayon du nez";
+  byId("rnSub").textContent = RN_SUB[p.nez];
+  document.querySelectorAll<HTMLElement>("[data-rai]").forEach((el) => (el.hidden = !p.rai));
+  document.querySelectorAll<HTMLElement>("[data-cm]").forEach((el) => (el.hidden = !p.cm));
   const pal = p.tournant === "palier";
   document.querySelectorAll<HTMLElement>("[data-bal]").forEach((el) => (el.hidden = pal));
   document.querySelectorAll<HTMLElement>("[data-pal]").forEach((el) => (el.hidden = !pal));

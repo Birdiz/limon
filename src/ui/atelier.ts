@@ -10,6 +10,7 @@ import {
   type AtelierKey,
 } from "../core/atelier";
 import { fmt } from "../core/format";
+import { NEZ_LABEL } from "../core/nez";
 import { DEFAULTS, sanitizeParams, type Params } from "../core/params";
 import { stamped } from "../core/project";
 import { ESSENCE_LABEL, GC_LABEL } from "../core/summary";
@@ -89,6 +90,8 @@ interface Champ {
   /** Case à cocher, avec le mot qui la suit. */
   coche?: string;
   opts?: readonly (readonly [string, string])[];
+  /** Unité affichée après le nombre ; mm par défaut. */
+  unite?: string;
 }
 
 const GROUPES: readonly { t: string; champs: readonly Champ[] }[] = [
@@ -98,9 +101,26 @@ const GROUPES: readonly { t: string; champs: readonly Champ[] }[] = [
       { k: "ess", l: "Essence", opts: Object.entries(ESSENCE_LABEL) },
       { k: "et", l: "Épaisseur de marche", min: 18 },
       { k: "deb", l: "Débord de nez", s: "recouvrement", min: 0, adv: true },
-      { k: "rn", l: "Rayon du nez", s: "arrondi dessus et dessous, 0 = vif", min: 0, adv: true },
+      { k: "nez", l: "Profil du nez", opts: Object.entries(NEZ_LABEL) },
+      { k: "rn", l: "Rayon du nez", s: "ou côte du chanfrein, 0 = vif", min: 0, adv: true },
+      { k: "rai", l: "Rainures antidérapantes", s: "près du nez", coche: "avec" },
+      { k: "raiN", l: "Nombre de rainures", min: 1, adv: true, unite: "" },
+      { k: "raiL", l: "Largeur des rainures", min: 2, adv: true },
+      { k: "raiP", l: "Profondeur des rainures", pas: 0.5, min: 0.5, adv: true },
+      { k: "raiD", l: "Première rainure", s: "son axe, depuis le nez", min: 5, adv: true },
+      { k: "raiE", l: "Entraxe des rainures", min: 5, adv: true },
       { k: "cm", l: "Contremarches", coche: "avec" },
       { k: "ecm", l: "Épaisseur de contremarche", min: 10 },
+      {
+        k: "cmPose",
+        l: "Pose de la contremarche",
+        s: "par rapport à la marche du bas",
+        opts: [
+          ["sur", "Sur la marche"],
+          ["derriere", "Derrière"],
+        ],
+      },
+      { k: "cmEmb", l: "Embrèvement", s: "rainure sous la marche du haut, 0 = sans", min: 0, adv: true },
       { k: "mp", l: "Marche palière", s: "logée dans les limons, à l'arrivée", coche: "avec" },
       { k: "mpP", l: "Profondeur de marche palière", s: "depuis le nez", pas: 10, min: 150 },
       { k: "mpE", l: "Épaisseur de marche palière", min: 18 },
@@ -159,7 +179,8 @@ function rowHTML(c: Champ): string {
   const mode = pas < 1 ? "" : ' inputmode="numeric"';
   return (
     `<div class="row"${adv}>${lab}<div class="num">` +
-    `<input id="${id}" type="number"${mode} step="${pas}" min="${c.min ?? 0}" /><span>mm</span>` +
+    `<input id="${id}" type="number"${mode} step="${pas}" min="${c.min ?? 0}" />` +
+    (c.unite === "" ? "" : `<span>${c.unite ?? "mm"}</span>`) +
     `</div></div>`
   );
 }

@@ -1,6 +1,7 @@
 /* Logements des limons : calculés avec l'escalier, pour proposer la hauteur de chaque limon,
    puis repris tels quels par l'export CNC. */
-import type { Params } from "./params";
+import { aretes, nezCote, type Arete } from "./nez";
+import { arriereMarche, type Params } from "./params";
 import { offsetPoly, polyCut, type Cut, type Poly } from "./poly";
 import type { NoseLine, PocketOf, Riser, StringerGeom, Tread } from "./stair-types";
 import { V, clamp, interp, type Pt, type Vertex } from "./vec";
@@ -70,13 +71,61 @@ export interface StringerPockets {
   need: number;
 }
 
-/* Le jeu agrandit chaque logement de chaque côté ; le bout avant d'un logement de marche suit le nez arrondi
-   (arc en bulge DXF, troisième coordonnée du sommet). */
+/** Bulge DXF d'un quart de cercle. */
+const QUART = Math.tan(Math.PI / 8);
+
+/** Bout avant d'un logement de marche, de (u0, hi) à (u0, lo) : il suit les arêtes du nez, agrandies du jeu
+    (arc en bulge DXF, troisième coordonnée du sommet ; chanfrein décalé du jeu). Sans le sommet de départ. */
+function noseEnd(
+  u0: number,
+  lo: number,
+  hi: number,
+  dessus: Arete,
+  dessous: Arete,
+  jeu: number,
+  room: number,
+): Vertex[] {
+  const cote = (a: Arete, max: number) =>
+    a.k === "arc" ? Math.min(a.r + jeu, max) : a.k === "chanfrein" ? Math.min(a.c + jeu * (2 - Math.SQRT2), max) : 0;
+  const both = dessus.k !== "vive" && dessous.k !== "vive",
+    h = hi - lo;
+  const t = cote(dessus, Math.min(both ? h / 2 : h, room)),
+    b = cote(dessous, Math.min(both ? h / 2 : h, room));
+  const top: Vertex[] =
+    t > 0.05
+      ? dessus.k === "arc"
+        ? [
+            [u0 + t, hi, QUART],
+            [u0, hi - t],
+          ]
+        : [
+            [u0 + t, hi],
+            [u0, hi - t],
+          ]
+      : [[u0, hi]];
+  const bot: Vertex[] =
+    b > 0.05
+      ? dessous.k === "arc"
+        ? [
+            [u0, lo + b, QUART],
+            [u0 + b, lo],
+          ]
+        : [
+            [u0, lo + b],
+            [u0 + b, lo],
+          ]
+      : [[u0, lo]];
+  // Arrondis qui se rejoignent (demi-rond) : un seul sommet au milieu du bout, qui porte l'arc du dessous.
+  if (h - t - b <= 0.01) return [top[0]!, bot[0]!.length > 2 ? [u0, hi - t, QUART] : [u0, hi - t], ...bot.slice(1)];
+  return [...top, ...bot];
+}
+
+/* Le jeu agrandit chaque logement de chaque côté ; le bout avant d'un logement de marche suit le profil du nez. */
 export function stringerPockets(R: StairGeom, p: Params, F: Frame): StringerPockets[] {
-  const bo = p.deb + (p.cm ? p.ecm : 0),
+  const bo = arriereMarche(p),
     jeu = Math.max(0, p.jeu),
-    rn = clamp(p.rn, 0, p.et / 2),
-    B = Math.tan(Math.PI / 8);
+    nez = aretes(p.nez, nezCote(p.nez, p.rn, p.et)),
+    profiled = nez.dessus.k !== "vive" || nez.dessous.k !== "vive";
   return R.stringers.map((sp) => {
     const uLo = sp.prof[0]![0],
       uHi = sp.prof[sp.prof.length - 1]![0];
@@ -110,22 +159,11 @@ export function stringerPockets(R: StairGeom, p: Params, F: Frame): StringerPock
       const lo = z0 > 0.5 ? z0 - jeu : z0,
         hi = z1 + jeu;
       // Le nez est au bout bas du logement, s'il tombe dans cette pièce de limon.
-      const r = nose && rn > 0 && a - jeu >= uLo - 1e-6 ? Math.min(rn + jeu, (hi - lo) / 2, u1 - u0) : 0;
+      const shaped = nose && profiled && a - jeu >= uLo - 1e-6;
       pocketOf.push(of);
       pockets.push(
-        r > 0.05
-          ? [
-              [u1, lo],
-              [u1, hi],
-              [u0 + r, hi, B],
-              ...(hi - lo - 2 * r > 0.01
-                ? ([
-                    [u0, hi - r],
-                    [u0, lo + r, B],
-                  ] as Vertex[])
-                : ([[u0, hi - r, B]] as Vertex[])),
-              [u0 + r, lo],
-            ]
+        shaped
+          ? [[u1, lo], [u1, hi], ...noseEnd(u0, lo, hi, nez.dessus, nez.dessous, jeu, u1 - u0)]
           : [
               [u0, lo],
               [u1, lo],

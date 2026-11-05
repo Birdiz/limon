@@ -19,8 +19,17 @@ export const ATELIER_KEYS = [
   "et",
   "deb",
   "rn",
+  "nez",
+  "rai",
+  "raiN",
+  "raiL",
+  "raiP",
+  "raiD",
+  "raiE",
   "cm",
   "ecm",
+  "cmPose",
+  "cmEmb",
   "el",
   "hl",
   "hljAuto",
@@ -62,9 +71,7 @@ export interface Atelier {
 
 /** Les réglages d'atelier d'un escalier. */
 export function atelierDefauts(p: Params): AtelierDefauts {
-  const { ess, et, deb, rn, cm, ecm, el, hl, hljAuto, ps, enc, jeu, pL, pW, gc, gcPose, mcL, mcH, bs, mp, mpP, mpE } =
-    p;
-  return { ess, et, deb, rn, cm, ecm, el, hl, hljAuto, ps, enc, jeu, pL, pW, gc, gcPose, mcL, mcH, bs, mp, mpP, mpE };
+  return Object.fromEntries(ATELIER_KEYS.map((k) => [k, p[k]])) as AtelierDefauts;
 }
 
 /** Réglages de départ d'un nouvel escalier : ceux de l'atelier, le reste comme l'exemple. */

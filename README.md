@@ -12,11 +12,11 @@ Calcul et dessin d'escaliers en bois pour menuisiers, sur le web (https://quart-
 - **Lien de projet et fiche PDF** : les réglages qui diffèrent de l'exemple vont dans l'adresse de la page (après le `#`) ; la fiche PDF téléchargée réunit les cotes, les contrôles, le plan, la vue 3D, la fiche des marches et la liste de débit.
 - **Plan et 3D** : plan coté en SVG, vue 3D Three.js avec limons, poteau, marches et contremarches.
 - **Export CNC** : zip contenant `marches.dxf`, `limons.dxf`, `contremarches.dxf` (si l'escalier en a), `poteau.dxf` (escalier tournant), `garde-corps.dxf` (s'il y en a un), la fiche des marches en CSV et une notice.
-  - Nez arrondi et jeu d'assemblage réglables ; le limon de jour d'un escalier tournant a sa propre hauteur, proposée d'après ses logements.
+  - Finitions des marches : profil du nez (arrondi, quart-de-rond, chanfrein, arêtes cassées), rainures antidérapantes, contremarche posée sur la marche ou derrière elle, embrevée ou non ; jeu d'assemblage réglable ; le limon de jour d'un escalier tournant a sa propre hauteur, proposée d'après ses logements.
   - Escalier tournant : poteau carré affleurant les limons de jour côté marches (demi-tournant : poteau unique de la largeur du jour quand le jour est étroit, sinon deux), limons de jour assemblés à tenon et mortaise dans le poteau, limons de mur en about vissé ou boulonné dans l'angle.
   - Garde-corps côté jour (limon droit pour l'escalier droit), au choix : balustres ou montants et lisses rampantes, posés dans le chant du limon ou à l'anglaise. Main courante droite à 900 mm au moins au-dessus des nez, écart libre de 110 mm au plus (NF P01-012), assemblée dans le poteau en escalier tournant. Export `garde-corps.dxf`, mortaises dans le chant des limons ou perçages pour la pose à l'anglaise.
   - DXF R12 en millimètres.
-  - Calques `DECOUPE` (contours), `DEFONCE` (logements), `CM_DESSUS` et `CM_DESSOUS` (traits des contremarches), `TEXTE` ; en escalier tournant, `TENON`, `MORTAISE` et `PERCAGE`.
+  - Calques `DECOUPE` (contours), `DEFONCE` (logements), `CM_DESSUS` et `CM_DESSOUS` (traits des contremarches), `TEXTE` ; en escalier tournant, `TENON`, `MORTAISE` et `PERCAGE` ; selon les finitions, `RAINURE` (rainures antidérapantes) et `EMBREVEMENT` (rainure de logement de la contremarche sous la marche).
 
 ## Organisation
 

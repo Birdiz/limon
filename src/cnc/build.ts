@@ -6,7 +6,8 @@
 import { fmt } from "../core/format";
 import { cncFrame, type Section } from "../core/pockets";
 import { polyPath, type Cut } from "../core/poly";
-import { isLeft } from "../core/params";
+import { nezDXF } from "../core/nez";
+import { arriereMarche, isLeft } from "../core/params";
 import { GC, postTenon } from "../core/railing";
 import { PERCAGE, type NewelFace, type NoseLine, type Stair } from "../core/stair";
 import { layBoard, stringerOutline } from "../core/stringer";
@@ -91,7 +92,7 @@ export function buildCNC(R: Stair): CNC {
     mx = left ? -1 : 1,
     M = (q: Pt): Pt => [mx * q[0], q[1]];
   const e = p.enc,
-    bo = p.deb + (p.cm ? p.ecm : 0);
+    bo = arriereMarche(p);
   const { inOff, outOff, at, riserBand } = cncFrame(R, p);
 
   // Marches
@@ -136,27 +137,34 @@ export function buildCNC(R: Stair): CNC {
     const w = b.x1 - b.x0,
       d = b.y1 - b.y0;
     treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + d / 2, h: 50, s: label, center: true });
-    treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + 18, h: 22, s: nose, center: true });
+    // Nom du nez près du nez, ou derrière les rainures quand il y en a.
+    const ny = p.rai ? p.raiD + (Math.round(p.raiN) - 1) * p.raiE + p.raiL / 2 + 20 : 18;
+    treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + ny, h: 22, s: nose, center: true });
     cx += w + gap;
     rowH = Math.max(rowH, d);
     return { L: w, l: d };
   };
+  // Contremarche sous le nez : sa place vue par transparence, ou la rainure de logement de son embrèvement,
+  // élargie du jeu et menée d'un bout à l'autre de la marche (ses bouts entrent dans les limons avec elle).
+  const jeu = Math.max(0, p.jeu);
+  const under = (ln: NoseLine): [Layer, Pt[]] => {
+    if (!(p.cmEmb > 0)) return ["CM_DESSOUS", riserBand(ln).quad];
+    const a = at(ln, p.deb - jeu),
+      b = at(ln, p.deb + p.ecm + jeu);
+    return ["EMBREVEMENT", [a.inD.p, a.outD.p, b.outD.p, b.inD.p]];
+  };
+  const grooves = (g: readonly Pt[][]): [Layer, Pt[]][] => g.map((q) => ["RAINURE", q]);
+  const nose = nezDXF(p.nez, R.rn);
   R.treads.forEach((t) => {
     const lnF = R.lines[t.j - 1]!,
       lnB = R.lines[t.j]!;
-    const marks: [Layer, Pt[]][] = p.cm
-      ? [
-          ["CM_DESSOUS", riserBand(lnF).quad],
-          ["CM_DESSUS", riserBand(lnB).quad],
-        ]
-      : [];
-    const part = tread(
-      lnF,
-      at(lnB, bo),
-      marks,
-      t.palier ? "PALIER" : `M${t.j}`,
-      R.rn > 0 ? `nez R${fmt(R.rn, 1)}` : "nez",
-    );
+    // Contremarche du haut posée sur la marche ; derrière elle, la marche s'arrête contre son parement.
+    const marks: [Layer, Pt[]][] = [
+      ...(p.cm ? [under(lnF)] : []),
+      ...(p.cm && p.cmPose === "sur" ? [["CM_DESSUS", riserBand(lnB).quad] as [Layer, Pt[]]] : []),
+      ...grooves(t.grooves),
+    ];
+    const part = tread(lnF, at(lnB, bo), marks, t.palier ? "PALIER" : `M${t.j}`, nose);
     treadParts.push({ j: t.j, ...part, ...(t.palier ? { palier: true as const } : {}) });
   });
   // Marche palière : du dernier nez jusqu'au bout des limons, encastrée comme les marches.
@@ -168,9 +176,9 @@ export function buildCNC(R: Stair): CNC {
         ...tread(
           lnA,
           at(lnA, mp.depth),
-          p.cm ? [["CM_DESSOUS", riserBand(lnA).quad]] : [],
+          [...(p.cm ? [under(lnA)] : []), ...grooves(mp.grooves)],
           "MP",
-          `marche paliere ep. ${fmt(mp.e)} - ${mp.rn > 0 ? `nez R${fmt(mp.rn, 1)}` : "nez"}`,
+          `marche paliere ep. ${fmt(mp.e)} - ${nezDXF(p.nez, mp.rn)}`,
         ),
       }
     : null;

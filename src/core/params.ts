@@ -8,6 +8,11 @@ export type Pose = "chant" | "anglaise";
 export type FormeTremie = "rect" | "L";
 /** Passage des tournants : marches balancées, ou palier (le même pour tous les tournants). */
 export type Tournant = "balance" | "palier";
+/** Profil du nez de marche : arrondi dessus et dessous (demi-rond au plus), quart-de-rond ou chanfrein sur l'arête
+    du dessus (dessous vif), ou droit aux arêtes cassées. */
+export type ProfilNez = "arrondi" | "quart" | "chanfrein" | "casse";
+/** Pose de la contremarche : sur la marche du bas, ou derrière elle (vissée dans son chant arrière). */
+export type PoseCm = "sur" | "derriere";
 
 /** Réglages saisis par l'utilisateur. Longueurs en millimètres. */
 export interface Params {
@@ -42,12 +47,30 @@ export interface Params {
   et: number;
   /** Débord de nez. */
   deb: number;
-  /** Rayon du nez, dessus et dessous ; 0 = vif. */
+  /** Rayon du nez (côte du chanfrein pour ce profil) ; 0 = vif. Sans effet aux arêtes cassées. */
   rn: number;
+  /** Profil du nez. */
+  nez: ProfilNez;
+  /** Rainures antidérapantes près du nez. */
+  rai: boolean;
+  /** Nombre de rainures. */
+  raiN: number;
+  /** Largeur d'une rainure. */
+  raiL: number;
+  /** Profondeur des rainures. */
+  raiP: number;
+  /** Distance du nez à l'axe de la première rainure. */
+  raiD: number;
+  /** Entraxe des rainures. */
+  raiE: number;
   /** Avec contremarches. */
   cm: boolean;
   /** Épaisseur de contremarche. */
   ecm: number;
+  /** Pose de la contremarche par rapport à la marche du bas. */
+  cmPose: PoseCm;
+  /** Embrèvement de la contremarche sous la marche du haut, profondeur de la rainure de logement ; 0 = sans. */
+  cmEmb: number;
   /** Épaisseur de limon. */
   el: number;
   /** Hauteur de limon (limon de mur en quart tournant). */
@@ -116,8 +139,17 @@ export const DEFAULTS: Readonly<Params> = {
   et: 40,
   deb: 30,
   rn: 10,
+  nez: "arrondi",
+  rai: false,
+  raiN: 2,
+  raiL: 6,
+  raiP: 3,
+  raiD: 25,
+  raiE: 15,
   cm: true,
   ecm: 22,
+  cmPose: "sur",
+  cmEmb: 0,
   el: 45,
   hl: 340,
   hljAuto: true,
@@ -197,6 +229,8 @@ export const GARDE_CORPS: readonly GardeCorps[] = ["aucun", "balustres", "lisses
 export const POSES: readonly Pose[] = ["chant", "anglaise"];
 export const FORMES_TREMIE: readonly FormeTremie[] = ["rect", "L"];
 export const TOURNANTS: readonly Tournant[] = ["balance", "palier"];
+export const PROFILS_NEZ: readonly ProfilNez[] = ["arrondi", "quart", "chanfrein", "casse"];
+export const POSES_CM: readonly PoseCm[] = ["sur", "derriere"];
 
 /** Masse volumique moyenne à 12 % d'humidité, en kg/m³ (ordre de grandeur pour le poids). */
 export const DENSITE: Record<Essence, number> = { chene: 710, hetre: 720, frene: 700, sapin: 450, noyer: 650 };
@@ -216,7 +250,13 @@ export const NUMERIC_KEYS = [
   "et",
   "deb",
   "rn",
+  "raiN",
+  "raiL",
+  "raiP",
+  "raiD",
+  "raiE",
   "ecm",
+  "cmEmb",
   "el",
   "hl",
   "hlj",
@@ -248,9 +288,27 @@ export const BOOLEAN_KEYS = [
   "nAuto",
   "hljAuto",
   "cm",
+  "rai",
   "tAuto",
   "mp",
 ] as const satisfies readonly (keyof Params)[];
+
+/** Réglages choisis dans une liste, écrits tels quels dans un lien de projet. */
+export const TEXT_KEYS = [
+  "forme",
+  "ess",
+  "gc",
+  "gcPose",
+  "tForme",
+  "tournant",
+  "nez",
+  "cmPose",
+] as const satisfies readonly (keyof Params)[];
+
+/** Recul de la coupe arrière d'une marche derrière la ligne de nez suivante : jusqu'au dos de la contremarche
+    posée dessus, ou jusqu'à son parement quand elle descend derrière la marche. */
+export const arriereMarche = (p: Pick<Params, "deb" | "cm" | "ecm" | "cmPose">): number =>
+  p.deb + (p.cm && p.cmPose === "sur" ? p.ecm : 0);
 
 /** Fusionne des réglages enregistrés (non fiables) avec les valeurs par défaut, champ par champ. */
 export function sanitizeParams(raw: unknown): Params {
@@ -263,6 +321,8 @@ export function sanitizeParams(raw: unknown): Params {
   if (POSES.includes(r.gcPose as Pose)) p.gcPose = r.gcPose as Pose;
   if (FORMES_TREMIE.includes(r.tForme as FormeTremie)) p.tForme = r.tForme as FormeTremie;
   if (TOURNANTS.includes(r.tournant as Tournant)) p.tournant = r.tournant as Tournant;
+  if (PROFILS_NEZ.includes(r.nez as ProfilNez)) p.nez = r.nez as ProfilNez;
+  if (POSES_CM.includes(r.cmPose as PoseCm)) p.cmPose = r.cmPose as PoseCm;
   for (const k of NUMERIC_KEYS) if (typeof r[k] === "number" && Number.isFinite(r[k])) p[k] = r[k];
   for (const k of BOOLEAN_KEYS) if (typeof r[k] === "boolean") p[k] = r[k];
   return p;
