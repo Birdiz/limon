@@ -21,6 +21,7 @@ import {
   type Appareil,
   type Passkey,
   type Refus,
+  type Statut,
 } from "../src/core/account";
 import {
   mergeAtelier,
@@ -33,9 +34,19 @@ import {
 import { MAX_OCTETS, sanitizeDevis } from "../src/core/devis";
 import type { Entreprise, Tarifs } from "../src/core/tarifs";
 import { avecRemis, fromNewerVersion, isProjectId, sanitizeProject, schemaOf, type Project } from "../src/core/project";
+import {
+  DROITS,
+  ESSAI_RESTE_MIN,
+  ABONNEMENT_OUVERT,
+  isOffre,
+  isRythme,
+  niveauDe,
+  statutReel,
+} from "../src/core/niveaux";
 import { sansControles } from "../src/core/texte";
 import type { Db } from "./db";
 import type { SendAdresseChangee, SendCode, SendPasskeyAjoutee } from "./mail";
+import type { Paiements } from "./stripe";
 
 export interface ApiConfig {
   db: Db;
@@ -52,9 +63,13 @@ export interface ApiConfig {
   limites?: Limites;
   /** Avis à l'adresse du compte, une passkey ajoutée. */
   sendPasskeyAjoutee: SendPasskeyAjoutee;
+  /** Stripe ; sans lui, le paiement en ligne reste fermé. */
+  paiements?: Paiements;
+  /** Les services du serveur suivent le niveau du compte ; `ABONNEMENT_OUVERT` sinon. */
+  limitesActives?: boolean;
 }
 
-type Env = { Variables: { compte: string; session: string } };
+type Env = { Variables: { compte: string; session: string; droits: Pick<Compte, "statut" | "droitsJusquA"> } };
 
 const COOKIE = "limon-session";
 /** Une session sans usage pendant cette durée se ferme ; un usage, une fois par jour au plus, la prolonge d'autant. */
@@ -120,6 +135,11 @@ const TROP_LOURD = "Il est trop lourd pour votre compte, avec les versions remis
 const OCCUPE = "Il a changé sur un autre appareil au même moment : il repartira au prochain chargement de la page.";
 const PAS_ARRIVE =
   "Cet escalier n'a pas encore rejoint votre compte, qui donne les numéros. Réessayez dans un instant : le brouillon reste enregistré.";
+
+const PAIEMENT_FERME = "Le paiement en ligne n'est pas encore ouvert.";
+const PAIEMENT_EN_PANNE = "Le paiement ne répond pas pour l'instant : rien n'a été prélevé. Réessayez dans un instant.";
+const ATELIER_REFUSE = "Les réglages de l'atelier viennent avec l'abonnement : ils restent gardés sur cet appareil.";
+const DEVIS_REFUSE = "Le devis vient avec l'offre « Pour vendre ». Ce qui est déjà écrit reste gardé.";
 
 const pese = (p: Project) => Buffer.byteLength(JSON.stringify(p));
 
@@ -218,6 +238,15 @@ export const balayeLimites = (limites: Limites) => Object.values(limites).forEac
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const ms = (d: unknown) => (d ? new Date(d as string).getTime() : null);
+/** Ce que la page sait du compte, depuis sa ligne en base. */
+const COMPTE_COLONNES = "id, email, statut, droits_jusqu_a";
+type CompteLigne = { id: string; email: string; statut: Statut; droits_jusqu_a: Date | null };
+const compteDe = (r: CompteLigne): Compte => ({
+  id: r.id,
+  email: r.email,
+  statut: r.statut,
+  droitsJusquA: ms(r.droits_jusqu_a),
+});
 /** Moyens de joindre une passkey, en base séparés par des virgules. */
 const transportsOf = (p: { transports: string }) => (p.transports ? p.transports.split(",") : []);
 const err = (c: Context, status: ContentfulStatusCode, erreur: string) => c.json({ erreur }, status);
@@ -258,6 +287,31 @@ export function api(cfg: ApiConfig): Hono<Env> {
 
   const app = new Hono<Env>().basePath("/api");
 
+  /**
+   * Nouvelles de Stripe, avant le contrôle de l'origine : la seule route qui n'en a pas, la signature en tient lieu. Le
+   * corps se lit brut, la signature porte sur lui. L'événement et son effet s'écrivent ensemble : rejoué, il ne change
+   * rien, et un échec le laisse à redire par Stripe. Les événements n'arrivent pas toujours dans l'ordre : un plus ancien
+   * que le dernier pris en compte, ou la fin d'un autre abonnement que celui du compte, n'y touche pas.
+   */
+  app.post("/stripe", bodyLimit({ maxSize: 4 << 20, onError: (c) => err(c, 413, "Envoi trop gros.") }), async (c) => {
+    if (!cfg.paiements) return err(c, 503, PAIEMENT_FERME);
+    const ev = cfg.paiements.evenement(await c.req.text(), c.req.header("stripe-signature"));
+    if (!ev) return err(c, 400, "Signature refusée.");
+    if (ev.etat) {
+      const e = ev.etat;
+      await db.query(
+        `with nouveau as (insert into paiements_evenements (id) values ($1) on conflict do nothing returning id)
+           update comptes set statut = $3, droits_jusqu_a = to_timestamp($4::bigint / 1000.0),
+             abonnement = case when $3 = 'expire' then null else $5 end, resilie = $6, abonnement_evenement = $7
+           where client_stripe = $2 and statut <> 'testeur' and exists (select 1 from nouveau)
+             and coalesce(abonnement_evenement, 0) <= $7
+             and ($3 <> 'expire' or abonnement is null or abonnement = $5)`,
+        [ev.id, e.client, e.statut, e.droitsJusquA, e.abonnement, e.resilie, e.date],
+      );
+    }
+    return c.json({ recu: true });
+  });
+
   app.use(async (c, next) => {
     // Une requête qui modifie quelque chose doit venir du site lui-même.
     if (c.req.method !== "GET" && c.req.method !== "HEAD" && c.req.header("origin") !== origin)
@@ -289,8 +343,8 @@ export function api(cfg: ApiConfig): Hono<Env> {
     setCookie(c, COOKIE, token, { httpOnly: true, secure, sameSite: "Lax", path: "/api", maxAge });
   }
   async function compteOf(id: string): Promise<Compte | null> {
-    const [r] = await db.query<Compte>("select id, email, statut from comptes where id = $1", [id]);
-    return r ?? null;
+    const [r] = await db.query<CompteLigne>(`select ${COMPTE_COLONNES} from comptes where id = $1`, [id]);
+    return r ? compteDe(r) : null;
   }
 
   /** Session valable, prolongée au plus une fois par jour jusqu'à son plafond, avec la dernière activité du compte. */
@@ -298,9 +352,9 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const token = getCookie(c, COOKIE);
     const hash = token && sha256(token);
     const [s] = hash
-      ? await db.query<{ compte: string; renew: boolean; revu: boolean }>(
+      ? await db.query<{ compte: string; renew: boolean; revu: boolean; statut: Statut; droits_jusqu_a: Date | null }>(
           `select s.compte, s.utilise < now() - interval '1 day' as renew,
-             c.vu < now() - interval '1 day' as revu
+             c.vu < now() - interval '1 day' as revu, c.statut, c.droits_jusqu_a
            from sessions s join comptes c on c.id = s.compte where s.hash = $1 and s.expire > now()`,
           [hash],
         )
@@ -318,8 +372,21 @@ export function api(cfg: ApiConfig): Hono<Env> {
     }
     c.set("compte", s.compte);
     c.set("session", hash!);
+    const droitsJusquA = ms(s.droits_jusqu_a);
+    c.set("droits", { statut: s.statut, droitsJusquA });
     await next();
+    // Sans requête de plus : la page voit le statut à chaque échange.
+    c.header("X-Statut", `${s.statut};${droitsJusquA ?? ""}`);
   });
+
+  /** Service du serveur réservé à un niveau. 402 : la page y reconnaît l'offre, ni une panne ni le réseau. */
+  const limitesActives = cfg.limitesActives ?? ABONNEMENT_OUVERT;
+  const exige = (droit: "atelier" | "devis", refus: string) =>
+    createMiddleware<Env>(async (c, next) => {
+      if (limitesActives && !DROITS[niveauDe(statutReel(c.get("droits"), Date.now()))][droit])
+        return err(c, 402, refus);
+      await next();
+    });
 
   /**
    * Geste qui engage le compte, après `auth` : une session ne suffit pas, il faut une connexion ou une preuve récente.
@@ -409,13 +476,16 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const [pris] = await db.query("delete from codes where email = $1 and hash = $2 returning id", [email, bon.hash]);
     if (!pris) return err(c, 400, "Ce code a expiré : demandez-en un nouveau.");
     await db.query("delete from codes where email = $1", [email]);
-    await db.query("insert into comptes (id, email) values ($1, $2) on conflict (email) do nothing", [
-      randomUUID(),
-      email,
-    ]);
-    const [compte] = await db.query<Compte>("select id, email, statut from comptes where email = $1", [email]);
+    // 30 jours d'essai dès que le paiement est ouvert ; avant, un compte naît testeur : le compteur ne tourne pas pour rien.
+    await db.query(
+      `insert into comptes (id, email, statut, droits_jusqu_a)
+       values ($1, $2, ${cfg.paiements ? "'essai', now() + interval '30 days'" : "'testeur', null"})
+       on conflict (email) do nothing`,
+      [randomUUID(), email],
+    );
+    const [compte] = await db.query<CompteLigne>(`select ${COMPTE_COLONNES} from comptes where email = $1`, [email]);
     await startSession(c, compte!.id, b.appareil);
-    return c.json(compte!);
+    return c.json(compteDe(compte!));
   });
 
   /* ---------- Passkeys ---------- */
@@ -689,7 +759,12 @@ export function api(cfg: ApiConfig): Hono<Env> {
     const ancienne = (await compteOf(compte))!.email;
     try {
       // Sans lecture avant : l'unicité de la base tranche, même si un compte se crée à cette adresse au même instant.
-      await db.query("update comptes set email = $2, essai = null where id = $1", [compte, email]);
+      const [r] = await db.query<{ client_stripe: string | null }>(
+        "update comptes set email = $2, essai = null where id = $1 returning client_stripe",
+        [compte, email],
+      );
+      // Les factures suivent l'adresse ; un échec n'y revient pas.
+      if (r?.client_stripe) await cfg.paiements?.changerAdresse(r.client_stripe, email).catch(console.error);
     } catch (e) {
       if ((e as { code?: unknown } | null)?.code !== "23505") throw e;
       return err(c, 409, "Cette adresse a déjà son propre compte. Votre compte garde son adresse actuelle.");
@@ -719,7 +794,18 @@ export function api(cfg: ApiConfig): Hono<Env> {
       utilise: ms(r.utilise)!,
       actuel: r.actuel,
     }));
-    return { ...compte, passkeys, appareils };
+    const [a] = await db.query<{ client_stripe: string | null; resilie: boolean }>(
+      "select client_stripe, resilie from comptes where id = $1",
+      [id],
+    );
+    return {
+      ...compte,
+      passkeys,
+      appareils,
+      paiement: !!cfg.paiements,
+      gestion: !!a?.client_stripe,
+      resilie: !!a?.resilie,
+    };
   }
 
   app.get("/compte", auth, async (c) => c.json(await detail(c)));
@@ -740,7 +826,67 @@ export function api(cfg: ApiConfig): Hono<Env> {
     return c.json(await detail(c));
   });
 
+  /* ---------- Abonnement ---------- */
+
+  /** Adresse de la page de paiement de Stripe, pour une offre. */
+  app.post("/abonnement/paiement", auth, preuve, debit, async (c) => {
+    const p = cfg.paiements;
+    if (!p) return err(c, 503, PAIEMENT_FERME);
+    const { offre, rythme } = await body(c);
+    if (!isOffre(offre) || !isRythme(rythme)) return err(c, 400, "Demande mal formée.");
+    const id = c.get("compte");
+    const [r] = await db.query<{ email: string; client_stripe: string | null }>(
+      "select email, client_stripe from comptes where id = $1",
+      [id],
+    );
+    const droits = c.get("droits");
+    const statut = statutReel(droits, Date.now());
+    if (statut === "testeur") return err(c, 409, "Votre compte a déjà tout, sans limite de durée.");
+    if (statut === "abonne" || statut === "premium")
+      return err(c, 409, "Vous êtes déjà abonné : « Gérer mon abonnement » permet de changer d'offre.");
+    const reste = droits.droitsJusquA && statut === "essai" ? droits.droitsJusquA - Date.now() : 0;
+    try {
+      const client = r!.client_stripe ?? (await p.creerClient(id, r!.email));
+      if (!r!.client_stripe) await db.query("update comptes set client_stripe = $2 where id = $1", [id, client]);
+      const finEssai = reste > ESSAI_RESTE_MIN ? droits.droitsJusquA! : null;
+      return c.json({ url: await p.ouvrirPaiement(client, offre, rythme, finEssai) });
+    } catch (e) {
+      console.error(e);
+      return err(c, 502, PAIEMENT_EN_PANNE);
+    }
+  });
+
+  /** Adresse de la page de Stripe où changer d'offre ou de carte, retrouver ses factures, arrêter. */
+  app.post("/abonnement/gestion", auth, preuve, debit, async (c) => {
+    const p = cfg.paiements;
+    if (!p) return err(c, 503, PAIEMENT_FERME);
+    const [r] = await db.query<{ client_stripe: string | null }>("select client_stripe from comptes where id = $1", [
+      c.get("compte"),
+    ]);
+    if (!r?.client_stripe) return err(c, 409, "Vous n'avez pas encore d'abonnement.");
+    try {
+      return c.json({ url: await p.ouvrirGestion(r.client_stripe) });
+    } catch (e) {
+      console.error(e);
+      return err(c, 502, PAIEMENT_EN_PANNE);
+    }
+  });
+
   app.delete("/compte", auth, preuve, async (c) => {
+    // L'abonnement s'arrête d'abord : un compte parti ne doit plus être prélevé.
+    const [r] = await db.query<{ client_stripe: string | null }>("select client_stripe from comptes where id = $1", [
+      c.get("compte"),
+    ]);
+    if (r?.client_stripe) {
+      const arret = "Votre abonnement n'a pas pu être arrêté : rien n'est supprimé. Réessayez dans un instant.";
+      if (!cfg.paiements) return err(c, 503, arret);
+      try {
+        await cfg.paiements.effacerClient(r.client_stripe);
+      } catch (e) {
+        console.error(e);
+        return err(c, 502, arret);
+      }
+    }
     await db.query("delete from comptes where id = $1", [c.get("compte")]);
     deleteCookie(c, COOKIE, { path: "/api" });
     return c.body(null, 204);
@@ -750,7 +896,9 @@ export function api(cfg: ApiConfig): Hono<Env> {
   app.get("/compte/donnees", auth, async (c) => {
     const id = c.get("compte");
     const [compte] = await db.query(
-      "select id, email, cree, statut, droits_jusqu_a, vu, averti, essai from comptes where id = $1",
+      `select id, email, cree, statut, droits_jusqu_a, vu, averti, essai,
+         client_stripe, abonnement, abonnement_evenement, resilie
+       from comptes where id = $1`,
       [id],
     );
     const passkeys = await db.query(
@@ -933,7 +1081,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
   app.get("/atelier", auth, async (c) => c.json(await atelierOf(c.get("compte"))));
 
   /** Le profil reçu ne remplace que plus ancien que lui, partie par partie ; renvoie le résultat. */
-  app.put("/atelier", auth, debit, async (c) => {
+  app.put("/atelier", auth, exige("atelier", ATELIER_REFUSE), debit, async (c) => {
     const raw = (await body(c)).atelier;
     const a = sanitizeAtelier(raw);
     if (!a) return err(c, 400, "Envoi mal formé.");
@@ -981,7 +1129,7 @@ export function api(cfg: ApiConfig): Hono<Env> {
    * sans trou. Redemandé (nouvelle version, envoi répété après une coupure), c'est le même, même l'escalier supprimé
    * depuis. Un premier numéro demande que l'escalier soit dans le compte : la page l'y envoie avant de le demander.
    */
-  app.post("/devis/numero", auth, debit, async (c) => {
+  app.post("/devis/numero", auth, exige("devis", DEVIS_REFUSE), debit, async (c) => {
     const projet = (await body(c)).projet;
     if (!isProjectId(projet)) return err(c, 400, "Demande mal formée.");
     const compte = c.get("compte");

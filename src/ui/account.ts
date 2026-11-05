@@ -1,5 +1,6 @@
 import type { Appareil, Compte, CompteDetail } from "../core/account";
 import { day } from "../core/format";
+import { PRIX, isOffre, offreVue, prixEuros, statutReel, type Rythme } from "../core/niveaux";
 import type { Project } from "../core/project";
 import { ApiError, NotSignedIn, ProofNeeded, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
@@ -100,6 +101,7 @@ export class AccountPanel {
   /** Le geste qui demande une preuve, et la vue où il attend. */
   private pending: { action: () => Promise<void>; from: View } | null = null;
   private newEmail = "";
+  private rythme: Rythme = "mois";
 
   constructor(
     private store: SyncStore,
@@ -157,6 +159,16 @@ export class AccountPanel {
     });
     byId("acProofGo").addEventListener("click", () => void this.resume());
     byId("acProofNo").addEventListener("click", () => this.leaveProof());
+    byId("acMois").addEventListener("click", () => this.showPrices("mois"));
+    byId("acAn").addEventListener("click", () => this.showPrices("an"));
+    byId("acOffres").addEventListener("click", (e) => {
+      const offre = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-choix]")?.dataset.choix;
+      if (isOffre(offre)) void this.run(async () => location.assign(await this.api.checkout(offre, this.rythme)));
+    });
+    byId("acGerer").addEventListener(
+      "click",
+      () => void this.run(async () => location.assign(await this.api.billing())),
+    );
     byId("acLogout").addEventListener("click", () => void this.run(() => this.logout()));
     byId("acDelete").addEventListener("click", () => void this.run(() => this.askDelete()));
     byId("acDeleteYes").addEventListener("click", () => void this.run(() => this.deleteAccount()));
@@ -513,6 +525,42 @@ export class AccountPanel {
     byId("acAddKey").hidden = !hasWebAuthn();
     byId("acDevices").innerHTML = d.appareils.map(deviceItem).join("");
     byId("acCloseOthers").hidden = !d.appareils.some((a) => !a.actuel);
+    this.showOffer(d);
+  }
+
+  /** Mon offre : rien tant que le paiement en ligne n'est pas ouvert. */
+  private showOffer(d: CompteDetail): void {
+    byId("acOffre").hidden = !d.paiement;
+    const vue = offreVue(d, Date.now());
+    byId("acOffreTxt").innerHTML = vue.texte;
+    byId("acOffres").hidden = !vue.choix;
+    byId("acOffreNote").textContent = vue.note;
+    byId("acOffreNote").hidden = !vue.note;
+    byId("acGererBox").hidden = !vue.gerer;
+    this.showPrices(this.rythme);
+  }
+
+  private showPrices(rythme: Rythme): void {
+    this.rythme = rythme;
+    byId("acMois").setAttribute("aria-pressed", String(rythme === "mois"));
+    byId("acAn").setAttribute("aria-pressed", String(rythme === "an"));
+    const mots = rythme === "mois" ? "par mois" : "par an";
+    byId("acPrixPayant").textContent = `${prixEuros(PRIX.payant[rythme])} ${mots}`;
+    byId("acPrixPremium").textContent = `${prixEuros(PRIX.premium[rythme])} ${mots}`;
+  }
+
+  /** Retour de la page de paiement : l'abonnement s'ouvre quand Stripe a prévenu le serveur, en quelques secondes. */
+  async paymentDone(): Promise<void> {
+    flash(this.msg, "Merci ! Votre abonnement s'ouvre, cela prend quelques secondes.", false, 12_000);
+    for (let essai = 0; essai < 6; essai++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const d = await this.api.account().catch(() => null);
+      const statut = d && statutReel(d, Date.now());
+      if (statut !== "abonne" && statut !== "premium") continue;
+      if (this.current === "account") this.render(d!);
+      flash(this.msg, "Votre abonnement est ouvert. Merci !");
+      return;
+    }
   }
 
   private async keepCopy(id: string): Promise<void> {

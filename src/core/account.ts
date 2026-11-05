@@ -2,13 +2,15 @@ import type { Project } from "./project";
 
 /* Ce que la page et le serveur échangent pour le compte et la synchronisation des projets. */
 
-/** Testeur : compte créé avant l'abonnement. Les autres statuts viendront avec lui ; abonne au niveau payant, premium au-dessus. */
+/** Testeur : compte créé avant l'abonnement, tout ouvert à vie. Essai : 30 jours à la création. Abonne au niveau payant, premium au-dessus. Expire : revenu au gratuit. */
 export type Statut = "testeur" | "essai" | "abonne" | "premium" | "expire";
 
 export interface Compte {
   id: string;
   email: string;
   statut: Statut;
+  /** Fin de l'essai ou de la période payée. Absente d'un compte gardé sur l'appareil avant l'abonnement. */
+  droitsJusquA?: number | null;
 }
 
 /** Passkey du compte : la clé privée reste dans l'appareil ou son trousseau. */
@@ -35,6 +37,12 @@ export interface Appareil {
 export interface CompteDetail extends Compte {
   passkeys: Passkey[];
   appareils: Appareil[];
+  /** Le paiement en ligne est ouvert sur ce serveur. */
+  paiement: boolean;
+  /** L'abonnement a déjà un client chez Stripe : factures, carte et arrêt s'y gèrent. */
+  gestion: boolean;
+  /** L'arrêt est demandé : l'abonnement court jusqu'à `droitsJusquA`, sans nouveau prélèvement. */
+  resilie: boolean;
 }
 
 /** Ligne de l'index des projets d'un compte : de quoi savoir qui a la version la plus récente. */

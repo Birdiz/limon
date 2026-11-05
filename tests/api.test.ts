@@ -38,6 +38,11 @@ beforeAll(async () => {
 });
 beforeEach(() => s.reset());
 
+/** Défait la dernière migration, pour partir d'une base d'avant. */
+const SANS_ABONNEMENT = `drop table paiements_evenements;
+  alter table comptes drop column client_stripe, drop column abonnement, drop column abonnement_evenement, drop column resilie;
+  delete from schema_version where v >= 12;`;
+
 describe("connexion par code", () => {
   it("crée le compte au premier code, puis le retrouve", async () => {
     const f = browser(s);
@@ -149,7 +154,8 @@ describe("connexion par code", () => {
     const db = await pgliteDb();
     await migrate(db);
     await db.exec(
-      `drop table codes;
+      `${SANS_ABONNEMENT}
+       drop table codes;
        create table codes (email text primary key, hash text not null, expire timestamptz not null, essais int not null default 0);
        insert into codes (email, hash, expire) values ('a@exemple.fr', 'h', now() + interval '1 minute');
        delete from schema_version where v >= 11;`,
@@ -412,7 +418,8 @@ describe("appareils connectés", () => {
       const db = await pgliteDb();
       await migrate(db);
       await db.exec(
-        `drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
+        `${SANS_ABONNEMENT}
+       drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
          alter table sessions drop column id, drop column appareil, drop column utilise;
          delete from schema_version where v >= 8;`,
       );
@@ -1353,7 +1360,8 @@ describe("numéros de devis", () => {
     await migrate(db);
     // La base telle qu'elle était avant cette migration.
     await db.exec(
-      `drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
+      `${SANS_ABONNEMENT}
+       drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
        alter table sessions drop column id, drop column appareil, drop column utilise;
        drop table devis_numeros; alter table ateliers drop column dates;
        drop table purge_passage; alter table comptes drop column essai;
@@ -1361,7 +1369,7 @@ describe("numéros de devis", () => {
     );
     await db.query("insert into comptes (id, email) values ('00000000-0000-0000-0000-000000000001', 'a@exemple.fr')");
     await migrate(db);
-    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 11 }]);
+    expect(await db.query("select max(v) as v from schema_version")).toEqual([{ v: 12 }]);
     expect(await db.query("select email from comptes")).toEqual([{ email: "a@exemple.fr" }]);
     await db.query(
       "insert into devis_numeros (compte, projet, annee, rang) values ('00000000-0000-0000-0000-000000000001', 'a', 2026, 1)",
@@ -1416,6 +1424,7 @@ const HORS_EXPORT: Record<string, string> = {
     "Changement d'adresse en cours, code haché : valable 10 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
   defis: "Défi de passkey : valable 5 minutes, effacé à l'usage ou à la purge, rien de durable à copier.",
   purge_passage: "L'heure du dernier passage de la purge : rien sur une personne.",
+  paiements_evenements: "Identifiants d'événements de Stripe déjà traités, gardés 30 jours : rien sur une personne.",
   schema_version: "Le numéro de la dernière migration : rien sur une personne.",
 };
 const raisonHors = (table: string, colonne: string) => HORS_EXPORT[table] ?? HORS_EXPORT[`${table}.${colonne}`];
@@ -1439,6 +1448,7 @@ describe("compte", () => {
       const { id } = await login(s, f, "a@exemple.fr");
       await s.db.query(
         `update comptes set droits_jusqu_a = now() + interval '1 year', averti = now() - interval '2 days',
+           client_stripe = 'cus_a', abonnement = 'sub_a', abonnement_evenement = 5,
            essai = now() - interval '3 days' where id = $1`,
         [id],
       );
@@ -1513,7 +1523,20 @@ describe("compte", () => {
     it("rend les clés attendues et ne laisse aucune empreinte", async () => {
       const { texte, d } = await compteRempli();
       expect(Object.keys(d.compte).sort()).toEqual(
-        ["averti", "cree", "droits_jusqu_a", "email", "essai", "id", "statut", "vu"].sort(),
+        [
+          "abonnement",
+          "abonnement_evenement",
+          "averti",
+          "client_stripe",
+          "cree",
+          "droits_jusqu_a",
+          "email",
+          "essai",
+          "id",
+          "resilie",
+          "statut",
+          "vu",
+        ].sort(),
       );
       expect(d.passkeys).toEqual([
         expect.objectContaining({ id: "cle-a", transports: "internal,hybrid", utilise: expect.any(String) }),
@@ -2591,7 +2614,8 @@ describe("comptes sans connexion", () => {
     const db = await pgliteDb();
     await migrate(db);
     await db.exec(
-      `drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
+      `${SANS_ABONNEMENT}
+       drop table codes_preuve; alter table sessions drop column preuve; drop table changements_adresse;
        alter table sessions drop column id, drop column appareil, drop column utilise;
        drop table purge_passage; alter table comptes drop column essai;
        alter table comptes drop column vu, drop column averti; delete from schema_version where v >= 6;`,

@@ -1,5 +1,17 @@
+import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DROITS, enLecture, formeOuverte, niveauActif, niveauDe } from "../src/core/niveaux";
+import {
+  DROITS,
+  enLecture,
+  formeOuverte,
+  niveauActif,
+  niveauDe,
+  offreVue,
+  prixEuros,
+  statutReel,
+  textesAbonnement,
+  PRIX,
+} from "../src/core/niveaux";
 
 describe("niveaux", () => {
   it("donne son niveau à chaque compte, le gratuit sans compte ou après l'abonnement", () => {
@@ -22,6 +34,109 @@ describe("niveaux", () => {
     expect(niveauActif("payant", null)).toBe("payant");
     expect(niveauActif("compte", "abonne")).toBe("payant");
     expect(niveauActif("compte", null)).toBe("gratuit");
+  });
+
+  it("une fois activé, suit le compte, et une préférence ne peut que baisser", () => {
+    expect(niveauActif(null, "abonne", true)).toBe("payant");
+    expect(niveauActif(null, "expire", true)).toBe("gratuit");
+    expect(niveauActif(null, null, true)).toBe("gratuit");
+    expect(niveauActif("gratuit", "testeur", true)).toBe("gratuit");
+    expect(niveauActif("payant", "premium", true)).toBe("payant");
+    expect(niveauActif("payant", "expire", true)).toBe("gratuit");
+    expect(niveauActif("payant", null, true)).toBe("gratuit");
+    expect(niveauActif("premium", "expire", true)).toBe("gratuit");
+  });
+
+  it("une date passée ramène au gratuit, sauf le testeur, à vie", () => {
+    const J = 86_400_000;
+    const now = 1000 * J;
+    expect(statutReel(null, now)).toBeNull();
+    expect(statutReel({ statut: "testeur", droitsJusquA: null }, now)).toBe("testeur");
+    expect(statutReel({ statut: "testeur" }, now)).toBe("testeur");
+    expect(statutReel({ statut: "essai", droitsJusquA: now + 1 }, now)).toBe("essai");
+    expect(statutReel({ statut: "essai", droitsJusquA: now }, now)).toBe("expire");
+    expect(statutReel({ statut: "essai", droitsJusquA: null }, now)).toBe("expire");
+    // Une période payée a sa marge : le site a pu ne pas entendre le renouvellement.
+    expect(statutReel({ statut: "abonne", droitsJusquA: now - 6 * J }, now)).toBe("abonne");
+    expect(statutReel({ statut: "premium", droitsJusquA: now - 8 * J }, now)).toBe("expire");
+    expect(statutReel({ statut: "expire", droitsJusquA: null }, now)).toBe("expire");
+  });
+
+  it("écrit les prix comme sur la page publique", () => {
+    expect([PRIX.payant.mois, PRIX.payant.an, PRIX.premium.mois, PRIX.premium.an].map(prixEuros)).toEqual([
+      "9 €",
+      "100 €",
+      "12,50 €",
+      "140 €",
+    ]);
+  });
+
+  describe("textes des pages selon l'interrupteur", () => {
+    const page = `a
+    <!-- abonnement: ouvert -->
+    <p>Prix</p>
+    <!-- abonnement: ferme -->
+    <p>Essai ouvert</p>
+    <!-- /abonnement -->
+    b
+    <!-- abonnement: ferme -->
+    <p>Seul</p>
+    <!-- /abonnement -->
+    c`;
+    it("garde le bloc de l'état demandé, sans ses marques", () => {
+      expect(textesAbonnement(page, true).replace(/\s+/g, " ")).toBe("a <p>Prix</p> b c");
+      expect(textesAbonnement(page, false).replace(/\s+/g, " ")).toBe("a <p>Essai ouvert</p> b <p>Seul</p> c");
+    });
+    it("sur les vraies pages : aucune marque ne reste, et les prix ne se montrent qu'à l'ouverture", () => {
+      const lire = (f: string) => fs.readFileSync(f, "utf8");
+      for (const f of ["index.html", "app/index.html", "mentions-legales/index.html"])
+        for (const ouvert of [true, false]) expect(textesAbonnement(lire(f), ouvert)).not.toContain("abonnement:");
+      const accueil = lire("index.html");
+      expect(textesAbonnement(accueil, false)).not.toContain("12,50");
+      expect(textesAbonnement(accueil, false)).toContain("essai ouvert");
+      expect(textesAbonnement(accueil, true)).toContain("12,50 €");
+      expect(textesAbonnement(accueil, true)).toContain("140 € TTC");
+      expect(textesAbonnement(accueil, true)).not.toContain("En ce moment");
+      expect(textesAbonnement(lire("mentions-legales/index.html"), false)).not.toContain("140");
+    });
+  });
+
+  describe("l'offre dans Mon compte", () => {
+    const now = Date.UTC(2026, 10, 5, 12);
+    const J = 86_400_000;
+    const base = { droitsJusquA: now + 20 * J, resilie: false, gestion: false };
+    it("essai : la date, le choix, et le premier prélèvement qui attend sa fin", () => {
+      const v = offreVue({ ...base, statut: "essai" }, now);
+      expect(v.texte).toContain("jusqu'au 25/11/2026");
+      expect(v.choix).toBe(true);
+      expect(v.note).toContain("25/11/2026");
+      expect(offreVue({ ...base, statut: "essai", droitsJusquA: now + J }, now).note).toBe("");
+    });
+    it("abonné : la prochaine échéance, ou l'arrêt demandé, et la gestion", () => {
+      const v = offreVue({ ...base, statut: "abonne", gestion: true }, now);
+      expect(v).toMatchObject({ choix: false, gerer: true });
+      expect(v.texte).toContain("Pour fabriquer");
+      expect(v.texte).toContain("Prochain prélèvement");
+      const r = offreVue({ ...base, statut: "premium", gestion: true, resilie: true }, now);
+      expect(r.texte).toContain("Pour vendre");
+      expect(r.texte).toContain("s'arrête");
+      expect(r.texte).toContain("tous vos escaliers");
+    });
+    it("gratuit : le choix, et les factures d'un ancien abonné", () => {
+      const v = offreVue({ ...base, statut: "expire", droitsJusquA: null }, now);
+      expect(v).toMatchObject({ choix: true, gerer: false });
+      expect(offreVue({ ...base, statut: "expire", droitsJusquA: null, gestion: true }, now).gerer).toBe(true);
+    });
+    it("testeur : rien à choisir", () => {
+      expect(offreVue({ ...base, statut: "testeur", droitsJusquA: null }, now)).toMatchObject({
+        choix: false,
+        gerer: false,
+      });
+    });
+    it("aucun mot de l'informatique ni de réseau", () => {
+      for (const statut of ["essai", "abonne", "premium", "expire", "testeur"] as const)
+        expect(offreVue({ ...base, statut }, now).texte).not.toMatch(/réseau|serveur|premium|Stripe/i);
+    });
   });
 
   it("ouvre au gratuit le droit et le quart tournant, pas les formes en U", () => {

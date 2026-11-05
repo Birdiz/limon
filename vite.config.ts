@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
+import { textesAbonnement } from "./src/core/niveaux";
 
 /**
  * Les trois pages : la page publique (/), l'outil (/app/) et les mentions légales. Chemins relatifs à
@@ -10,6 +11,14 @@ import { defineConfig } from "vitest/config";
  * publique) avec l'adresse de l'outil, et la page publique manquerait au build.
  */
 const PAGES = ["./index.html", "./app/index.html", "./mentions-legales/index.html"];
+
+/** Textes des pages selon l'interrupteur de l'abonnement, au build comme en développement. */
+function abonnement(): Plugin {
+  return {
+    name: "limon-abonnement",
+    transformIndexHtml: { order: "pre", handler: (html) => textesAbonnement(html) },
+  };
+}
 
 /**
  * Retire les polices .woff : @fontsource les propose après le woff2, que lisent tous les navigateurs
@@ -103,6 +112,6 @@ export default defineConfig(({ isSsrBuild }) => ({
     copyPublicDir: !isSsrBuild,
     rolldownOptions: isSsrBuild ? {} : { input: PAGES },
   },
-  plugins: [woff2Only(), pwa(), api()],
+  plugins: [abonnement(), woff2Only(), pwa(), api()],
   test: { include: ["tests/**/*.test.ts"] },
 }));

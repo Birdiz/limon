@@ -9,6 +9,7 @@ import {
   consoleMail,
   consolePasskeyAjoutee,
 } from "./mail";
+import { stripeDepuis } from "./stripe";
 
 /* /api dans le serveur de développement de Vite (greffon `api` de vite.config.ts). La base PGlite est
    gardée dans .pglite/ et survit aux redémarrages ; les codes s'affichent dans la console. */
@@ -21,6 +22,8 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
   const origin = `http://${req.headers.host ?? "localhost"}`;
   let listener = listeners.get(origin);
   if (!listener) {
+    // Clés de test seulement, données au lancement de `npm run dev` ; sans elles, le paiement reste fermé.
+    const paiements = stripeDepuis(process.env, origin);
     listener = getRequestListener(
       api({
         db: await db,
@@ -30,6 +33,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
         sendAdresseChangee: consoleAdresseChangee,
         sendCodePreuve: consoleCodePreuve,
         sendPasskeyAjoutee: consolePasskeyAjoutee,
+        ...(paiements ? { paiements } : {}),
       }).fetch,
     );
     listeners.set(origin, listener);

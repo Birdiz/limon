@@ -18,10 +18,12 @@ import {
   consolePasskeyAjoutee,
 } from "./mail";
 import { staticFiles } from "./static";
+import { stripeDepuis } from "./stripe";
 
 /* Serveur de Quart de tour : le site construit et /api, sur la même adresse.
    En ligne : DATABASE_URL et BREVO_API_KEY. `--local` : base PGlite en mémoire et codes dans la console, même
-   si ces variables sont réglées, pour essayer le build (service worker compris) sans rien installer. */
+   si ces variables sont réglées, pour essayer le build (service worker compris) sans rien installer.
+   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET et STRIPE_PRIX ouvrent le paiement en ligne ; sans elles, il reste fermé. */
 
 const local = process.argv.includes("--local");
 const port = Number(process.env.PORT ?? 3000);
@@ -37,7 +39,8 @@ await purge(db);
 // Les comptes à part et sans attendre : les envois ne retardent pas le démarrage. Le premier passage attend que le
 // serveur écoute : il note que le service tourne, et un artisan doit pouvoir se connecter dès lors.
 const avertir = key && !local ? brevoAvertissement(key) : consoleAvertissement;
-const purgeInactifs = () => void purgeComptes(db, avertir).catch(console.error);
+const paiements = local ? undefined : stripeDepuis(process.env, origin);
+const purgeInactifs = () => void purgeComptes(db, avertir, paiements?.effacerClient).catch(console.error);
 setInterval(() => {
   void purge(db).catch(console.error);
   purgeInactifs();
@@ -66,6 +69,7 @@ app.route(
     sendAdresseChangee: parBrevo ? brevoAdresseChangee(key) : consoleAdresseChangee,
     sendCodePreuve: parBrevo ? brevoCodePreuve(key) : consoleCodePreuve,
     sendPasskeyAjoutee: parBrevo ? brevoPasskeyAjoutee(key) : consolePasskeyAjoutee,
+    ...(paiements ? { paiements } : {}),
   }),
 );
 app.use(await staticFiles(path.resolve(import.meta.dirname, "../dist")));

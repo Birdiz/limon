@@ -44,7 +44,7 @@ Limites : les plafonds par e-mail atteints, le code par e-mail attend jusqu'à u
 
 **Preuve récente** (`preuve`, `server/api.ts`) : une session ne suffit pas pour les gestes qui engagent le compte. `sessions.preuve` date la connexion, ou la dernière preuve de cet appareil ; plus de 5 minutes (`PREUVE_MINUTES`) ou nulle (session d'avant) : 403 avec `preuve: true`.
 
-- **Demandée par** : `POST /passkey/ajout/options`, `POST /passkey/ajout`, `POST /compte/email/code`, `DELETE /compte`. À mettre sur les routes de l'abonnement quand elles viendront. `PUT /compte/email` n'en demande pas : il ne vaut que pour une demande faite sous preuve, et les 10 minutes du code laissent le temps d'aller lire ses messages.
+- **Demandée par** : `POST /passkey/ajout/options`, `POST /passkey/ajout`, `POST /compte/email/code`, `DELETE /compte`, `POST /abonnement/paiement`, `POST /abonnement/gestion`. `PUT /compte/email` n'en demande pas : il ne vaut que pour une demande faite sous preuve, et les 10 minutes du code laissent le temps d'aller lire ses messages.
 - **Pas demandée par** : `DELETE /sessions*`, `/deconnexion` et `DELETE /passkeys/:id`. C'est ce qu'on fait quand un téléphone est perdu, souvent avec la boîte mail dessus, et cela ne donne aucun accès : au pire un voleur déconnecte, et la personne revient par un code.
 - **Se donne par** : une connexion ; `POST /preuve/passkey/options` puis `POST /preuve/passkey`, les seules passkeys du compte ; `POST /preuve/code` puis `POST /preuve/code/verifier`, 10 minutes, 5 essais, 5 codes par heure et par compte, table `codes_preuve` à part (il n'ouvre pas de session, un code de connexion n'en tient pas lieu, et l'un ne remplace pas l'autre).
 - **À l'écran** : `Api` lève `ProofNeeded`, `AccountPanel.run` montre la vue `acProof` pour tout geste qui la rencontre, et le geste repart sur « Continuer », jamais tout seul : Safari n'ouvre Face ID qu'après un geste de la personne. Un onglet ouvert depuis avant ne connaît pas cette vue : il affiche `PREUVE_DEMANDEE`, qui lui dit de se reconnecter, ce qui est une preuve.
@@ -67,7 +67,7 @@ Limites : `utilise` n'est noté qu'une fois par jour, donc une session peut s'ar
 
 ## Données
 
-Minimales (e-mail, projets, clés publiques, empreinte des sessions, nom d'appareil, dernier usage et date de la dernière preuve ; pas d'IP conservée en base, seulement en mémoire le temps des limites de débit). `statut` du compte : `testeur` pour l'instant, l'abonnement viendra. Suppression du compte en cascade ; export des données dans Mon compte.
+Minimales (e-mail, projets, clés publiques, empreinte des sessions, nom d'appareil, dernier usage et date de la dernière preuve ; pas d'IP conservée en base, seulement en mémoire le temps des limites de débit). `statut` du compte : voir Abonnement. Suppression du compte en cascade, après l'arrêt de l'abonnement ; export des données dans Mon compte.
 
 **Export** (`GET /compte/donnees`) : tout ce que le compte garde, traces de suppression et numéros de devis compris, un numéro restant après la suppression de son escalier. L'empreinte des sessions n'en sort jamais. Une colonne ou une table ajoutée fait échouer `tests/api.test.ts` tant qu'elle n'est pas rendue par la route ou écrite dans `HORS_EXPORT`, avec sa raison (dehors aujourd'hui : l'identifiant du compte répété dans chaque table, et `codes`, `changements_adresse`, `codes_preuve` et `defis`, de durée très courte).
 
@@ -78,6 +78,23 @@ Minimales (e-mail, projets, clés publiques, empreinte des sessions, nom d'appar
 - **Adresse refusée** : `essai` note le dernier envoi en échec, et le compte passe après ceux qui n'ont pas été essayés, puis du plus ancien essai au plus récent. Effacée au premier envoi réussi.
 
 Limites : une coupure que le serveur ne voit pas (domaine, réseau, routes `/api` en panne alors que les passages tournent) ne reporte rien. Une adresse toujours refusée n'est jamais avertie, donc son compte n'est jamais effacé : le journal seul le dit. Au retour, tous les comptes avertis reçoivent un second e-mail, à 10 par passage. `purge` retire aussi les traces de suppression de plus de 24 mois, à la date de l'appareil : un appareil resté plus longtemps sans échange renverrait son escalier.
+
+## Abonnement
+
+Stripe, par son API (`server/stripe.ts`, sans bibliothèque) : paiement et gestion sur ses pages, le site ne voit aucune carte. Sans `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` et `STRIPE_PRIX`, le paiement reste fermé sans panne (`paiement: false`, section « Mon offre » masquée). Jamais de clé dans le dépôt. `npm run stripe:prix` crée produits, prix et page de gestion, et écrit `STRIPE_PRIX` et `STRIPE_PORTAIL`.
+
+- **Statuts** : `testeur` (comptes d'avant l'abonnement, tout à vie, décision de Thomas ; ni paiement ni événement n'y touchent), `essai` (compte neuf dès que le paiement est ouvert, 30 jours, sans carte ; sans clés Stripe, il naît `testeur`, à vie, pour que le compteur ne tourne pas pour rien), `abonne` (payant), `premium`, `expire` (gratuit). `statutReel` (`src/core/niveaux.ts`) dit ce qui vaut maintenant, pour la page comme pour le serveur : un essai s'arrête à sa date, une période payée 7 jours après, si aucune nouvelle n'est arrivée.
+- **`POST /api/stripe`** : déclarée avant le contrôle de l'origine, la seule route exemptée, signature vérifiée sur le corps brut, 4 Mo au plus. Événements `customer.subscription.*` seulement. L'événement (`paiements_evenements`, 30 jours) et son effet s'écrivent en une requête : rejoué, il ne change rien. Un événement plus ancien que `abonnement_evenement`, ou la fin d'un autre abonnement que celui du compte, n'y touche pas. `active`, `trialing`, `past_due` donnent leurs droits (Stripe réessaie encore la carte) ; `canceled`, `unpaid`, `incomplete_expired`, `paused` ramènent à `expire` ; `incomplete` n'y change rien. La fin de période se lit sur la ligne de l'abonnement ou, dans les anciennes versions de l'API, sur l'abonnement.
+- **Statut vu par la page** : l'en-tête `X-Statut` (`auth`), à chaque réponse, sans requête de plus ; `droitsVus` (`src/ui/sync.ts`) le garde pour le hors ligne.
+- **Services du serveur** : `exige` refuse par 402 `PUT /atelier` (dès le payant) et `POST /devis/numero` (premium), si les limites sont actives. Le reste du compte reste ouvert au gratuit : connexion, lecture et envoi d'escaliers, données, suppression, pour ne rien perdre. Le calcul et les fichiers se font sur l'appareil : leurs limites sont sur la page. Un profil de l'atelier refusé par 402 reste sur l'appareil, sans erreur ni attente à l'écran.
+- **Essai en cours** : le premier prélèvement attend sa fin s'il reste plus de 3 jours (`ESSAI_RESTE_MIN` ; Stripe en demande au moins 2).
+- **Fin** : l'arrêt demandé court jusqu'à la fin de la période (`resilie`), puis `expire`, sans rien effacer. `DELETE /compte` efface d'abord le client chez Stripe, ce qui arrête l'abonnement aussitôt, sans remboursement ; un échec garde le compte et va au journal. `purgeComptes` fait de même, et un échec attend le passage suivant. Les factures restent chez Stripe. Un changement d'adresse suit chez Stripe ; un échec va au journal et n'y revient pas.
+
+Limites : choisir « Pour fabriquer » pendant l'essai ferme aussitôt le devis, le niveau suivant l'offre choisie. Un arrêt pendant l'essai perd ce qu'il en restait. Supprimer son compte et le recréer redonne 30 jours. Rien ne prévient avant la fin de l'essai, sauf Mon compte. Au retour de la page de gestion, un événement encore en route ne se voit qu'à la prochaine ouverture de Mon compte.
+
+**Essayer** : `STRIPE_SECRET_KEY=sk_test_… STRIPE_WEBHOOK_SECRET=whsec_… STRIPE_PRIX=… npm run dev`, avec `stripe listen --forward-to localhost:5173/api/stripe` (Stripe CLI), carte d'essai 4242 4242 4242 4242, `?niveau=compte` pour voir les limites suivre le compte. Sans compte Stripe, les tests (`tests/abonnement.test.ts`) passent par un faux.
+
+**Activation**, avec l'accord de Thomas, une fois un paiement essayé en mode test : régler les clés réelles sur Railway, puis passer `ABONNEMENT_OUVERT` à vrai (`src/core/niveaux.ts`), qui ouvre les limites, le devis à l'essai et au premium sans préférence, et les textes des pages (blocs `<!-- abonnement: ouvert -->`, skill `page-publique`). Ajuster les tests qui supposent les limites endormies.
 
 ## Synchronisation
 

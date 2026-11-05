@@ -51,7 +51,7 @@
       >
       <span class="recu" id="lecture" hidden
         >Lecture seule : l'offre gratuite garde un escalier modifiable à la fois.
-        <a href="/?visite#prix">Voir les prix</a></span
+        <a href="?compte">Voir les offres</a></span
       >
       <span class="undo idle" id="undoBox">
         <button class="ibtn" id="undo" type="button" aria-label="Annuler" disabled>
@@ -157,7 +157,7 @@
           restent propres à chaque escalier.
         </p>
         <p class="disclaimer" data-offre>
-          Vos réglages de départ viennent avec l'abonnement. <a href="/?visite#prix">Voir les prix</a>
+          Vos réglages de départ viennent avec l'abonnement. <a href="?compte">Voir les offres</a>
         </p>
         <p class="disclaimer" id="atSum" data-payant></p>
         <div class="actions" data-payant>
@@ -180,6 +180,10 @@
           <p class="lead" id="acIntro">
             Avec un compte, vos escaliers vous suivent sur votre téléphone et votre ordinateur, et restent utilisables
             sans réseau.
+          </p>
+          <p class="disclaimer" id="acEssai" hidden>
+            Un nouveau compte ouvre tout l'outil pendant 30 jours, sans carte bancaire. Ensuite, vous gardez l'offre
+            gratuite et tous vos escaliers.
           </p>
           <div class="actions" id="acPkBox" hidden>
             <button class="btn" id="acPk" type="button">Se connecter avec Face ID ou l'empreinte</button>
@@ -238,6 +242,43 @@
           <p>Connecté avec <b id="acMe"></b></p>
           <p class="disclaimer" id="acState"></p>
           <ul class="plist" id="acRefus" hidden></ul>
+          <section class="acoffre" id="acOffre" hidden>
+            <h3>Mon offre</h3>
+            <p id="acOffreTxt"></p>
+            <div id="acOffres" hidden>
+              <div class="seg" role="group" aria-label="Payer au mois ou à l'année">
+                <button id="acMois" type="button" aria-pressed="true">Au mois</button
+                ><button id="acAn" type="button" aria-pressed="false">À l'année</button>
+              </div>
+              <ul class="plist">
+                <li>
+                  <div>
+                    <b>Pour fabriquer · <span id="acPrixPayant"></span></b
+                    ><small
+                      >Escaliers sans limite, fiche entière, liste de débit, fichiers pour la machine, formes en U et
+                      palier, réglages avancés, réglages de l'atelier.</small
+                    >
+                  </div>
+                  <button class="btn" type="button" data-choix="payant">Choisir</button>
+                </li>
+                <li>
+                  <div>
+                    <b>Pour vendre · <span id="acPrixPremium"></span></b
+                    ><small>Tout ce qui sert à fabriquer, et le devis remis au client.</small>
+                  </div>
+                  <button class="btn" type="button" data-choix="premium">Choisir</button>
+                </li>
+              </ul>
+              <p class="disclaimer">
+                Prix TTC, sans engagement : vous arrêtez quand vous voulez. Le paiement se fait sur la page de Stripe,
+                votre carte n'arrive jamais chez nous.
+              </p>
+              <p class="disclaimer" id="acOffreNote" hidden></p>
+            </div>
+            <div class="actions" id="acGererBox" hidden>
+              <button class="btn" id="acGerer" type="button">Gérer mon abonnement</button>
+            </div>
+          </section>
           <div class="actions">
             <button class="btn" id="acEmailChange" type="button">Changer d'adresse e-mail</button>
           </div>
@@ -297,7 +338,8 @@
             <p>
               Votre adresse, vos escaliers en ligne et le profil de votre atelier, avec vos tarifs et la fiche de votre
               entreprise, seront effacés. Le profil de l'atelier quitte aussi cet appareil. Vos autres appareils gardent
-              ce qu'ils ont déjà.
+              ce qu'ils ont déjà. Un abonnement en cours s'arrête aussitôt, et ce qui est déjà réglé n'est pas
+              remboursé.
             </p>
             <label class="adv" id="acWipeBox"
               ><span><b>Effacer aussi de cet appareil</b><small id="acWipeWhat"></small></span
@@ -360,7 +402,7 @@
           ><input type="checkbox" role="switch" id="advToggle"
         /></label>
         <p class="disclaimer" data-offre>
-          Les réglages avancés viennent avec l'abonnement. <a href="/?visite#prix">Voir les prix</a>
+          Les réglages avancés viennent avec l'abonnement. <a href="?compte">Voir les offres</a>
         </p>
         <div class="adv pref">
           <span
@@ -380,10 +422,14 @@
             <li><b>Lien de visite</b> pour montrer l'escalier au client, en 3D</li>
             <li><b>Versions</b> : revoir un escalier tel qu'il était avant</li>
           </ul>
+          <!-- abonnement: ouvert -->
+          <p class="disclaimer">Ces outils arrivent avec l'offre « Pour vendre », en préparation.</p>
+          <!-- abonnement: ferme -->
           <p class="disclaimer">
             Ces outils arrivent avec l'abonnement, en préparation. Le devis viendra dans une offre au-dessus de
             l'abonnement.
           </p>
+          <!-- /abonnement -->
         </div>
         <details class="privacy">
           <summary>Confidentialité</summary>
@@ -402,7 +448,10 @@
           <p>
             Hébergement chez Railway, dans un centre de données à Amsterdam ; Railway est une société américaine, liée
             par un accord de traitement des données. Les codes de connexion et les autres messages du compte partent par
-            Brevo, en France.
+            Brevo, en France. Si vous vous abonnez, le paiement passe par Stripe (Irlande, société du groupe américain
+            Stripe) : votre carte reste chez Stripe, le compte ne garde que votre numéro de client et l'état de
+            l'abonnement. Vos factures restent chez Stripe le temps que la loi exige de garder les pièces comptables,
+            même après la suppression du compte.
           </p>
           <p>
             Les données sont gardées jusqu'à la suppression du compte, qui les efface aussitôt, ou jusqu'à 24 mois sans
@@ -435,7 +484,7 @@
             <p class="hint">Choisissez la forme de l'escalier. Le plan et la 3D suivent chaque réglage.</p>
             <p class="disclaimer" data-offre>
               Double quart, demi-tournant et palier viennent avec l'abonnement.
-              <a href="/?visite#prix">Voir les prix</a>
+              <a href="?compte">Voir les offres</a>
             </p>
             <div class="shapes" role="radiogroup" aria-label="Forme de l'escalier">
               <input type="radio" name="forme" id="f-droit" value="droit" />
@@ -855,7 +904,7 @@
           </div>
           <p class="disclaimer" data-offre>
             La fiche entière, sans filigrane, et les tableurs viennent avec l'abonnement.
-            <a href="/?visite#prix">Voir les prix</a>
+            <a href="?compte">Voir les offres</a>
           </p>
           <div class="tablewrap"><table id="table"></table></div>
         </section>
@@ -875,7 +924,7 @@
           </p>
           <p class="disclaimer" data-offre>
             Les fichiers pour la machine et la liste de débit viennent avec l'abonnement.
-            <a href="/?visite#prix">Voir les prix</a>
+            <a href="?compte">Voir les offres</a>
           </p>
           <div class="cncbody" id="cncBody" hidden>
             <div class="group asm" data-adv>
