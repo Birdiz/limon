@@ -10,7 +10,7 @@ export const CONFORT = {
   g: { min: 240, max: 320, bad: 210 },
   blondel: { min: 600, max: 640, cible: 630, badMin: 580, badMax: 660 },
   pente: { max: 38, bad: 45 },
-  gIn: { min: 100, bad: 60 },
+  gIn: { min: 100, conseil: 120, bad: 60 },
 } as const;
 
 /** Statuts de confort d'une hauteur de marche h et d'un giron g. */

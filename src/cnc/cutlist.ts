@@ -1,6 +1,6 @@
 /* Liste de débit, volume et alertes de fabrication, communs à la page et à la fiche PDF. */
 import { ceil10, fmt } from "../core/format";
-import { DENSITE } from "../core/params";
+import { DENSITE, type Essence } from "../core/params";
 import type { Stair, Status } from "../core/stair";
 import { oversize, stockVolume, tightBoards, type BoardPart, type Pieces, type TreadPart } from "../core/pieces";
 
@@ -80,7 +80,19 @@ export function cutRows(P: Pieces, R: Stair): CutRow[] {
   ];
 }
 
-const ESSENCE_LABEL = { chene: "chêne", hetre: "hêtre", frene: "frêne", sapin: "sapin", noyer: "noyer" } as const;
+const ESSENCE_LABEL: Record<Essence, string> = {
+  chene: "chêne",
+  hetre: "hêtre",
+  frene: "frêne",
+  chataignier: "châtaignier",
+  erable: "érable",
+  merisier: "merisier",
+  noyer: "noyer",
+  sapin: "sapin",
+  epicea: "épicéa",
+  douglas: "douglas",
+  meleze: "mélèze",
+};
 
 /** Nombre pour un tableur français : virgule décimale, sans séparateur de milliers. */
 const num = (v: number, d: number) =>

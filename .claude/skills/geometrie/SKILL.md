@@ -34,7 +34,7 @@ Selon le sujet, lire aussi :
 
 ## Résultat
 
-`compute` renvoie `{ ok: true, stair }` ou `{ ok: false, errors }` (chaque erreur désigne si possible le champ fautif). `stair.params` garde les réglages utilisés. Les notes s'écrivent dans `stairNotes` (`src/core/stair-notes.ts`). Une note peut porter une correction (`Fix`, appliquée d'un clic) ; `compute(p, false)` saute leur recherche.
+`compute` renvoie `{ ok: true, stair }` ou `{ ok: false, errors }` (chaque erreur désigne si possible le champ fautif). `stair.params` garde les réglages utilisés. Les notes s'écrivent dans `stairNotes` (`src/core/stair-notes.ts`). Une note peut porter une correction (`Fix`, appliquée d'un clic) ; `compute(p, false)` saute leur recherche. Deux remarques (`info`, pas des alertes) laissent « tout est dans les règles » : giron au jour bon mais sous `CONFORT.gIn.conseil` (120 mm, avec le nombre de marches balancées qui l'atteint), et pas de garde-corps au-delà de 1 m de chute (il peut être posé à part, ou inutile entre deux murs).
 
 `validate` refuse d'abord, sur son champ, toute cote lue au-delà de `H_MAX` (hauteur) ou de `COTE_MAX` (les autres), en valeur absolue : le calcul reste assez court pour ne pas figer la page. `sanitizeParams` garde la valeur, pour la montrer à corriger. `pickN` et `palierLayout` ne dépassent pas `H_MAX / 120` hauteurs. Une boucle nouvelle qui dépend d'un réglage se teste aux bornes (`tests/stair.test.ts`).
 

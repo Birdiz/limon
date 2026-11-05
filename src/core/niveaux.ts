@@ -111,7 +111,10 @@ export function statutReel(compte: Pick<Compte, "statut" | "droitsJusquA"> | nul
 export type Offre = "payant" | "premium";
 export type Rythme = "mois" | "an";
 
-/** Prix TTC en centimes, repris par `scripts/stripe-prix.ts` et à recopier dans `index.html` et `mentions-legales`. */
+/**
+ * Prix TTC en centimes, ceux que Stripe prélève (`scripts/stripe-prix.ts`). Les pages les montrent HT d'abord (`prixHT`),
+ * à recopier dans `index.html` et `mentions-legales`.
+ */
 export const PRIX: Record<Offre, Record<Rythme, number>> = {
   payant: { mois: 900, an: 10_000 },
   premium: { mois: 1250, an: 14_000 },
@@ -182,6 +185,12 @@ export function offreVue(
 }
 
 /** « 9 € », « 12,50 € » : le prix écrit comme sur la page publique. */
+/** Taux de TVA des abonnements. */
+export const TVA = 0.2;
+
+/** Prix HT en centimes, arrondi au centime, d'un prix TTC. */
+export const prixHT = (ttc: number): number => Math.round(ttc / (1 + TVA));
+
 export function prixEuros(centimes: number): string {
   const e = centimes / 100;
   return `${Number.isInteger(e) ? e : e.toFixed(2).replace(".", ",")} €`;
