@@ -331,7 +331,7 @@ async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = a
   openProject(q);
 }
 
-const account = new AccountPanel(store, api);
+const account = new AccountPanel(store, api, browserStorage());
 const home = new Home(store, {
   current: () => project,
   params: () => atelier.params(),
@@ -602,6 +602,7 @@ void (async () => {
   else if (asked.has("exemple")) await example();
   else if (asked.has("nouveau")) await startNew();
   else if (asked.has("accueil")) await home.show();
+  else if (account.awaitsCode()) await home.show("compte");
   store.start();
 })();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.

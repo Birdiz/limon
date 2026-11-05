@@ -53,8 +53,7 @@ function soumettre(id: string): void {
 }
 
 /** Le panneau sur un serveur simulé. `reponses` remplace une route, « POST code » par exemple. */
-function monter(reponses: Record<string, () => Response> = {}) {
-  const m = new Map<string, string>();
+function monter(reponses: Record<string, () => Response> = {}, m = new Map<string, string>()) {
   const storage: KeyValue = {
     getItem: (k) => m.get(k) ?? null,
     setItem: (k, v) => void m.set(k, v),
@@ -78,7 +77,7 @@ function monter(reponses: Record<string, () => Response> = {}) {
     return Promise.resolve(vide());
   });
   const store = new SyncStore(new LocalStore(storage), api, storage);
-  const panel = new AccountPanel(store, api);
+  const panel = new AccountPanel(store, api, storage);
   const routes = () => appels.map((a) => a.route);
   return { store, panel, appels, routes };
 }
@@ -124,6 +123,74 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+});
+
+describe("le code demandé attend le retour de la boîte mail", () => {
+  /** Le code demandé, puis la page rechargée : même stockage, plus rien en mémoire ni à l'écran. */
+  async function recharge(memoire = new Map<string, string>()) {
+    const avant = monter({}, memoire);
+    await ouvrir(avant.panel);
+    el<HTMLInputElement>("acEmail").value = "a@exemple.fr";
+    soumettre("acEmailForm");
+    await vi.waitFor(() => expect(el("acCodeForm").hidden).toBe(false));
+    document.body.innerHTML = body;
+    return monter({ "POST code/verifier": () => json(COMPTE) }, memoire);
+  }
+
+  it("après un rechargement, Mon compte reprend au code, pour la même adresse", async () => {
+    const memoire = new Map<string, string>();
+    const { panel, appels } = await recharge(memoire);
+    expect(panel.awaitsCode()).toBe(true);
+    await ouvrir(panel);
+    expect(el("acCodeForm").hidden).toBe(false);
+    expect(el("acEmailForm").hidden).toBe(true);
+    expect(el("acCodeTo").textContent).toBe("a@exemple.fr");
+    el<HTMLInputElement>("acCode").value = "12345678";
+    soumettre("acCodeForm");
+    await vi.waitFor(() => expect(msg().textContent).toBe("Connecté"));
+    expect(appels).toContainEqual(
+      expect.objectContaining({ corps: expect.objectContaining({ email: "a@exemple.fr" }) }),
+    );
+    expect(panel.awaitsCode()).toBe(false);
+    expect(memoire.has("limon-code-attendu")).toBe(false);
+  });
+
+  it("un détour par un autre onglet ne le perd pas", async () => {
+    const { panel } = await auCode();
+    await ouvrir(panel);
+    expect(el("acCodeForm").hidden).toBe(false);
+    expect(el("acCodeTo").textContent).toBe("a@exemple.fr");
+  });
+
+  it("Retour l'oublie et rend l'adresse à corriger, y compris après un rechargement", async () => {
+    const { panel } = await recharge();
+    await ouvrir(panel);
+    el("acBack").click();
+    expect(el("acEmailForm").hidden).toBe(false);
+    expect(el<HTMLInputElement>("acEmail").value).toBe("a@exemple.fr");
+    expect(panel.awaitsCode()).toBe(false);
+  });
+
+  it("passé 10 minutes, il n'attend plus et l'adresse quitte l'appareil", async () => {
+    const memoire = new Map<string, string>();
+    const { panel } = await recharge(memoire);
+    const dans = Date.now() + 10 * 60_000 + 1;
+    vi.spyOn(Date, "now").mockReturnValue(dans);
+    expect(panel.awaitsCode()).toBe(false);
+    expect(memoire.has("limon-code-attendu")).toBe(false);
+    await ouvrir(panel);
+    expect(el("acEmailForm").hidden).toBe(false);
+    vi.restoreAllMocks();
+  });
+
+  it("un refus d'envoi ne laisse rien en attente", async () => {
+    const { panel } = monter({ "POST code": refus(429, "Trop de codes demandés.") });
+    await ouvrir(panel);
+    el<HTMLInputElement>("acEmail").value = "a@exemple.fr";
+    soumettre("acEmailForm");
+    await vi.waitFor(() => expect(enErreur()).toBe(true));
+    expect(panel.awaitsCode()).toBe(false);
+  });
 });
 
 describe("connexion par code", () => {
