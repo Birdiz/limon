@@ -1,6 +1,7 @@
 import { day } from "../core/format";
 import type { Params } from "../core/params";
 import { planShapes, type PlanShape } from "../core/plan-shapes";
+import { enLecture, type Droits } from "../core/niveaux";
 import { hasClient, newProject, parseProjectFile, type Mode, type Project } from "../core/project";
 import { compute } from "../core/stair";
 import { COTE_LABEL, FORME_LABEL } from "../core/summary";
@@ -30,6 +31,9 @@ export interface HomeHost {
   known(): boolean;
   /** L'onglet Compte s'affiche. */
   account(): void;
+  droits(): Droits;
+  /** Liste relue : la page en tire les escaliers en lecture seule. */
+  listed(all: Project[]): void;
 }
 
 /** Ce que l'artisan doit reprendre sur un escalier importé dont des cotes ne se lisent pas. Une clé inconnue reste telle
@@ -38,6 +42,13 @@ function ignoresMsg(nom: string, ignores: string[]): string {
   const noms = ignores.map((k) => (Object.hasOwn(COTE_LABEL, k) ? COTE_LABEL[k as keyof Params] : k)).join(", ");
   const [debut, suite] = ignores.length > 1 ? ["Cotes illisibles", "Remises"] : ["Cote illisible", "Remise"];
   return `${debut} dans « ${nom} » : ${noms}. ${suite} à l'exemple : à reprendre avant de couper.`;
+}
+
+/** Ce que la suppression d'un escalier emporte de remis au client, pour la question posée. */
+function remisMsg(p: Project): string {
+  // Un devis remis est un document que le client a en main : la question le nomme.
+  const numeros = [...new Set(p.devis?.remis.map((r) => r.numero))].join(", ");
+  return numeros ? ` Il porte un devis déjà remis au client (${numeros}), effacé avec lui.` : "";
 }
 
 /** Vignette du plan : limons, marches et ligne de foulée, sans les cotes. */
@@ -81,6 +92,8 @@ export class Home {
   private panel: Panel = "escaliers";
   /** Vignettes déjà dessinées, par escalier et date de modification. */
   private thumbs = new Map<string, string>();
+  /** Escaliers en lecture seule, nommés sur leur carte. */
+  private lecture = new Set<string>();
 
   constructor(
     private store: ProjectStore,
@@ -163,6 +176,8 @@ export class Home {
     byId("homeAcct").textContent = this.host.known() ? "me connecter" : "créer mon compte";
     byId("pjExport").hidden = !cur;
     const all = await this.store.list();
+    this.host.listed(all);
+    this.lecture = enLecture(this.host.droits(), all);
     // Premier lancement : l'accueil invite à commencer.
     byId("homeTitle").textContent = all.length ? "Mes escaliers" : "Un escalier à calculer ?";
     byId("homeLead").hidden = all.length > 0;
@@ -194,8 +209,9 @@ export class Home {
   }
 
   private card(p: Project, isCur: boolean): string {
-    const state =
-      p.etat === "fini"
+    const state = this.lecture.has(p.id)
+      ? `<span class="etat">Lecture seule</span>`
+      : p.etat === "fini"
         ? `<span class="etat fini">Terminé le ${day(p.finiLe)}</span>`
         : `<span class="etat">${p.mode === "guide" ? "Pas à pas en cours" : "Brouillon"}</span>`;
     return (
@@ -204,7 +220,9 @@ export class Home {
       `<span class="thumb">${this.thumb(p)}</span>` +
       `<span class="ctxt"><b>${esc(p.nom)}</b><small>${FORME_LABEL[p.params.forme]} · modifié le ${day(p.modifie)}</small>${state}</span>` +
       `${isCur ? '<span class="pjcur">ouvert</span>' : ""}</button>` +
-      `<div class="pjbtns"><button class="btn" type="button" data-act="dup" data-id="${esc(p.id)}">Dupliquer</button>` +
+      `<div class="pjbtns">` +
+      // Au gratuit, une copie prendrait la place de l'escalier copié.
+      `${this.host.droits().escaliers > 1 ? `<button class="btn" type="button" data-act="dup" data-id="${esc(p.id)}">Dupliquer</button>` : ""}` +
       `<button class="btn danger" type="button" data-act="del" data-id="${esc(p.id)}">Supprimer</button></div></li>`
     );
   }
@@ -214,7 +232,33 @@ export class Home {
     void this.store.setCurrent(p.id);
   }
 
+  /**
+   * Fait la place d'un nouvel escalier. Au gratuit, il remplace celui qui existe, après confirmation ; plusieurs restés
+   * d'un abonnement ne se remplacent pas d'un coup : c'est à l'artisan de choisir lesquels supprimer.
+   */
+  async makeRoom(): Promise<boolean> {
+    const max = this.host.droits().escaliers;
+    const all = await this.store.list();
+    if (all.length < max) return true;
+    const seul = all.length === 1 ? all[0]! : null;
+    if (!seul) {
+      await this.show();
+      flash(
+        this.msg,
+        "L'offre gratuite garde un escalier à la fois : supprimez-en jusqu'à n'en garder qu'un, ou abonnez-vous.",
+        true,
+        10000,
+      );
+      return false;
+    }
+    if (!confirm(`L'offre gratuite garde un escalier à la fois. Remplacer « ${seul.nom} » ?${remisMsg(seul)}`))
+      return false;
+    await this.store.remove(seul.id);
+    return true;
+  }
+
   private async create(mode: Mode): Promise<void> {
+    if (!(await this.makeRoom())) return;
     const p = newProject(newId(), this.nom.value, mode, Date.now(), this.host.params());
     this.nom.value = "";
     await this.store.save(p);
@@ -241,10 +285,7 @@ export class Home {
       await this.refresh();
     } else if (b.dataset.act === "del") {
       const where = this.host.signedIn() ? "de cet appareil et de votre compte" : "de cet appareil";
-      // Un devis remis est un document que le client a en main : la question le nomme.
-      const numeros = [...new Set(p.devis?.remis.map((r) => r.numero))].join(", ");
-      const remis = numeros ? ` Il porte un devis déjà remis au client (${numeros}), effacé avec lui.` : "";
-      if (!confirm(`Supprimer « ${p.nom} » ? L'escalier sera effacé ${where}.${remis}`)) return;
+      if (!confirm(`Supprimer « ${p.nom} » ? L'escalier sera effacé ${where}.${remisMsg(p)}`)) return;
       await this.store.remove(p.id);
       // L'escalier ouvert supprimé : l'accueil reste affiché, sans escalier derrière.
       if (p.id === this.host.current()?.id) {
@@ -274,6 +315,7 @@ export class Home {
       flash(this.msg, r.erreur, true);
       return;
     }
+    if (!(await this.makeRoom())) return;
     await this.store.save(r.projet);
     if (!r.ignores.length) {
       this.openProject(r.projet);

@@ -91,3 +91,12 @@ describe("écrivain PDF", () => {
     expect(wrap("un deux trois quatre", 10, textWidth("un deux trois", 10))).toEqual(["un deux trois", "quatre"]);
   });
 });
+
+describe("fiche du niveau gratuit", () => {
+  it("s'arrête à la première page, avec le filigrane", () => {
+    const s = latin1(fichePDF(stairOf({}), { nom: "Essai", date: "01/01/2026", brouillon: true, extrait: true }));
+    expect(s.match(/\/MediaBox/g)).toHaveLength(1);
+    expect(s).toContain("(page 1/1) Tj");
+    expect(s).not.toContain("(Liste de d\\351bit) Tj");
+  });
+});

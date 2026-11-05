@@ -7,6 +7,7 @@ import { DEFAULTS } from "../src/core/params";
 import { newProject, projectFile, withEtat, type Project } from "../src/core/project";
 import { compute } from "../src/core/stair";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
+import { DROITS } from "../src/core/niveaux";
 import { Home, type HomeHost } from "../src/ui/home";
 import { LocalStore, type KeyValue, type ProjectStore } from "../src/ui/store";
 
@@ -22,6 +23,8 @@ const host = {
   signedIn: () => false,
   known: () => false,
   account() {},
+  droits: () => DROITS.premium,
+  listed() {},
 };
 
 /** Un magasin qui ne filtre rien : la carte doit tenir toute seule. */
@@ -628,5 +631,65 @@ describe("gestes de l'accueil, sur un vrai magasin en mémoire", () => {
       el("homeEx").click();
       expect(example).toHaveBeenCalledOnce();
     });
+  });
+});
+
+describe("offre gratuite", () => {
+  const gratuit = { ...host, droits: () => DROITS.gratuit };
+  const un = newProject("a", "Dupont", "complet", 2);
+  const deux = newProject("b", "Martin", "complet", 1);
+  let store: LocalStore;
+
+  function memoire(): KeyValue {
+    const m = new Map<string, string>();
+    return {
+      getItem: (k) => m.get(k) ?? null,
+      setItem: (k, v) => void m.set(k, v),
+      removeItem: (k) => void m.delete(k),
+    };
+  }
+
+  async function accueil(...projets: Project[]): Promise<Home> {
+    document.documentElement.innerHTML = html;
+    store = new LocalStore(memoire());
+    for (const p of projets) await store.save(p);
+    const home = new Home(store, gratuit);
+    await home.show();
+    return home;
+  }
+
+  it("laisse entrer le premier escalier sans rien demander", async () => {
+    const confirme = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirme);
+    expect(await (await accueil()).makeRoom()).toBe(true);
+    expect(confirme).not.toHaveBeenCalled();
+  });
+
+  it("remplace le seul escalier après confirmation, et le garde sur un refus", async () => {
+    vi.stubGlobal("confirm", () => false);
+    const home = await accueil(un);
+    expect(await home.makeRoom()).toBe(false);
+    expect((await store.list()).map((p) => p.id)).toEqual(["a"]);
+    vi.stubGlobal("confirm", () => true);
+    expect(await home.makeRoom()).toBe(true);
+    expect(await store.list()).toEqual([]);
+  });
+
+  it("n'efface rien quand plusieurs escaliers restent d'un abonnement, et nomme ceux en lecture seule", async () => {
+    const confirme = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirme);
+    const home = await accueil(un, deux);
+    expect(await home.makeRoom()).toBe(false);
+    expect(confirme).not.toHaveBeenCalled();
+    expect(await store.list()).toHaveLength(2);
+    const cartes = [...document.querySelectorAll("#homeDraft li")].map((li) => li.textContent);
+    expect(cartes.filter((t) => t.includes("Lecture seule"))).toHaveLength(1);
+    expect(document.getElementById("pjMsg")!.textContent).toContain("n'en garder qu'un");
+  });
+
+  it("ne propose pas de dupliquer", async () => {
+    await accueil(un);
+    expect(document.querySelector('[data-act="dup"]')).toBeNull();
+    expect(document.querySelector('[data-act="del"]')).not.toBeNull();
   });
 });
