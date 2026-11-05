@@ -22,6 +22,8 @@ export interface TreadPart {
   l: number;
   /** Palier d'un tournant, débité et logé comme une marche. */
   palier?: true;
+  /** Marches seulement : contour vu de dessus, nez le long de x, coin du débit à l'origine (comme marches.dxf). */
+  outline?: Pt[];
 }
 
 export interface BoardPart {
@@ -103,7 +105,13 @@ export function buildCNC(R: Stair): CNC {
   const gap = 40,
     rowMax = 2600;
   // Une marche, du nez lnF jusqu'à la coupe arrière bk, placée à la suite des précédentes.
-  const tread = (lnF: NoseLine, bk: Section, marks: [Layer, Pt[]][], label: string, nose: string): Piece => {
+  const tread = (
+    lnF: NoseLine,
+    bk: Section,
+    marks: [Layer, Pt[]][],
+    label: string,
+    nose: string,
+  ): Piece & { outline: Pt[] } => {
     const fr = at(lnF, 0);
     // Nez qui part du coin du jour, après un palier : le fond de son logement est sur le prolongement du segment.
     const ext = (c: Cut) => (c.outside ? [c.p] : []);
@@ -139,7 +147,7 @@ export function buildCNC(R: Stair): CNC {
     treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + 18, h: 22, s: nose, center: true });
     cx += w + gap;
     rowH = Math.max(rowH, d);
-    return { L: w, l: d };
+    return { L: w, l: d, outline: o.map((q): Pt => [q[0] - b.x0, q[1] - b.y0]) };
   };
   R.treads.forEach((t) => {
     const lnF = R.lines[t.j - 1]!,
