@@ -45,7 +45,7 @@ const refus = (status: number, erreur: string) => () => json({ erreur }, status)
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const msg = () => el("acMsg");
 const settled = () => new Promise((r) => setTimeout(r));
-const vue = () => ["acLogin", "acOffer", "acAccount", "acProof"].filter((id) => !el(id).hidden);
+const vue = () => ["acLogin", "acOffer", "acRetenus", "acAccount", "acProof"].filter((id) => !el(id).hidden);
 const enErreur = () => !msg().hidden && msg().classList.contains("err");
 
 function soumettre(id: string): void {
@@ -1013,5 +1013,161 @@ describe("supprimer le compte", () => {
     expect(store.account()).toEqual(COMPTE);
     expect(await store.get("a")).not.toBeNull();
     expect(vue()).toEqual(["acAccount"]);
+  });
+});
+
+describe("escaliers de l'appareil qui ne sont dans aucun compte", () => {
+  const noms = () => [...el("acRetenusNoms").querySelectorAll("li")].map((li) => li.textContent);
+  const ligne = () => el("saved");
+
+  /** Déconnecté, quelqu'un dessine ces escaliers sans compte. */
+  async function dessines(reponses: Record<string, () => Response>, ...escaliers: string[]) {
+    const d = monter(reponses);
+    await d.store.signIn(COMPTE);
+    await d.store.signOut();
+    for (const [i, nom] of escaliers.entries()) await d.store.save(newProject(`p${i}`, nom, "complet", i + 1));
+    return d;
+  }
+
+  /** Puis une personne se connecte : la question est à l'écran. */
+  async function question(...escaliers: string[]) {
+    const d = await dessines({}, ...escaliers);
+    await d.store.signIn(COMPTE);
+    await d.panel.show();
+    await vi.waitFor(() => expect(vue()).toEqual(["acRetenus"]));
+    d.appels.length = 0;
+    return d;
+  }
+
+  it("un seul : la question au singulier, avec son nom, et un seul bouton orange", async () => {
+    await question("Dupont");
+    expect(el("acRetenusTxt").textContent).toBe(
+      "Un escalier de cet appareil n'est dans aucun compte. Il est peut-être à quelqu'un d'autre.",
+    );
+    expect(noms()).toEqual(["Dupont"]);
+    expect(el("acRetenusNote").textContent).toBe(
+      "Laissé ici, il reste à l'écart de votre compte, et la question reviendra à votre prochaine connexion.",
+    );
+    expect(el("acRetenusPrendre").textContent).toBe("Le mettre dans mon compte");
+    expect(el("acRetenusLaisser").textContent).toBe("Le laisser sur cet appareil");
+    expect(el("acRetenusEffacer").textContent).toBe("L'effacer");
+    expect([...el("acRetenus").querySelectorAll(".btn.go")].map((b) => b.id)).toEqual(["acRetenusPrendre"]);
+  });
+
+  it("plusieurs : la question au pluriel, avec leurs noms", async () => {
+    await question("Dupont", "Martin");
+    expect(el("acRetenusTxt").textContent).toBe(
+      "2 escaliers de cet appareil ne sont dans aucun compte. Ils sont peut-être à quelqu'un d'autre.",
+    );
+    // Le plus récent d'abord, comme dans Mes escaliers.
+    expect(noms()).toEqual(["Martin", "Dupont"]);
+    expect(el("acRetenusNote").textContent).toBe(
+      "Laissés ici, ils restent à l'écart de votre compte, et la question reviendra à votre prochaine connexion.",
+    );
+    expect(el("acRetenusPrendre").textContent).toBe("Les mettre dans mon compte");
+    expect(el("acRetenusLaisser").textContent).toBe("Les laisser sur cet appareil");
+    expect(el("acRetenusEffacer").textContent).toBe("Les effacer");
+  });
+
+  it("un nom d'escalier reste du texte", async () => {
+    await question("<img src=x onerror=alert(1)>");
+    expect(el("acRetenusNoms").querySelector("img")).toBeNull();
+    expect(noms()).toEqual(["<img src=x onerror=alert(1)>"]);
+  });
+
+  it("les mettre dans le compte : ils partent et se revoient, et le compte s'affiche", async () => {
+    const { store, routes } = await question("Dupont");
+    el("acRetenusPrendre").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acAccount"]));
+    expect(routes()).toContain("PUT projets");
+    expect((await store.get("p0"))?.nom).toBe("Dupont");
+    expect((await store.status()).aDecider).toEqual([]);
+  });
+
+  it("les laisser : rien ne part, ils restent cachés, et le compte s'affiche", async () => {
+    const { store, routes } = await question("Dupont");
+    el("acRetenusLaisser").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acAccount"]));
+    await store.sync();
+    expect(routes()).not.toContain("PUT projets");
+    expect(await store.get("p0")).toBeNull();
+    expect((await store.status()).aDecider).toEqual([]);
+
+    await store.signOut();
+    await store.signIn(COMPTE);
+    expect((await store.status()).aDecider).toEqual([{ id: "p0", nom: "Dupont" }]);
+  });
+
+  it("les effacer : le dit d'abord, et sans accord rien ne bouge", async () => {
+    const { store } = await question("Dupont", "Martin");
+    vi.mocked(confirm).mockReturnValueOnce(false);
+    el("acRetenusEffacer").click();
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+    await settled();
+    expect(vi.mocked(confirm).mock.calls[0]![0]).toContain("plus nulle part");
+    expect(vi.mocked(confirm).mock.calls[0]![0]).toContain("2 escaliers");
+    expect(vue()).toEqual(["acRetenus"]);
+    expect((await store.status()).aDecider).toHaveLength(2);
+  });
+
+  it("les effacer, avec accord : plus rien sur l'appareil, rien d'envoyé", async () => {
+    const { store, routes } = await question("Dupont");
+    el("acRetenusEffacer").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acAccount"]));
+    expect(vi.mocked(confirm).mock.calls[0]![0]).toBe("Effacer cet escalier ? Il ne sera plus nulle part.");
+    expect(routes()).not.toContain("PUT projets");
+    await store.signOut();
+    expect(await store.list()).toEqual([]);
+  });
+
+  it("l'en-tête le dit tant que la question attend, sans parler d'échec", async () => {
+    const { store } = await question("Dupont");
+    await vi.waitFor(() => expect(ligne().textContent).toBe("1 escalier attend votre réponse : voir Mon compte"));
+    expect(ligne().classList.contains("ask")).toBe(true);
+    expect(ligne().classList.contains("fail")).toBe(false);
+
+    await store.takeRetained();
+    await vi.waitFor(() => expect(ligne().textContent).toBe("Enregistré sur tous vos appareils"));
+    expect(ligne().classList.contains("ask")).toBe(false);
+  });
+
+  it("l'en-tête au pluriel, même si un envoi a échoué", async () => {
+    const d = await dessines({ "GET projets": refus(500, "Base indisponible.") }, "Dupont", "Martin");
+    await d.store.signIn(COMPTE);
+    await vi.waitFor(() => expect(ligne().textContent).toBe("2 escaliers attendent votre réponse : voir Mon compte"));
+    expect(ligne().classList.contains("fail")).toBe(false);
+  });
+
+  it("revenir sur l'onglet repose la question tant qu'elle attend", async () => {
+    const { panel } = await question("Dupont");
+    await panel.show();
+    await settled();
+    expect(vue()).toEqual(["acRetenus"]);
+  });
+
+  it("après le code : pas de Face ID tant que la question attend, ni après la réponse", async () => {
+    vi.mocked(webauthn.platformAuthenticatorIsAvailable).mockResolvedValue(true);
+    const { panel } = await dessines({ "POST code/verifier": () => json(COMPTE) }, "Dupont");
+    await ouvrir(panel);
+    el<HTMLInputElement>("acEmail").value = "a@exemple.fr";
+    soumettre("acEmailForm");
+    await vi.waitFor(() => expect(el("acCodeForm").hidden).toBe(false));
+    soumettre("acCodeForm");
+    await vi.waitFor(() => expect(vue()).toEqual(["acRetenus"]));
+    el("acRetenusLaisser").click();
+    await vi.waitFor(() => expect(vue()).toEqual(["acAccount"]));
+  });
+
+  it("répondu dans un autre onglet : l'écran suit", async () => {
+    const { store } = await question("Dupont");
+    store.leaveRetained();
+    await vi.waitFor(() => expect(vue()).toEqual(["acAccount"]));
+  });
+
+  it("la session se perd pendant la question : retour à la connexion", async () => {
+    const { store } = await question("Dupont");
+    await store.sessionLost();
+    await vi.waitFor(() => expect(vue()).toEqual(["acLogin"]));
+    expect((await store.status()).aDecider).toEqual([]);
   });
 });

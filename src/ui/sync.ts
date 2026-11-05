@@ -39,6 +39,13 @@ interface SyncState {
   serveurAtelier: number | null;
   /** Version du profil refusée par le serveur : elle reste à envoyer, sans bloquer la déconnexion ; une autre version repart. */
   atelierRefuse: number | null;
+  /**
+   * Escaliers trouvés ici, jamais envoyés, quand un autre compte se connecte : ils sont peut-être à quelqu'un d'autre.
+   * Ils ne partent pas, et ne se montrent qu'à l'appareil sans compte. Gardés à la déconnexion.
+   */
+  retenus: string[];
+  /** La personne connectée n'a pas encore dit ce qu'elle fait des escaliers retenus. */
+  question: boolean;
 }
 
 const EMPTY: SyncState = {
@@ -51,6 +58,8 @@ const EMPTY: SyncState = {
   refuses: {},
   serveurAtelier: null,
   atelierRefuse: null,
+  retenus: [],
+  question: false,
 };
 
 /** État enregistré, par cet onglet ou un autre ; null s'il est absent ou abîmé. */
@@ -82,6 +91,12 @@ export interface RefusVu extends Refus {
   nom: string | null;
 }
 
+/** Escalier retenu, nommé dans la question posée à la connexion. */
+export interface RetenuVu {
+  id: string;
+  nom: string;
+}
+
 export interface SyncStatus {
   compte: Compte | null;
   /** Projets modifiés ou supprimés ici, pas encore envoyés, et le profil de l'atelier s'il l'est aussi. */
@@ -94,6 +109,8 @@ export interface SyncStatus {
   erreur: string | null;
   /** Ce que le serveur a refusé élément par élément. */
   refuses: RefusVu[];
+  /** Escaliers retenus sur lesquels la personne connectée doit répondre. */
+  aDecider: RetenuVu[];
   /** Projets du compte écrits par une version plus récente de l'outil : ils attendent ici sa mise à jour. */
   plusRecents: number;
   /** Le stockage de l'appareil accepte les projets. */
@@ -161,11 +178,11 @@ export class SyncStore implements ProjectStore {
   }
 
   async list(): Promise<Project[]> {
-    return (await this.local.list()).map((p) => this.shown(p));
+    return (await this.local.list()).filter((p) => !this.hides(p.id)).map((p) => this.shown(p));
   }
 
   async get(id: string): Promise<Project | null> {
-    const p = await this.local.get(id);
+    const p = this.hides(id) ? null : await this.local.get(id);
     return p && this.shown(p);
   }
 
@@ -178,6 +195,12 @@ export class SyncStore implements ProjectStore {
   async remove(id: string): Promise<void> {
     const p = await this.local.get(id);
     await this.local.remove(id);
+    if (this.state.retenus.includes(id)) {
+      // Jamais envoyé : le serveur n'a rien à supprimer.
+      this.state.retenus = this.state.retenus.filter((r) => r !== id);
+      this.persist();
+      return this.emitStatus();
+    }
     if (id in this.state.refuses) {
       this.state.refuses = Object.fromEntries(Object.entries(this.state.refuses).filter(([k]) => k !== id));
       this.persist();
@@ -236,6 +259,11 @@ export class SyncStore implements ProjectStore {
     return !this.state.compte && !!this.state.dernier;
   }
 
+  /** Retenu, et l'appareil a un compte, même à la session perdue : cet escalier n'est pas à lui. */
+  private hides(id: string): boolean {
+    return !!this.state.dernier && this.state.retenus.includes(id);
+  }
+
   /** Le projet tel que la page peut le voir. */
   private shown(p: Project): Project {
     return this.hidesClients() ? { ...p, devis: null } : p;
@@ -254,6 +282,7 @@ export class SyncStore implements ProjectStore {
       offline: this.offline,
       erreur: this.erreur,
       refuses: this.state.compte ? await this.refused() : [],
+      aDecider: this.state.compte && this.state.question ? await this.retained() : [],
       plusRecents: this.state.compte ? this.plusRecents : 0,
       stored: this.local.stored(),
     };
@@ -270,11 +299,28 @@ export class SyncStore implements ProjectStore {
     return out;
   }
 
-  /** Connexion réussie : les projets de l'appareil montent dans le compte, ceux du compte descendent. */
+  /** Escaliers retenus encore sur l'appareil. */
+  private async retained(): Promise<RetenuVu[]> {
+    const out: RetenuVu[] = [];
+    for (const id of this.state.retenus) {
+      const p = await this.local.get(id);
+      if (p) out.push({ id, nom: p.nom });
+    }
+    return out;
+  }
+
+  /**
+   * Connexion réussie : les projets de l'appareil montent dans le compte, ceux du compte descendent. Sauf si un autre
+   * compte a déjà servi ici : ce qu'il reste à envoyer est peut-être à une autre personne, et attend sa réponse.
+   */
   async signIn(compte: Compte): Promise<void> {
     const hidden = this.hidesClients();
+    const arrive = !this.state.compte;
+    const autre = !!this.state.dernier && this.state.dernier !== compte.email && this.state.dernierId !== compte.id;
+    // Après une déconnexion, l'appareil a oublié qui c'était : ce peut être une autre personne.
+    const inconnu = this.state.connu && !this.state.dernier;
     let changed: string[] = [];
-    if (this.state.dernier && this.state.dernier !== compte.email && this.state.dernierId !== compte.id) {
+    if (autre) {
       // Autre compte que le précédent : les projets de celui-ci, à l'abri dans son compte, quittent l'appareil.
       changed = await this.removeSynced();
       this.atelier?.clear();
@@ -284,6 +330,10 @@ export class SyncStore implements ProjectStore {
       this.state.serveurAtelier = null;
       this.state.atelierRefuse = null;
     }
+    if (autre || inconnu) this.state.retenus = await this.allIds();
+    this.state.retenus = (await this.retained()).map((r) => r.id);
+    if (arrive) this.state.question = this.state.retenus.length > 0;
+    changed = [...changed, ...this.state.retenus];
     this.state.compte = compte;
     this.state.dernier = compte.email;
     this.state.dernierId = compte.id;
@@ -291,6 +341,35 @@ export class SyncStore implements ProjectStore {
     this.persist();
     this.emit(hidden ? [...new Set([...changed, ...(await this.allIds())])] : changed);
     await this.sync();
+  }
+
+  /** Réponse à la question : les escaliers retenus rejoignent le compte connecté. */
+  async takeRetained(): Promise<void> {
+    const ids = this.state.retenus;
+    this.state.retenus = [];
+    this.state.question = false;
+    this.persist();
+    this.emit(ids);
+    this.emitStatus();
+    await this.sync();
+  }
+
+  /** Réponse à la question : ils restent à l'écart sur l'appareil, et la question revient à la connexion suivante. */
+  leaveRetained(): void {
+    this.state.question = false;
+    this.persist();
+    this.emitStatus();
+  }
+
+  /** Réponse à la question : ils quittent l'appareil. Jamais envoyés, ils ne seront plus nulle part. */
+  async eraseRetained(): Promise<void> {
+    const ids = this.state.retenus;
+    for (const id of ids) await this.local.remove(id);
+    this.state.retenus = [];
+    this.state.question = false;
+    this.persist();
+    this.emit(ids);
+    this.emitStatus();
   }
 
   /**
@@ -311,9 +390,12 @@ export class SyncStore implements ProjectStore {
     } catch (e) {
       if (!(e instanceof NotSignedIn)) throw e;
     }
-    this.emit(await this.removeSynced());
+    const removed = await this.removeSynced();
     if (!this.atelierRefused()) this.atelier?.clear();
+    const { retenus } = this.state;
     this.reset(true);
+    // Sans compte sur l'appareil, ce qui était retenu se revoit.
+    this.emit([...removed, ...retenus]);
   }
 
   /** Retire de l'appareil les projets dont le serveur a la dernière version. */
@@ -335,7 +417,8 @@ export class SyncStore implements ProjectStore {
    */
   async deleteAccount(effacer: boolean): Promise<void> {
     await this.api.deleteAccount();
-    const removed = effacer ? await this.allIds() : [];
+    // Ce qui est retenu n'est pas à ce compte.
+    const removed = effacer ? (await this.allIds()).filter((id) => !this.state.retenus.includes(id)) : [];
     for (const id of removed) await this.local.remove(id);
     this.emit(removed);
     this.atelier?.clear();
@@ -379,7 +462,14 @@ export class SyncStore implements ProjectStore {
    */
   private otherTabExchanged(): void {
     const other = readState(this.storage);
-    if (!this.state.compte || other?.compte?.id !== this.state.compte.id) return;
+    const retenus = other?.retenus ?? [];
+    if (retenus.join() !== this.state.retenus.join()) {
+      const changed = [...new Set([...retenus, ...this.state.retenus])];
+      this.state.retenus = retenus;
+      this.emit(changed);
+    }
+    this.state.question = !!other?.question;
+    if (!this.state.compte || other?.compte?.id !== this.state.compte.id) return this.emitStatus();
     const { serveur } = this.state;
     for (const [id, modifie] of Object.entries(other.serveur ?? {}))
       if (!(id in serveur) || serveur[id]! < modifie) serveur[id] = modifie;
@@ -402,9 +492,10 @@ export class SyncStore implements ProjectStore {
 
   /** Versions plus récentes ici que sur le serveur, et suppressions à envoyer ; les refusées seulement à la demande. */
   private async pending(withRefused = false): Promise<Changement[]> {
-    const { serveur, supprimes, refuses } = this.state;
+    const { serveur, supprimes, refuses, retenus } = this.state;
     const skip = (id: string, modifie: number) => !withRefused && refuses[id]?.modifie === modifie;
     const changes: Changement[] = (await this.local.list())
+      .filter((p) => !retenus.includes(p.id))
       .filter((p) => (!(p.id in serveur) || p.modifie > serveur[p.id]!) && !skip(p.id, p.modifie))
       .map((p) => ({ id: p.id, projet: p }));
     for (const [id, modifie] of Object.entries(supprimes))
@@ -607,7 +698,7 @@ export class SyncStore implements ProjectStore {
   private reset(connu: boolean): void {
     clearTimeout(this.timer);
     clearTimeout(this.relais);
-    this.state = { ...EMPTY, connu, serveur: {}, supprimes: {}, refuses: {} };
+    this.state = { ...EMPTY, connu, serveur: {}, supprimes: {}, refuses: {}, retenus: this.state.retenus };
     this.plusRecents = 0;
     this.offline = false;
     this.erreur = null;

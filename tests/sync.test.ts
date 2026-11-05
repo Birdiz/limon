@@ -89,6 +89,147 @@ const avecClient = (id: string, modifie: number): Project => ({
   devis: { ...newDevis(), client: { nom: "M. Martin", adresse: "1 rue des Lilas", chantier: "" } },
 });
 
+describe("escaliers non envoyés quand le compte change", () => {
+  /** Jean a un escalier envoyé et un autre pas encore, puis sa session se perd. */
+  const sessionPerdue = async (a: ReturnType<typeof device>) => {
+    await a.signIn("jean@exemple.fr");
+    await a.store.save(project("envoye", "Envoyé", 1));
+    await a.store.sync();
+    a.online = false;
+    await a.store.save(avecClient("nonEnvoye", 2));
+    await a.store.sync();
+    a.online = true;
+    await a.store.sessionLost();
+  };
+  /** Déconnecté, quelqu'un dessine un escalier sans compte. */
+  const horsCompte = async (a: ReturnType<typeof device>) => {
+    await a.signIn("jean@exemple.fr");
+    await a.store.signOut();
+    await a.store.save(avecClient("nonEnvoye", 2));
+  };
+  const duCompte = async (email: string) => {
+    const b = device();
+    await b.signIn(email);
+    return b.names();
+  };
+
+  it.each([
+    ["session perdue", sessionPerdue],
+    ["après une déconnexion", horsCompte],
+  ])("%s, autre adresse, sans réponse : rien ne part et rien ne se montre", async (_, avant) => {
+    const a = device();
+    await avant(a);
+    a.envois.length = 0;
+    await a.signIn("marie@exemple.fr");
+    await a.store.sync();
+    expect(a.envois).toEqual([]);
+    expect(await duCompte("marie@exemple.fr")).toEqual([]);
+    expect(await a.names()).toEqual([]);
+    expect(await a.store.get("nonEnvoye")).toBeNull();
+    const status = await a.store.status();
+    expect(status.aDecider).toEqual([{ id: "nonEnvoye", nom: "Dupont" }]);
+    expect(status.pending).toBe(0);
+  });
+
+  it("la réponse attend même après un rechargement de la page", async () => {
+    const a = device();
+    await sessionPerdue(a);
+    await a.signIn("marie@exemple.fr");
+    const rechargee = device(a.storage);
+    rechargee.f = a.f;
+    expect((await rechargee.store.status()).aDecider).toEqual([{ id: "nonEnvoye", nom: "Dupont" }]);
+    expect(await rechargee.names()).toEqual([]);
+  });
+
+  it("les mettre dans ce compte : ils montent et se revoient, client compris", async () => {
+    const a = device();
+    await sessionPerdue(a);
+    await a.signIn("marie@exemple.fr");
+    await a.store.takeRetained();
+    expect(await a.names()).toEqual(["Dupont"]);
+    expect((await a.store.get("nonEnvoye"))?.devis?.client.nom).toBe("M. Martin");
+    expect((await a.store.status()).aDecider).toEqual([]);
+    expect(await duCompte("marie@exemple.fr")).toEqual(["Dupont"]);
+  });
+
+  it("les laisser : ils restent à l'abri, hors de ce compte, et la question revient à la connexion suivante", async () => {
+    const a = device();
+    await sessionPerdue(a);
+    await a.signIn("marie@exemple.fr");
+    await a.store.leaveRetained();
+    expect((await a.store.status()).aDecider).toEqual([]);
+    await a.store.sync();
+    expect(await a.names()).toEqual([]);
+    expect(await duCompte("marie@exemple.fr")).toEqual([]);
+
+    await a.store.signOut();
+    expect(await a.names()).toEqual(["Dupont"]);
+
+    await a.signIn("jean@exemple.fr");
+    expect((await a.store.status()).aDecider).toEqual([{ id: "nonEnvoye", nom: "Dupont" }]);
+    await a.store.takeRetained();
+    expect(await duCompte("jean@exemple.fr")).toEqual(["Dupont", "Envoyé"]);
+  });
+
+  it("les effacer : plus rien sur l'appareil, ni trace envoyée", async () => {
+    const a = device();
+    await sessionPerdue(a);
+    await a.signIn("marie@exemple.fr");
+    a.envois.length = 0;
+    await a.store.eraseRetained();
+    await a.store.sync();
+    expect((await a.store.status()).aDecider).toEqual([]);
+    expect(a.envois).toEqual([]);
+    expect(await new LocalStore(a.storage).list()).toEqual([]);
+  });
+
+  it("la même adresse après une session perdue ne pose aucune question", async () => {
+    const a = device();
+    await sessionPerdue(a);
+    await a.signIn("jean@exemple.fr");
+    expect((await a.store.status()).aDecider).toEqual([]);
+    expect(await a.names()).toEqual(["Dupont", "Envoyé"]);
+    expect(await duCompte("jean@exemple.fr")).toEqual(["Dupont", "Envoyé"]);
+  });
+
+  it("une toute première connexion ne pose aucune question : les escaliers montent", async () => {
+    const a = device();
+    await a.store.save(project("p", "Dupont", 1));
+    await a.signIn("jean@exemple.fr");
+    expect((await a.store.status()).aDecider).toEqual([]);
+    expect(await duCompte("jean@exemple.fr")).toEqual(["Dupont"]);
+  });
+
+  it("une connexion sans escalier qui attend ne pose aucune question", async () => {
+    const a = device();
+    await a.signIn("jean@exemple.fr");
+    await a.store.signOut();
+    await a.signIn("marie@exemple.fr");
+    expect((await a.store.status()).aDecider).toEqual([]);
+  });
+
+  it("ce qui est créé une fois connecté part normalement, à côté de ce qui est retenu", async () => {
+    const a = device();
+    await sessionPerdue(a);
+    await a.signIn("marie@exemple.fr");
+    await a.store.save(project("neuf", "Neuf", 5));
+    await a.store.sync();
+    expect(await a.names()).toEqual(["Neuf"]);
+    expect(await duCompte("marie@exemple.fr")).toEqual(["Neuf"]);
+  });
+
+  it("un compte supprimé avec ses escaliers ne touche pas à ceux qui sont retenus", async () => {
+    const a = device();
+    await sessionPerdue(a);
+    await a.signIn("marie@exemple.fr");
+    await a.store.leaveRetained();
+    await a.store.save(project("neuf", "Neuf", 5));
+    await a.store.sync();
+    await a.store.deleteAccount(true);
+    expect(await a.names()).toEqual(["Dupont"]);
+  });
+});
+
 describe("synchronisation des projets", () => {
   it("sans compte, tout reste sur l'appareil", async () => {
     const a = device();
@@ -360,7 +501,7 @@ describe("synchronisation des projets", () => {
     expect(await b.names()).toEqual(["Dupont modifié"]);
   });
 
-  it("session expirée : les projets restent, et suivent le compte suivant s'ils n'étaient pas envoyés", async () => {
+  it("session expirée : les projets restent, et ne suivent le compte suivant que si on le lui dit", async () => {
     const a = device();
     await a.store.save(project("p", "Dupont", 1));
     await a.signIn("jean@exemple.fr");
@@ -375,8 +516,9 @@ describe("synchronisation des projets", () => {
     await s.db.query("delete from sessions");
     await a.store.save(project("r", "Durand", 3));
     await a.store.sync();
-    // Autre compte : Dupont et Martin restent dans le compte de Jean, Durand suit Marie.
+    // Autre compte : Dupont et Martin restent dans le compte de Jean, Durand suit Marie si elle le prend.
     await a.signIn("marie@exemple.fr");
+    await a.store.takeRetained();
     expect(await a.names()).toEqual(["Durand"]);
     const b = device();
     await b.signIn("jean@exemple.fr");
@@ -522,12 +664,14 @@ describe("synchronisation des projets", () => {
       expect((await a.store.get("fichier"))!.devis!.client.nom).toBe("M. Martin");
     });
 
-    it("la reprise à une autre adresse : ce qui reste sur l'appareil se revoit", async () => {
+    it("la reprise à une autre adresse : ce qui reste sur l'appareil se revoit une fois repris", async () => {
       const a = await perdue();
       await a.store.save(avecClient("q", 50));
       await a.signIn("marie@exemple.fr");
       expect(a.store.hidesClients()).toBe(false);
       expect(await a.store.get("p")).toBeNull();
+      expect(await a.store.get("q")).toBeNull();
+      await a.store.takeRetained();
       expect((await a.store.get("q"))!.devis!.client.nom).toBe("M. Martin");
     });
 
@@ -1474,6 +1618,25 @@ describe("deux fenêtres d'un navigateur connectées au même compte", () => {
     b.requests = 0;
     return { a, b };
   }
+
+  it("une autre personne se connecte dans A : B apprend ce qui est retenu, et ne l'envoie pas", async () => {
+    const { a, b } = await fenetres();
+    a.online = false;
+    await a.store.save(avecClient("nonEnvoye", 2000));
+    await a.store.sync();
+    a.online = true;
+    await a.store.sessionLost();
+    let notes = 0;
+    b.store.onStatus(() => notes++);
+    await a.signIn("marie@exemple.fr");
+    ecrit("limon-projets");
+    notes = 0;
+    ecrit("limon-synchro");
+    expect(notes).toBeGreaterThan(0);
+    expect((await b.store.status()).aDecider).toEqual([{ id: "nonEnvoye", nom: "Dupont" }]);
+    expect((await b.store.status()).pending).toBe(0);
+    expect(await b.store.get("nonEnvoye")).toBeNull();
+  });
 
   it("A a envoyé sa cote : B le sait, ne l'envoie pas et ne le dit plus", async () => {
     const { a, b } = await fenetres();
