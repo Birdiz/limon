@@ -8,6 +8,7 @@ import {
   niveauDe,
   offreVue,
   prixEuros,
+  prixHT,
   statutReel,
   textesAbonnement,
   PRIX,
@@ -69,6 +70,14 @@ describe("niveaux", () => {
       "12,50 €",
       "140 €",
     ]);
+    const ht = [PRIX.payant.mois, PRIX.payant.an, PRIX.premium.mois, PRIX.premium.an].map((p) => prixEuros(prixHT(p)));
+    expect(ht).toEqual(["7,50 €", "83,33 €", "10,42 €", "116,67 €"]);
+    const accueil = textesAbonnement(fs.readFileSync("index.html", "utf8"), true);
+    const mentions = textesAbonnement(fs.readFileSync("mentions-legales/index.html", "utf8"), true);
+    for (const e of ht) {
+      expect(accueil).toContain(e.replace(" €", ""));
+      expect(mentions).toContain(`${e} HT`);
+    }
   });
 
   describe("textes des pages selon l'interrupteur", () => {
@@ -93,7 +102,8 @@ describe("niveaux", () => {
         for (const ouvert of [true, false]) expect(textesAbonnement(lire(f), ouvert)).not.toContain("abonnement:");
       const accueil = lire("index.html");
       expect(textesAbonnement(accueil, false)).not.toContain("12,50");
-      expect(textesAbonnement(accueil, false)).toContain("essai ouvert");
+      expect(textesAbonnement(accueil, false)).toContain("30 jours d'essai gratuits");
+      expect(textesAbonnement(accueil, false)).not.toContain("tout est gratuit");
       expect(textesAbonnement(accueil, true)).toContain("12,50 €");
       expect(textesAbonnement(accueil, true)).toContain("140 € TTC");
       expect(textesAbonnement(accueil, true)).not.toContain("En ce moment");

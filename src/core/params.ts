@@ -1,5 +1,16 @@
 export type Forme = "droit" | "quart-g" | "quart-d" | "dq-g" | "dq-d" | "demi-g" | "demi-d";
-export type Essence = "chene" | "hetre" | "frene" | "sapin" | "noyer";
+export type Essence =
+  | "chene"
+  | "hetre"
+  | "frene"
+  | "chataignier"
+  | "erable"
+  | "merisier"
+  | "noyer"
+  | "sapin"
+  | "epicea"
+  | "douglas"
+  | "meleze";
 /** Remplissage du garde-corps côté jour. */
 export type GardeCorps = "aucun" | "balustres" | "lisses";
 /** Pose des balustres ou montants : dans le chant haut du limon, ou sur son flanc côté vide. */
@@ -224,7 +235,20 @@ export function changeForme(prev: Params, next: Params): Params {
     ? { ...next, J: next.C - 2 * next.W }
     : { ...next, C: 2 * next.W + Math.max(next.J, jourUnPoteau(next)) };
 }
-export const ESSENCES: readonly Essence[] = ["chene", "hetre", "frene", "sapin", "noyer"];
+/** Feuillus puis résineux, dans l'ordre des listes. */
+export const ESSENCES: readonly Essence[] = [
+  "chene",
+  "hetre",
+  "frene",
+  "chataignier",
+  "erable",
+  "merisier",
+  "noyer",
+  "sapin",
+  "epicea",
+  "douglas",
+  "meleze",
+];
 export const GARDE_CORPS: readonly GardeCorps[] = ["aucun", "balustres", "lisses"];
 export const POSES: readonly Pose[] = ["chant", "anglaise"];
 export const FORMES_TREMIE: readonly FormeTremie[] = ["rect", "L"];
@@ -233,7 +257,19 @@ export const PROFILS_NEZ: readonly ProfilNez[] = ["arrondi", "quart", "chanfrein
 export const POSES_CM: readonly PoseCm[] = ["sur", "derriere"];
 
 /** Masse volumique moyenne à 12 % d'humidité, en kg/m³ (ordre de grandeur pour le poids). */
-export const DENSITE: Record<Essence, number> = { chene: 710, hetre: 720, frene: 700, sapin: 450, noyer: 650 };
+export const DENSITE: Record<Essence, number> = {
+  chene: 710,
+  hetre: 720,
+  frene: 700,
+  chataignier: 590,
+  erable: 650,
+  merisier: 620,
+  noyer: 650,
+  sapin: 450,
+  epicea: 450,
+  douglas: 530,
+  meleze: 600,
+};
 
 export const NUMERIC_KEYS = [
   "H",

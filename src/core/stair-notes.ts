@@ -150,16 +150,27 @@ export function stairNotes(ctx: NotesCtx, suggest: boolean): Note[] {
     const fix = pal ? palierFix(p, runs, last, rMin, n) : runFix(p, quart, Lw, n, nAuto);
     if (fix) N.push(["info", fix[0], fix[1]]);
   }
-  if (quart && st.gIn !== "ok") {
-    // Plus petit nombre de marches balancées qui garde 100 mm au jour.
-    let mb: number | null = null;
-    for (let m = Math.max(p.mb, 1) + 1; suggest && m <= 12 && mb == null; m++) {
+  // Plus petit nombre de marches balancées qui garde ce giron au jour.
+  const mbPour = (seuil: number): number | null => {
+    for (let m = Math.max(p.mb, 1) + 1; suggest && m <= 12; m++) {
       const r = compute({ ...p, mb: m }, false);
-      if (r.ok && r.stair.gInMin >= CONFORT.gIn.min) mb = m;
+      if (r.ok && r.stair.gInMin >= seuil) return m;
     }
+    return null;
+  };
+  if (quart && st.gIn !== "ok") {
+    const mb = mbPour(CONFORT.gIn.min);
     N.push([
       st.gIn,
       `Giron côté jour de ${fmt(gInMin)} mm seulement : augmentez le nombre de marches balancées${mb ? ` (${mb} suffisent)` : ""}.`,
+      mb ? { set: { mb }, label: `Passer à ${mb}` } : undefined,
+    ]);
+  } else if (quart && gInMin < CONFORT.gIn.conseil) {
+    // Dans les règles, mais au bas de la plage : beaucoup d'artisans veulent plus de pied au collet.
+    const mb = mbPour(CONFORT.gIn.conseil);
+    N.push([
+      "info",
+      `Giron côté jour de ${fmt(gInMin)} mm : au-dessus des ${CONFORT.gIn.min} mm, mais beaucoup visent ${CONFORT.gIn.conseil} à 150 mm au collet${mb ? ` ; ${mb} marches balancées donnent ${CONFORT.gIn.conseil} mm au moins` : ""}.`,
       mb ? { set: { mb }, label: `Passer à ${mb}` } : undefined,
     ]);
   }
@@ -281,6 +292,14 @@ export function stairNotes(ctx: NotesCtx, suggest: boolean): Note[] {
           : `Trémie minimale pour 2 000 mm d'échappée : ${fmt(tLmin!)} mm de long.`,
     ]);
   }
+  // Plus d'un mètre de chute côté vide demande un garde-corps (NF P01-012) ; il peut être posé à part ou inutile entre
+  // deux murs, d'où une remarque et non une alerte.
+  if (!rail && p.gc === "aucun" && p.H > 1000)
+    N.push([
+      "info",
+      `Pas de garde-corps : côté vide, il en faut un dès 1 m de chute (main courante à 900 mm au moins, NF P01-012). Rien à faire si l'escalier est entre deux murs ou si le garde-corps est posé à part.`,
+      { set: { gc: "balustres" }, label: "Ajouter des balustres" },
+    ]);
   if (rail) {
     const what =
       rail.type === "balustres"

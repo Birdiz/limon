@@ -1,4 +1,4 @@
-import type { BoardPart, CNC } from "../cnc/build";
+import type { BoardPart, Pieces } from "../core/pieces";
 import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist";
 import type { Entity } from "../cnc/entities";
 import { fmt } from "../core/format";
@@ -38,22 +38,22 @@ export function stringerFitHTML(boards: readonly BoardPart[], R: Stair): string 
 }
 
 /** Alerte si des pièces dépassent les plateaux disponibles. */
-export function stockFitHTML(cnc: CNC, R: Stair): string {
-  return stockNotes(cnc, R)
+export function stockFitHTML(P: Pieces, R: Stair): string {
+  return stockNotes(P, R)
     .map(([st, t]) => `<div class="note ${st}">${t}</div>`)
     .join("");
 }
 
 /** Liste de débit : limons, marches, contremarches, garde-corps, poteau. */
-export function cutListHTML(cnc: CNC, R: Stair): string {
+export function cutListHTML(P: Pieces, R: Stair): string {
   return (
     "<thead><tr><th>Pièce</th><th>Qté</th><th>Longueur</th><th>Largeur</th><th>Épaisseur</th></tr></thead><tbody>" +
-    cutRows(cnc, R)
+    cutRows(P, R)
       .map(
         (r) => `<tr><td>${r.name}</td><td>${r.q}</td><td>${fmt(r.L)}</td><td>${fmt(r.l)}</td><td>${fmt(r.e)}</td></tr>`,
       )
       .join("") +
     "</tbody>" +
-    `<tfoot><tr><td colspan="5">${volumeText(cnc, R)}</td></tr></tfoot>`
+    `<tfoot><tr><td colspan="5">${volumeText(P, R)}</td></tr></tfoot>`
   );
 }

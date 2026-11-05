@@ -338,8 +338,28 @@ describe("corrections proposées", () => {
   };
 
   it("ne propose rien quand tout est bon", () => {
-    expect(fixes(stairOf({ forme: "quart-d" }))).toEqual([]);
-    expect(fixes(stairOf({ forme: "droit" }))).toEqual([]);
+    expect(fixes(stairOf({ forme: "quart-d", mb: 8, gc: "balustres" }))).toEqual([]);
+    expect(fixes(stairOf({ forme: "droit", gc: "balustres" }))).toEqual([]);
+  });
+
+  it("rappelle le garde-corps au-delà d'un mètre de chute, sans en faire une alerte", () => {
+    const R = stairOf({ forme: "droit" });
+    const note = R.notes.find(([, t]) => t.startsWith("Pas de garde-corps"))!;
+    expect(note[0]).toBe("info");
+    expect(note[2]!.set).toEqual({ gc: "balustres" });
+    expect(R.notes[0]![0]).toBe("ok");
+    expect(stairOf({ forme: "droit", H: 900 }).notes.some(([, t]) => t.startsWith("Pas de garde-corps"))).toBe(false);
+  });
+
+  it("dit qu'un giron au jour bon mais court peut gagner une marche balancée", () => {
+    const R = stairOf({ forme: "quart-d" });
+    expect(R.st.gIn).toBe("ok");
+    expect(R.gInMin).toBeLessThan(120);
+    const note = R.notes.find(([, t]) => t.startsWith("Giron côté jour"))!;
+    expect(note[0]).toBe("info");
+    expect(note[1]).toContain("120 à 150 mm au collet");
+    expect(note[2]!.set).toEqual({ mb: 8 });
+    expect(stairOf({ forme: "quart-d", mb: 8 }).gInMin).toBeGreaterThanOrEqual(120);
   });
 
   it("trouve le reculement le plus proche qui rend l'escalier confortable", () => {
@@ -358,7 +378,7 @@ describe("corrections proposées", () => {
 
   it("allonge le côté départ d'un quart tournant et ajoute des marches balancées", () => {
     const R = stairOf({ forme: "quart-d", H: 3200 });
-    expect(fixes(R)).toEqual([{ A: 3590, nAuto: true }, { mb: 8 }, { hl: 350 }]);
+    expect(fixes(R)).toEqual([{ A: 3590, nAuto: true }, { mb: 8 }, { hl: 350 }, { gc: "balustres" }]);
     const F = applyAll({ forme: "quart-d", H: 3200 });
     expect(Object.values(F.st).every((s) => s === "ok")).toBe(true);
   });

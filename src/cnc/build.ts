@@ -4,126 +4,44 @@
    Limons : développé vu depuis la face côté marches, avec les logements à défoncer.
    Poteaux : leurs quatre faces vues de l'extérieur, couchées pied à gauche, avec logements et mortaises. */
 import { fmt } from "../core/format";
-import { cncFrame, type Section } from "../core/pockets";
-import { polyPath, type Cut } from "../core/poly";
 import { nezDXF } from "../core/nez";
-import { arriereMarche, isLeft } from "../core/params";
+import type { Section } from "../core/pockets";
+import { boardNames, cutFrame, pieces, riserShape, treadShape, type Pieces, type RiserEnd } from "../core/pieces";
 import { GC, postTenon } from "../core/railing";
 import { PERCAGE, type NewelFace, type NoseLine, type Stair } from "../core/stair";
 import { layBoard, stringerOutline } from "../core/stringer";
-import { V, bbox, closeRing, interp, type Pt, type Vertex } from "../core/vec";
+import { V, interp, type Pt, type Vertex } from "../core/vec";
 import type { Entity, Layer } from "./entities";
 import { buildRailing, type RailingCNC } from "./railing";
 
-export interface TreadPart {
-  j: number;
-  /** Longueur hors tout (le long du nez). */
-  L: number;
-  /** Profondeur hors tout (hauteur pour une contremarche). */
-  l: number;
-  /** Palier d'un tournant, débité et logé comme une marche. */
-  palier?: true;
-}
-
-export interface BoardPart {
-  name: string;
-  L: number;
-  l: number;
-  pockets: number;
-  /** Hauteur de limon nécessaire pour garder 20 mm de bois sous chaque logement. */
-  need: number;
-  /** Hauteur retenue pour cette pièce. */
-  hl: number;
-}
-
-/** Poteau d'un tournant : longueur, largeur et épaisseur de débit. */
-export interface PostPart {
-  j: number;
-  L: number;
-  l: number;
-  e: number;
-}
-
-/** Limons dont des logements débordent sous le bord : moins de 20 mm de bois sous le plus bas. */
-export const tightBoards = (boards: readonly BoardPart[]): BoardPart[] => boards.filter((b) => b.need > b.hl + 0.5);
-
-type Piece = Pick<TreadPart, "L" | "l">;
-
-/** Pièces plus grandes qu'un plateau de pL (dans le fil) sur pW. */
-export function oversize(cnc: CNC, pL: number, pW: number) {
-  const big = (q: Piece) => q.L > pL + 0.5 || q.l > pW + 0.5;
-  return {
-    treads: cnc.treadParts.filter(big),
-    risers: cnc.riserParts.filter(big),
-    boards: cnc.boardParts.filter(big),
-  };
-}
-
-/** Volume brut débité, en m³ : rectangle de débit de chaque pièce × son épaisseur. */
-export function stockVolume(cnc: CNC, R: Stair): number {
-  const p = R.params;
-  const sum = (list: readonly Piece[], e: number) => list.reduce((v, q) => v + q.L * q.l * e, 0);
-  const mp = cnc.mpPart ? cnc.mpPart.L * cnc.mpPart.l * p.mpE : 0;
-  const post = cnc.postParts.reduce((v, q) => v + q.L * q.l * q.e, 0);
-  const rail = cnc.rail
-    ? sum(cnc.rail.handrailParts, p.mcL) + sum(cnc.rail.postParts, p.bs) + sum(cnc.rail.railParts, p.bs)
-    : 0;
-  return (sum(cnc.boardParts, p.el) + sum(cnc.treadParts, p.et) + mp + sum(cnc.riserParts, p.ecm) + post + rail) / 1e9;
-}
-
-export interface CNC {
+/** Pièces débitées et leur pose : un jeu d'entités par fichier DXF. */
+export interface CNC extends Pieces {
   treadEnts: Entity[];
   riserEnts: Entity[];
   boardEnts: Entity[];
-  treadParts: TreadPart[];
-  riserParts: TreadPart[];
-  boardParts: BoardPart[];
-  /** Marche palière, dans marches.dxf ; null sans elle. */
-  mpPart: TreadPart | null;
   postEnts: Entity[];
-  postParts: PostPart[];
   /** Garde-corps côté jour, s'il y en a un. */
   rail: RailingCNC | null;
 }
 
-export function buildCNC(R: Stair): CNC {
+/** Pose des pièces dans les fichiers DXF. P : les pièces de l'escalier, recalculées si on ne les donne pas. */
+export function buildCNC(R: Stair, P?: Pieces): CNC {
   const p = R.params;
-  const left = isLeft(p.forme),
-    mx = left ? -1 : 1,
-    M = (q: Pt): Pt => [mx * q[0], q[1]];
-  const e = p.enc,
-    bo = arriereMarche(p);
-  const { inOff, outOff, at, riserBand } = cncFrame(R, p);
+  const F = cutFrame(R),
+    { left, M, bo, at, riserBand } = F;
+  P ??= pieces(R, F);
+  const e = p.enc;
 
   // Marches
-  const treadEnts: Entity[] = [],
-    treadParts: TreadPart[] = [];
+  const treadEnts: Entity[] = [];
   let cx = 0,
     cy = 0,
     rowH = 0;
   const gap = 40,
     rowMax = 2600;
   // Une marche, du nez lnF jusqu'à la coupe arrière bk, placée à la suite des précédentes.
-  const tread = (lnF: NoseLine, bk: Section, marks: [Layer, Pt[]][], label: string, nose: string): Piece => {
-    const fr = at(lnF, 0);
-    // Nez qui part du coin du jour, après un palier : le fond de son logement est sur le prolongement du segment.
-    const ext = (c: Cut) => (c.outside ? [c.p] : []);
-    const outline = closeRing([
-      ...ext(fr.inD),
-      ...polyPath(inOff, fr.inD.s, bk.inD.s),
-      ...ext(bk.inD),
-      ...polyPath(outOff, bk.outD.s, fr.outD.s),
-    ]);
-    // Repère local : nez sur l'axe x, montée vers +y, vu de dessus.
-    const ref = M(fr.inF.p),
-      nr = M(lnF.nr),
-      ax: Pt = [nr[1], -nr[0]];
-    const loc = (q: Pt): Pt => {
-      const d = V.sub(M(q), ref);
-      return [V.dot(d, ax), V.dot(d, nr)];
-    };
-    const o = outline.map(loc),
-      b = bbox(o);
+  const tread = (lnF: NoseLine, bk: Section, marks: [Layer, Pt[]][], label: string, nose: string): void => {
+    const { o, b, loc } = treadShape(F, lnF, bk);
     if (cx > 0 && cx + (b.x1 - b.x0) > rowMax) {
       cx = 0;
       cy += rowH + gap + 30;
@@ -142,7 +60,6 @@ export function buildCNC(R: Stair): CNC {
     treadEnts.push({ kind: "text", layer: "TEXTE", x: cx + w / 2, y: cy + ny, h: 22, s: nose, center: true });
     cx += w + gap;
     rowH = Math.max(rowH, d);
-    return { L: w, l: d };
   };
   // Contremarche sous le nez : sa place vue par transparence, ou la rainure de logement de son embrèvement,
   // élargie du jeu et menée d'un bout à l'autre de la marche (ses bouts entrent dans les limons avec elle).
@@ -164,49 +81,29 @@ export function buildCNC(R: Stair): CNC {
       ...(p.cm && p.cmPose === "sur" ? [["CM_DESSUS", riserBand(lnB).quad] as [Layer, Pt[]]] : []),
       ...grooves(t.grooves),
     ];
-    const part = tread(lnF, at(lnB, bo), marks, t.palier ? "PALIER" : `M${t.j}`, nose);
-    treadParts.push({ j: t.j, ...part, ...(t.palier ? { palier: true as const } : {}) });
+    tread(lnF, at(lnB, bo), marks, t.palier ? "PALIER" : `M${t.j}`, nose);
   });
   // Marche palière : du dernier nez jusqu'au bout des limons, encastrée comme les marches.
   const mp = R.mp,
     lnA = R.lines[R.n - 1]!;
-  const mpPart = mp
-    ? {
-        j: R.n,
-        ...tread(
-          lnA,
-          at(lnA, mp.depth),
-          [...(p.cm ? [under(lnA)] : []), ...grooves(mp.grooves)],
-          "MP",
-          `marche paliere ep. ${fmt(mp.e)} - ${nezDXF(p.nez, mp.rn)}`,
-        ),
-      }
-    : null;
+  if (mp)
+    tread(
+      lnA,
+      at(lnA, mp.depth),
+      [...(p.cm ? [under(lnA)] : []), ...grooves(mp.grooves)],
+      "MP",
+      `marche paliere ep. ${fmt(mp.e)} - ${nezDXF(p.nez, mp.rn)}`,
+    );
 
   // Contremarches : vues de face depuis l'escalier, bas en bas, encastrement compris, longueur hors tout.
   // Dans le tournant, la contremarche arrive en biais sur le limon : chaque bout biais est coté.
-  const riserEnts: Entity[] = [],
-    riserParts: TreadPart[] = [];
+  const riserEnts: Entity[] = [];
   cx = 0;
   cy = 0;
   rowH = 0;
   if (p.cm)
-    R.risers.forEach((r, i) => {
-      const ln = R.lines[i]!,
-        band = riserBand(ln),
-        nr = M(ln.nr),
-        ax: Pt = [nr[1], -nr[0]];
-      const x = (q: Pt) => V.dot(M(q), ax);
-      type End = { f: number; b: number };
-      const ends: End[] = [
-        [band.a.inD.p, band.b.inD.p],
-        [band.a.outD.p, band.b.outD.p],
-      ].map(([f, b]) => ({ f: x(f!), b: x(b!) }));
-      const [lo, hi] = (ends[0]!.f + ends[0]!.b < ends[1]!.f + ends[1]!.b ? ends : [ends[1], ends[0]]) as [End, End];
-      const x0 = Math.min(lo.f, lo.b),
-        x1 = Math.max(hi.f, hi.b),
-        w = x1 - x0,
-        d = r.z1 - r.z0;
+    R.risers.forEach((_, i) => {
+      const { lo, hi, L: w, l: d } = riserShape(F, R, i);
       if (cx > 0 && cx + w > rowMax) {
         cx = 0;
         cy += rowH + gap + 30;
@@ -233,7 +130,7 @@ export function buildCNC(R: Stair): CNC {
         center: true,
       });
       // Parement : face vue, côté nez. Un bout est biais quand parement et dos n'ont pas la même longueur.
-      const bevel = (end: End, shortF: boolean, y: number, right: boolean) => {
+      const bevel = (end: RiserEnd, shortF: boolean, y: number, right: boolean) => {
         const dev = Math.abs(end.f - end.b);
         if (dev < 0.5) return;
         const deg = (Math.atan2(dev, p.ecm) * 180) / Math.PI;
@@ -251,19 +148,13 @@ export function buildCNC(R: Stair): CNC {
       bevel(hi, hi.f < hi.b, cy + d - 32, true);
       cx += w + gap;
       rowH = Math.max(rowH, d);
-      riserParts.push({ j: i + 1, L: w, l: d });
     });
 
   // Limons
-  const boardEnts: Entity[] = [],
-    boardParts: BoardPart[] = [];
+  const boardEnts: Entity[] = [];
   let by = 0;
   const G = R.rail;
-  const names = R.quart ? { in: "LIMON DE JOUR", out: "LIMON DE MUR" } : { in: "LIMON DROIT", out: "LIMON GAUCHE" };
-  // Numéro de chaque limon de jour : sans limon du milieu (poteau unique du demi-tournant), ils se suivent quand même.
-  const jour = R.stringers.filter((sp) => sp.side === "in").map((sp) => sp.idx),
-    nj = jour.length,
-    no = (idx: number) => `${jour.indexOf(idx) + 1}/${nj}`;
+  const { names, no, name: boardName } = boardNames(R);
   R.stringers.forEach((sp) => {
     const outline = stringerOutline(sp, sp.hl),
       pockets = sp.pockets;
@@ -301,8 +192,7 @@ export function buildCNC(R: Stair): CNC {
         boardEnts.push({ kind: "circle", layer: "PERCAGE", x: c[0], y: c[1], r: GC.vis / 2 });
       }),
     );
-    const name =
-      names[sp.side] + (sp.count > 1 ? ` ${sp.side === "in" ? no(sp.idx) : `${sp.idx + 1}/${sp.count}`}` : "");
+    const name = boardName(sp);
     const { L, H, flip } = B;
     boardEnts.push({
       kind: "text",
@@ -332,7 +222,6 @@ export function buildCNC(R: Stair): CNC {
     joints.forEach((s, i) =>
       boardEnts.push({ kind: "text", layer: "TEXTE", x: 0, y: by + H + 100 + 50 * i, h: 30, s }),
     );
-    boardParts.push({ name, L, l: H, pockets: pockets.length, need: sp.need, hl: sp.hl });
     by += H + 180 + 50 * Math.max(0, joints.length - 1);
     // Balustres posés dans le chant : chant haut déroulé au-dessus du limon, dans le même sens, avec les mortaises.
     if (posts.length && G!.pose === "chant") {
@@ -468,7 +357,6 @@ export function buildCNC(R: Stair): CNC {
     });
     py = fy - fw(order[3]!) - 150 - 250;
   });
-  const postParts = NN.map((N, c) => ({ j: c + 1, L: N.h, l: Math.max(N.sx, N.sy), e: Math.min(N.sx, N.sy) }));
-  const rail = G ? buildRailing(G, p) : null;
-  return { treadEnts, riserEnts, boardEnts, treadParts, riserParts, boardParts, mpPart, postEnts, postParts, rail };
+  const rail = G && P.rail ? buildRailing(G, p, P.rail) : null;
+  return { ...P, treadEnts, riserEnts, boardEnts, postEnts, rail };
 }

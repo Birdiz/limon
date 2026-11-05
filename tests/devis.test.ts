@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCNC, stockVolume } from "../src/cnc/build";
+import { pieces, stockVolume } from "../src/core/pieces";
 import { quantites } from "../src/cnc/quantites";
 import { SAISIE_DEFAUT, devis, type Quantites, type Saisie } from "../src/core/devis";
 import { DEFAULTS, type Params } from "../src/core/params";
@@ -190,7 +190,7 @@ describe("devis chiffré", () => {
 describe("quantités tirées de l'escalier", () => {
   it("comptent les marches, les pièces débitées et le bois de l'exemple", () => {
     const R = stair();
-    const cnc = buildCNC(R);
+    const cnc = pieces(R);
     const q = quantites(R, cnc);
     expect(q.marches + q.balancees + q.paliers).toBe(R.treads.length + (R.mp ? 1 : 0));
     expect(q.balancees).toBeGreaterThan(0);
@@ -204,7 +204,7 @@ describe("quantités tirées de l'escalier", () => {
 
   it("comptent le palier et le garde-corps quand il y en a", () => {
     const R = stair({ tournant: "palier", gc: "balustres" });
-    const q = quantites(R, buildCNC(R));
+    const q = quantites(R, pieces(R));
     expect(q.balancees).toBe(0);
     expect(q.paliers).toBeGreaterThan(0);
     expect(q.balustres).toBeGreaterThan(0);
@@ -214,7 +214,7 @@ describe("quantités tirées de l'escalier", () => {
   it("donnent un devis complet avec des tarifs complets", () => {
     const R = stair({ gc: "lisses" });
     const full: Tarifs = { ...T, heures: { ...T.heures, mainCourante: 1, balustre: 0.5, lisse: 0.5 } };
-    const d = devis(quantites(R, buildCNC(R)), full, S);
+    const d = devis(quantites(R, pieces(R)), full, S);
     expect(d.aCompleter).toEqual([]);
     expect(d.lignes.every((l) => l.total !== null && l.total > 0)).toBe(true);
     const sum = d.lignes.reduce((s, l) => s + Math.round(l.total! * 100), 0);

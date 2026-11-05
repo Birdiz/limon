@@ -16,8 +16,14 @@ export const ESSENCE_LABEL: Record<Essence, string> = {
   chene: "Chêne",
   hetre: "Hêtre",
   frene: "Frêne",
-  sapin: "Sapin",
+  chataignier: "Châtaignier",
+  erable: "Érable",
+  merisier: "Merisier",
   noyer: "Noyer",
+  sapin: "Sapin",
+  epicea: "Épicéa",
+  douglas: "Douglas",
+  meleze: "Mélèze",
 };
 
 export const GC_LABEL: Record<GardeCorps, string> = {

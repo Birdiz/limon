@@ -265,6 +265,8 @@ export interface InputError {
 }
 
 export type ComputeResult = { ok: true; stair: Stair } | { ok: false; errors: InputError[] };
+/** Refus du calcul : renvoyé tel quel par l'étape qui bute. */
+export type ComputeFailure = Extract<ComputeResult, { ok: false }>;
 
 export type EchCote = "jour" | "foulee" | "mur";
 
