@@ -24,7 +24,14 @@ const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
 
 const COMPTE = { id: "c", email: "a@exemple.fr", statut: "testeur" as const };
 const CLE: Passkey = { id: "k/1", nom: "iPhone", cree: Date.UTC(2026, 0, 15), utilise: null };
-const detail = (...passkeys: Passkey[]): CompteDetail => ({ ...COMPTE, passkeys, appareils: [ICI] });
+const detail = (...passkeys: Passkey[]): CompteDetail => ({
+  ...COMPTE,
+  passkeys,
+  appareils: [ICI],
+  paiement: false,
+  gestion: false,
+  resilie: false,
+});
 const ICI: Appareil = {
   id: "ici",
   nom: "Mac",

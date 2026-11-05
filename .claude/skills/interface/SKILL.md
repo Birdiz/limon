@@ -20,6 +20,7 @@ Pas de framework d'interface.
 
 ## En-tête et accueil
 
+- **Paramètres d'ouverture** : `?compte` ouvre Mon compte, `?compte=paye` aussi, au retour de la page de paiement.
 - **En-tête** : logo (retour à l'accueil), « Mes escaliers » avec l'état de l'escalier et son nom, état de l'enregistrement, « Nouvel escalier », bouton du compte (« Ouvrir l'outil » tant qu'on n'est pas connecté, puis initiale).
 - **Accueil** (`Home`, `src/ui/home.ts`) : page entière à la place de tout dialogue. Onglets Escaliers (création, cartes avec vignette du plan, rangées En cours et Terminés, copies en fichier, installation), Mon atelier, Mon compte. Montré quand aucun escalier n'est ouvert, par le logo, « Mes escaliers » (onglet Escaliers) ou le bouton du compte (onglet Mon compte).
 - Un nouvel escalier part en pas à pas, sauf l'exemple, un lien reçu et le bouton avancé « Tous les réglages d'un coup », qui partent en mode complet.
@@ -34,7 +35,7 @@ Préférence de l'appareil (`limon-avance`), interrupteur dans l'onglet Mon comp
 
 ## Niveaux
 
-Gratuit, payant, premium : `DROITS`, `niveauActif` (`src/core/niveaux.ts`), appliqués par `applyNiveau` (`src/main.ts`). Tant que le paiement en ligne n'existe pas, tout reste ouvert : un artisan limité n'aurait aucun moyen de s'abonner. La préférence de l'appareil `limon-niveau` sert à essayer : `?niveau=gratuit`, `payant`, `premium`, `compte` (suit le statut du compte, `niveauDe`), `?niveau=0` l'enlève. Le contrôle reste dans le navigateur : le dépôt est public, seul ce que fait le serveur s'impose vraiment.
+Gratuit, payant, premium : `DROITS`, `niveauActif` (`src/core/niveaux.ts`), appliqués par `applyNiveau` (`src/main.ts`). Tant que `LIMITES_ACTIVES` est faux, tout reste ouvert : un artisan limité n'aurait aucun moyen de s'abonner (Activation, skill `serveur-compte`). La préférence de l'appareil `limon-niveau` sert à essayer : `?niveau=gratuit`, `payant`, `compte` (suit le compte), `?niveau=0` l'enlève. Un niveau forcé ne peut que baisser, jamais donner plus que le compte. Le statut passe par `statutReel` : une date passée ramène au gratuit, hors ligne compris. Le contrôle reste dans le navigateur : le dépôt est public, seul ce que fait le serveur s'impose vraiment (décision de Thomas du 2026-11-05).
 
 - **Masqués** : `[data-payant]` sans la classe `payant` du `body`, `[data-offre]` (ce qui les remplace) avec elle.
 - **Un escalier à la fois** au gratuit : `makeRoom` (`src/ui/home.ts`) fait remplacer le seul escalier après confirmation, à la création et à l'ouverture d'une copie. Pas de « Dupliquer ».

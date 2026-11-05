@@ -133,6 +133,8 @@ export class SyncStore implements ProjectStore {
   private offline = false;
   private erreur: string | null = null;
   private plusRecents = 0;
+  /** Le profil de l'atelier n'est pas dans l'offre du compte : il reste ici sans rien attendre, sans erreur à dire. */
+  private atelierHorsOffre = false;
   /** Les refus sont retentés une fois par chargement de la page : l'heure a pu avancer, le compte a pu changer. */
   private retry = true;
   private changeListeners: ((ids: string[]) => void)[] = [];
@@ -150,6 +152,7 @@ export class SyncStore implements ProjectStore {
     this.state.connu ||= !!this.state.dernier;
     // État enregistré avant `dernierId`.
     this.state.dernierId ??= this.state.compte?.id ?? null;
+    api.onDroits = (droits) => this.droitsVus(droits);
     local.onChange((ids) => {
       this.emit(ids);
       this.emitStatus();
@@ -245,6 +248,15 @@ export class SyncStore implements ProjectStore {
   }
 
   /** Le serveur a dit le compte : son adresse a pu changer, ici ou sur un autre appareil. */
+  /** Le statut a changé (abonnement, fin de l'essai, autre appareil) : la page suit, et s'en souvient hors ligne. */
+  private droitsVus({ statut, droitsJusquA = null }: Pick<Compte, "statut" | "droitsJusquA">): void {
+    const compte = this.state.compte;
+    if (!compte || (compte.statut === statut && (compte.droitsJusquA ?? null) === droitsJusquA)) return;
+    this.state.compte = { ...compte, statut, droitsJusquA };
+    this.persist();
+    this.emitStatus();
+  }
+
   accountSeen({ id, email }: Compte): void {
     const compte = this.state.compte;
     if (compte?.id !== id || compte.email === email) return;
@@ -278,7 +290,7 @@ export class SyncStore implements ProjectStore {
     return {
       compte: this.state.compte,
       pending: this.state.compte ? await this.waiting() : 0,
-      atelierAttend: !!this.state.compte && this.atelierWaits(),
+      atelierAttend: !!this.state.compte && this.atelierWaits() && !this.atelierHorsOffre,
       offline: this.offline,
       erreur: this.erreur,
       refuses: this.state.compte ? await this.refused() : [],
@@ -517,7 +529,7 @@ export class SyncStore implements ProjectStore {
 
   /** Ce qui reste à envoyer : les projets et les suppressions, plus le profil de l'atelier. */
   private async waiting(): Promise<number> {
-    return (await this.pending()).length + (this.atelierWaits() ? 1 : 0);
+    return (await this.pending()).length + (this.atelierWaits() && !this.atelierHorsOffre ? 1 : 0);
   }
 
   /** Envoie par lots et note les refus ; renvoie l'index à jour. */
@@ -603,6 +615,12 @@ export class SyncStore implements ProjectStore {
     try {
       theirs = mine ? await this.api.pushAtelier(mine) : await this.api.atelierOf();
     } catch (e) {
+      if (mine && e instanceof ApiError && e.status === 402) {
+        this.atelierHorsOffre = true;
+        this.state.atelierRefuse = mine.modifie;
+        this.persist();
+        return;
+      }
       if (mine && e instanceof ApiError && e.status === 400) {
         // Une date devant l'horloge de l'appareil : celle-ci a été remise à l'heure, le profil repart sans rien à faire.
         const cur = this.atelier.get();
@@ -616,6 +634,7 @@ export class SyncStore implements ProjectStore {
       }
       throw e;
     }
+    this.atelierHorsOffre = false;
     this.state.atelierRefuse = null;
     this.state.serveurAtelier = theirs?.modifie ?? null;
     this.persist();

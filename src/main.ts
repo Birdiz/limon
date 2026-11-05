@@ -13,7 +13,7 @@ import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "./core/tarifs";
 import { DEFAULTS, changeForme, type Params } from "./core/params";
-import { DROITS, enLecture, formeOuverte, niveauActif, type Droits } from "./core/niveaux";
+import { DROITS, LIMITES_ACTIVES, enLecture, formeOuverte, niveauActif, statutReel, type Droits } from "./core/niveaux";
 import {
   NOM_PAR_DEFAUT,
   canFinish,
@@ -60,7 +60,7 @@ const leaving = leaveOldHost();
 // Lu avant le premier calcul, qui réécrit l'adresse.
 const sharedAtStart = paramsFromHash(location.hash);
 /** Boutons de la page publique : « Calculer mon escalier » (?nouveau), « Voir un exemple » (?exemple),
-    « Mes escaliers » (?accueil). */
+    « Mes escaliers » (?accueil). Mon compte (?compte), au retour de la page de paiement (?compte=paye). */
 const asked = new URLSearchParams(location.search);
 if (asked.size) history.replaceState(null, "", location.pathname + location.hash);
 let project: Project | null = null;
@@ -422,9 +422,11 @@ function setAdvanced(on: boolean): void {
 
 /** Applique le niveau de cet appareil ; suit le compte quand celui-ci change. */
 function applyNiveau(): void {
-  droits = DROITS[niveauActif(read(prefs, NIVEAU_KEY), store.account()?.statut ?? null)];
+  droits = DROITS[niveauActif(read(prefs, NIVEAU_KEY), statutReel(store.account(), Date.now()))];
   document.body.classList.toggle("payant", droits.fabrication);
-  document.body.classList.toggle("devis", droits.devis && read(prefs, DEVIS_KEY) === "1");
+  // Avant l'activation, le devis attend encore sa préférence ; ensuite, il va avec le niveau.
+  document.body.classList.toggle("devis", droits.devis && (LIMITES_ACTIVES || read(prefs, DEVIS_KEY) === "1"));
+  byId("acEssai").hidden = !LIMITES_ACTIVES;
   if (!droits.devis && tabs.current === "devis") tabs.show("reglages");
   document.querySelectorAll<HTMLInputElement>('input[name="forme"]').forEach((r) => {
     r.disabled = !formeOuverte(droits, r.value === "droit" ? "droit" : (`${r.value}-d` as Params["forme"]));
@@ -688,7 +690,10 @@ void (async () => {
   else if (asked.has("exemple")) await example();
   else if (asked.has("nouveau")) await startNew();
   else if (asked.has("accueil")) await home.show();
-  else if (account.awaitsCode()) await home.show("compte");
+  else if (asked.has("compte")) {
+    await home.show("compte");
+    if (asked.get("compte") === "paye") void account.paymentDone();
+  } else if (account.awaitsCode()) await home.show("compte");
   store.start();
 })();
 // Three.js est chargé à part : le calcul et le plan s'affichent sans attendre la 3D.

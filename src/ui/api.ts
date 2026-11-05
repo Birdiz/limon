@@ -1,5 +1,6 @@
-import type { Changement, Compte, CompteDetail, Entree, Envoi } from "../core/account";
+import type { Changement, Compte, CompteDetail, Entree, Envoi, Statut } from "../core/account";
 import type { Atelier } from "../core/atelier";
+import type { Offre, Rythme } from "../core/niveaux";
 import type { Project } from "../core/project";
 
 /** Session absente ou expirée. */
@@ -20,6 +21,9 @@ export class ProofNeeded extends ApiError {}
 
 /** Le serveur de Quart de tour, sur la même adresse que la page. */
 export class Api {
+  /** Statut du compte, lu à chaque réponse du serveur. */
+  onDroits: ((droits: Pick<Compte, "statut" | "droitsJusquA">) => void) | null = null;
+
   constructor(private f: typeof fetch = (...a) => fetch(...a)) {}
 
   private async call<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
@@ -29,6 +33,8 @@ export class Api {
       ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
     });
     if (res.status === 401) throw new NotSignedIn();
+    const [statut, fin] = res.headers.get("x-statut")?.split(";") ?? [];
+    if (statut) this.onDroits?.({ statut: statut as Statut, droitsJusquA: fin ? Number(fin) : null });
     if (!res.ok) {
       const r = (await res.json().catch(() => null)) as { erreur?: string; preuve?: boolean } | null;
       const message = r?.erreur ?? "Le serveur ne répond pas. Réessayez dans un instant.";
@@ -59,6 +65,11 @@ export class Api {
   closeOtherDevices = () => this.call<CompteDetail>("DELETE", "sessions");
   deleteAccount = () => this.call<undefined>("DELETE", "compte");
   logout = () => this.call<undefined>("POST", "deconnexion", {});
+  /** Adresse de la page de paiement de Stripe. */
+  checkout = async (offre: Offre, rythme: Rythme) =>
+    (await this.call<{ url: string }>("POST", "abonnement/paiement", { offre, rythme })).url;
+  /** Adresse de la page de Stripe qui gère l'abonnement. */
+  billing = async () => (await this.call<{ url: string }>("POST", "abonnement/gestion", {})).url;
 
   atelierOf = () => this.call<Atelier | null>("GET", "atelier");
   /** Envoie le profil de l'atelier ; renvoie celui qui l'emporte, c'est-à-dire le plus récent. */

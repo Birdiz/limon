@@ -1991,6 +1991,19 @@ a.btn {
 .acdelete .adv[hidden] {
   display: none;
 }
+/* L'offre du compte, dans l'onglet Mon compte */
+.acoffre {
+  margin: 16px 0;
+}
+.acoffre h3 {
+  margin: 0 0 6px;
+}
+.acoffre .seg {
+  margin: 4px 0 10px;
+}
+.acoffre .plist li {
+  flex-wrap: nowrap;
+}
 /* Les outils à venir, dans l'onglet Mon compte */
 .soon {
   padding: 14px 16px;

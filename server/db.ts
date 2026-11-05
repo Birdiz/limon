@@ -163,6 +163,16 @@ const MIGRATIONS = [
     expire timestamptz not null
   );
   create index on codes (email);`,
+  // Abonnement : un compte neuf part avec 30 jours d'essai, ceux d'avant restent testeurs. Le client et l'abonnement
+  // chez Stripe, la date de son dernier événement pris en compte, et les événements déjà traités.
+  `alter table comptes
+    alter column statut set default 'essai',
+    alter column droits_jusqu_a set default now() + interval '30 days',
+    add column client_stripe text unique,
+    add column abonnement text,
+    add column abonnement_evenement bigint,
+    add column resilie boolean not null default false;
+  create table paiements_evenements (id text primary key, recu timestamptz not null default now());`,
 ];
 
 /** Met la base à jour ; un seul serveur tourne à la fois. */
@@ -192,10 +202,12 @@ const AVERTI_VALABLE = `(averti > greatest(vu, droits_jusqu_a) and averti + inte
 const A_AVERTIR = `vu + interval '${CONSERVATION}' - interval '${PREAVIS}' < now() and ${SANS_DROITS}
   and not coalesce(${AVERTI_VALABLE}, false)`;
 
-/** Efface codes, changements d'adresse, codes de preuve, défis et sessions expirés, et les traces de suppression anciennes. */
+/** Efface codes, changements d'adresse, codes de preuve, défis et sessions expirés, les événements de paiement et les traces de suppression anciens. */
 export async function purge(db: Db): Promise<void> {
   for (const t of ["codes", "changements_adresse", "codes_preuve", "defis", "sessions"])
     await db.query(`delete from ${t} where expire < now()`);
+  // Stripe ne redit pas un événement au-delà de 3 jours.
+  await db.query("delete from paiements_evenements where recu < now() - interval '30 days'");
   await db.query(
     `delete from projets where supprime and modifie < extract(epoch from now() - interval '${CONSERVATION}') * 1000`,
   );
@@ -222,7 +234,11 @@ async function noteLePassage(db: Db): Promise<void> {
  * quitte à partir deux fois si l'enregistrement échoue après l'envoi. L'effacement n'arrive jamais avant la date
  * annoncée : `averti` est posé après son calcul.
  */
-export async function purgeComptes(db: Db, avertir: SendAvertissement): Promise<void> {
+export async function purgeComptes(
+  db: Db,
+  avertir: SendAvertissement,
+  effacerClient?: (client: string) => Promise<void>,
+): Promise<void> {
   await noteLePassage(db);
   const comptes = await db.query<{ id: string; email: string; limite: Date }>(
     `select id, email, now() + interval '${PREAVIS}' as limite
@@ -239,12 +255,22 @@ export async function purgeComptes(db: Db, avertir: SendAvertissement): Promise<
     // Revenu pendant l'envoi : l'avertissement n'est pas retenu, il en faudra un autre le moment venu.
     await db.query(`update comptes set averti = now(), essai = null where id = $1 and ${A_AVERTIR}`, [c.id]);
   }
-  // Tout est relu par la base dans cette seule instruction : une connexion qui passe avant met `vu` à jour et l'épargne.
-  const effaces = await db.query(
-    `delete from comptes
-     where vu + interval '${CONSERVATION}' < now() and averti + interval '${EFFACEMENT}' < now()
-       and ${AVERTI_VALABLE} and ${SANS_DROITS}
-     returning id`,
+  const A_EFFACER = `vu + interval '${CONSERVATION}' < now() and averti + interval '${EFFACEMENT}' < now()
+       and ${AVERTI_VALABLE} and ${SANS_DROITS}`;
+  // Le client chez Stripe part d'abord ; s'il ne part pas, le compte attend le passage suivant.
+  const clients = await db.query<{ id: string; client_stripe: string }>(
+    `select id, client_stripe from comptes where client_stripe is not null and ${A_EFFACER}`,
   );
+  for (const c of clients) {
+    if (!effacerClient) continue;
+    try {
+      await effacerClient(c.client_stripe);
+      await db.query("update comptes set client_stripe = null where id = $1", [c.id]);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  // Tout est relu par la base dans cette seule instruction : une connexion qui passe avant met `vu` à jour et l'épargne.
+  const effaces = await db.query(`delete from comptes where client_stripe is null and ${A_EFFACER} returning id`);
   if (effaces.length) console.log(`[purge] comptes inactifs effacés : ${effaces.length}`);
 }

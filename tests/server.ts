@@ -1,6 +1,7 @@
 import { cleanEmail, type Compte } from "../src/core/account";
 import { api, nouvellesLimites, type Limites } from "../server/api";
 import { migrate, pgliteDb, type Db } from "../server/db";
+import type { Paiements } from "../server/stripe";
 
 export const ORIGIN = "https://quart-de-tour.fr";
 
@@ -8,7 +9,7 @@ export const ORIGIN = "https://quart-de-tour.fr";
  * Serveur de test sur PGlite en mémoire ; les codes envoyés restent dans `codes`, `codesAdresse` et `codesPreuve`, les
  * avis dans `avis` et `ajouts`.
  */
-export async function testServer() {
+export async function testServer(options: { paiements?: Paiements; limitesActives?: boolean } = {}) {
   const db: Db = await pgliteDb();
   await migrate(db);
   const codes = new Map<string, string>();
@@ -26,6 +27,7 @@ export async function testServer() {
       sendAdresseChangee: async (ancienne) => void avis.push(ancienne),
       sendCodePreuve: async (email, code) => void codesPreuve.set(email, code),
       sendPasskeyAjoutee: async (email) => void ajouts.push(email),
+      ...options,
     });
   const limites = nouvellesLimites();
   const s = {
