@@ -1,22 +1,22 @@
 # Quart de tour
 
-Calcul et dessin d'escaliers en bois pour menuisiers, sur le web (https://quart-de-tour.fr/, anciennement Limon) : escalier droit et quart tournant (gauche ou droite), 3D, contrôle de l'échappée et export CNC en DXF.
+Calcul et dessin d'escaliers en bois pour menuisiers, sur le web (https://quart-de-tour.fr/, anciennement Limon) : escalier droit, quart tournant, double quart tournant et demi-tournant (gauche ou droite), marches balancées ou palier, 3D, contrôle de l'échappée et export CNC en DXF.
 
 ## Ce que fait l'outil
 
-- **Calcul** : nombre de hauteurs automatique (Blondel 2h + g ≈ 630 mm), ligne de foulée, balancement des marches dans le quart tournant.
+- **Calcul** : nombre de hauteurs automatique (Blondel 2h + g ≈ 630 mm), ligne de foulée, balancement des marches dans les tournants, ou palier.
 - **Trémie et échappée** : contrôle de la hauteur libre sous le plancher (alerte sous 2 000 mm, erreur sous 1 900 mm) et trémie minimale.
 - **Corrections chiffrées** : quand une règle n'est pas tenue, l'outil propose la valeur qui la rétablit (reculement ou longueur côté départ, marches balancées, hauteur de limon, trémie), applicable d'un clic.
 - **Débit** : alerte quand une pièce dépasse les plateaux disponibles, volume brut et poids selon l'essence.
 - **Compte facultatif** : connexion par Face ID ou l'empreinte (passkey), code à 8 chiffres par e-mail pour créer le compte et en secours. Les projets suivent l'artisan d'un appareil à l'autre et restent utilisables sans réseau.
 - **Lien de projet et fiche PDF** : les réglages qui diffèrent de l'exemple vont dans l'adresse de la page (après le `#`) ; la fiche PDF téléchargée réunit les cotes, les contrôles, le plan, la vue 3D, la fiche des marches et la liste de débit.
 - **Plan et 3D** : plan coté en SVG, vue 3D Three.js avec limons, poteau, marches et contremarches.
-- **Export CNC** : zip contenant `marches.dxf`, `limons.dxf`, `contremarches.dxf` (si l'escalier en a), `poteau.dxf` (quart tournant), `garde-corps.dxf` (s'il y en a un), la fiche des marches en CSV et une notice.
-  - Nez arrondi et jeu d'assemblage réglables ; le limon de jour du quart tournant a sa propre hauteur, proposée d'après ses logements.
-  - Quart tournant : poteau carré affleurant les limons de jour côté marches, limons de jour assemblés à tenon et mortaise dans le poteau, limons de mur en about vissé ou boulonné dans l'angle.
-  - Garde-corps côté jour (limon droit pour l'escalier droit), au choix : balustres ou montants et lisses rampantes, posés dans le chant du limon ou à l'anglaise. Main courante droite à 900 mm au moins au-dessus des nez, écart libre de 110 mm au plus (NF P01-012), assemblée dans le poteau en quart tournant. Export `garde-corps.dxf`, mortaises dans le chant des limons ou perçages pour la pose à l'anglaise.
+- **Export CNC** : zip contenant `marches.dxf`, `limons.dxf`, `contremarches.dxf` (si l'escalier en a), `poteau.dxf` (escalier tournant), `garde-corps.dxf` (s'il y en a un), la fiche des marches en CSV et une notice.
+  - Nez arrondi et jeu d'assemblage réglables ; le limon de jour d'un escalier tournant a sa propre hauteur, proposée d'après ses logements.
+  - Escalier tournant : poteau carré affleurant les limons de jour côté marches (demi-tournant : poteau unique de la largeur du jour quand le jour est étroit, sinon deux), limons de jour assemblés à tenon et mortaise dans le poteau, limons de mur en about vissé ou boulonné dans l'angle.
+  - Garde-corps côté jour (limon droit pour l'escalier droit), au choix : balustres ou montants et lisses rampantes, posés dans le chant du limon ou à l'anglaise. Main courante droite à 900 mm au moins au-dessus des nez, écart libre de 110 mm au plus (NF P01-012), assemblée dans le poteau en escalier tournant. Export `garde-corps.dxf`, mortaises dans le chant des limons ou perçages pour la pose à l'anglaise.
   - DXF R12 en millimètres.
-  - Calques `DECOUPE` (contours), `DEFONCE` (logements), `CM_DESSUS` et `CM_DESSOUS` (traits des contremarches), `TEXTE` ; en quart tournant, `TENON`, `MORTAISE` et `PERCAGE`.
+  - Calques `DECOUPE` (contours), `DEFONCE` (logements), `CM_DESSUS` et `CM_DESSOUS` (traits des contremarches), `TEXTE` ; en escalier tournant, `TENON`, `MORTAISE` et `PERCAGE`.
 
 ## Organisation
 
@@ -64,7 +64,7 @@ Puis ouvrir http://localhost:5173 (page publique) ou http://localhost:5173/app/ 
 | `npm run build`       | site dans `dist/`, serveur dans `dist-server/`           |
 | `npm start`           | serveur en ligne (`DATABASE_URL`, `BREVO_API_KEY`)       |
 | `npm run start:local` | le build avec une base en mémoire, codes dans la console |
-| `npm run export`      | archives CNC des trois formes dans `out/`                |
+| `npm run export`      | archives CNC de toutes les formes dans `out/`            |
 | `npm run check:dxf`   | export puis vérification des DXF avec ezdxf              |
 
 ## Mise en ligne
