@@ -9,6 +9,7 @@ Voir `fichePDF` dans `src/pdf/fiche.ts`. C'est la seule fiche imprimable.
 
 - **Écriture** : PDF 1.4 écrit à la main (`PdfDoc`, `src/pdf/pdf.ts`), Helvetica standard en WinAnsiEncoding, chasses AFM codées en dur, pas de compression.
 - **Pages** : trois pages A4. Cotes, contrôles (`checks`, partagés avec les tuiles), remarques, plan et vue 3D ; bois, assemblage et fiche des marches ; liste de débit, volume et alertes de fabrication (`src/cnc/cutlist.ts`, partagé avec le panneau CNC).
+- **Limons** : pages à l'italienne après les trois premières (`src/pdf/limons.ts`), limons couchés par `layBoard` (`src/core/stringer.ts`) comme dans `limons.dxf`.
 - **Brouillon** : la fiche porte « brouillon » en tête, un filigrane en lettres creuses sur chaque page, et « (brouillon) » dans le nom du fichier.
 - **Extrait** : au niveau gratuit, `extrait` arrête la fiche à sa première page.
 - **Plan** : vient de `planShapes` (`src/core/plan-shapes.ts`), commun au SVG de l'écran et au PDF.

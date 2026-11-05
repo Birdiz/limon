@@ -7,12 +7,12 @@ import { fmt } from "../core/format";
 import { cncFrame, type Section } from "../core/pockets";
 import { polyPath, type Cut } from "../core/poly";
 import { isLeft } from "../core/params";
-import { GC } from "../core/railing";
-import { PERCAGE, type NewelFace, type NoseLine, type Stair, type StringerPiece } from "../core/stair";
-import { stringerOutline } from "../core/stringer";
-import { V, bbox, closeRing, interp, type Box, type Pt, type Vertex } from "../core/vec";
+import { GC, postTenon } from "../core/railing";
+import { PERCAGE, type NewelFace, type NoseLine, type Stair } from "../core/stair";
+import { layBoard, stringerOutline } from "../core/stringer";
+import { V, bbox, closeRing, interp, type Pt, type Vertex } from "../core/vec";
 import type { Entity, Layer } from "./entities";
-import { buildRailing, postTenon, type RailingCNC } from "./railing";
+import { buildRailing, type RailingCNC } from "./railing";
 
 export interface TreadPart {
   j: number;
@@ -83,44 +83,6 @@ export interface CNC {
   postParts: PostPart[];
   /** Garde-corps côté jour, s'il y en a un. */
   rail: RailingCNC | null;
-}
-
-/** Limon couché dans le sens de la planche : vu depuis la face côté marches (le limon de jour se lit à l'envers
-    du sens de montée), tourné au plus petit rectangle de débit, haut en haut, coin bas gauche à l'origine. */
-export interface BoardLay {
-  /** Point du plan du limon (u, z) vers la planche, bulge retourné avec la pièce. */
-  tr: (q: Vertex) => Vertex;
-  L: number;
-  H: number;
-  flip: boolean;
-}
-
-export function layBoard(sp: StringerPiece, left: boolean): BoardLay {
-  const flip = (sp.side === "in") !== left;
-  const fl = (q: Vertex): Pt => [flip ? -q[0] : q[0], q[1]];
-  const flat = stringerOutline(sp, sp.hl).map(fl);
-  let best: { area: number; th: number; r: Box; c: number; s: number } | null = null;
-  for (let i = 0; i < flat.length; i++) {
-    const a = flat[i]!,
-      b = flat[(i + 1) % flat.length]!;
-    let th = Math.atan2(b[1] - a[1], b[0] - a[0]);
-    while (th > Math.PI / 2) th -= Math.PI;
-    while (th <= -Math.PI / 2) th += Math.PI;
-    const c = Math.cos(-th),
-      s = Math.sin(-th);
-    const r = bbox(flat.map((q): Pt => [q[0] * c - q[1] * s, q[0] * s + q[1] * c]));
-    const area = (r.x1 - r.x0) * (r.y1 - r.y0);
-    if (!best || area < best.area - 1 || (Math.abs(area - best.area) <= 1 && Math.abs(th) < Math.abs(best.th)))
-      best = { area, th, r, c, s };
-  }
-  const B = best!;
-  // Le retournement inverse le sens des arcs.
-  const tr = (q: Vertex): Vertex => {
-    const f = fl(q),
-      t: Pt = [f[0] * B.c - f[1] * B.s - B.r.x0, f[0] * B.s + f[1] * B.c - B.r.y0];
-    return q.length > 2 ? [...t, flip ? -q[2]! : q[2]!] : t;
-  };
-  return { tr, L: B.r.x1 - B.r.x0, H: B.r.y1 - B.r.y0, flip };
 }
 
 export function buildCNC(R: Stair): CNC {

@@ -1,7 +1,6 @@
 import { fmt } from "../core/format";
-import { GC } from "../core/railing";
+import { GC, postTenon } from "../core/railing";
 import { PERCAGE, TENON, type Newel, type Stair } from "../core/stair";
-import { postTenon } from "./railing";
 import { treadsCSV } from "../core/sheet";
 import { buildCNC, type CNC } from "./build";
 import { cutListCSV } from "./cutlist";

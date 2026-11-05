@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildCNC } from "../src/cnc/build";
-import { postOutline } from "../src/cnc/railing";
 import { DEFAULTS, type Params } from "../src/core/params";
-import { GC, type Railing } from "../src/core/railing";
-import { compute, type Stair } from "../src/core/stair";
+import { GC, postOutline } from "../src/core/railing";
+import { compute, type Railing, type Stair } from "../src/core/stair";
 import { bbox, interp } from "../src/core/vec";
 import { stairOf } from "./cases";
 

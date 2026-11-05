@@ -2,7 +2,7 @@
    puis repris tels quels par l'export CNC. */
 import type { Params } from "./params";
 import { offsetPoly, polyCut, type Cut, type Poly } from "./poly";
-import type { NoseLine, Riser, StringerGeom, Tread } from "./stair";
+import type { NoseLine, PocketOf, Riser, StringerGeom, Tread } from "./stair-types";
 import { V, clamp, interp, type Pt, type Vertex } from "./vec";
 
 /** Points d'une ligne de marche décalée : sur les faces des limons (F) et au fond des logements (D). */
@@ -60,12 +60,6 @@ export function cncFrame(R: Pick<StairGeom, "inner" | "outer">, p: Params): Fram
 
 /** Bois gardé sous le logement le plus bas d'un limon, en mm. */
 export const BOIS_SOUS_LOGEMENT = 20;
-
-/** Ce que reçoit un logement : marche j (palier compris), marche palière, ou contremarche j (sous la marche j). */
-export interface PocketOf {
-  k: "marche" | "palière" | "contremarche";
-  j: number;
-}
 
 /** Logements d'un limon dans son plan (u le long du limon, z en hauteur), et hauteur nécessaire. */
 export interface StringerPockets {

@@ -5,7 +5,7 @@ description: Géométrie de l'escalier (compute, src/core/stair.ts), formes, rep
 
 # Géométrie
 
-Voir `compute(p)` dans `src/core/stair.ts`.
+Voir `compute(p)` dans `src/core/stair.ts`. Les types du modèle (`Stair`, `Tread`, `StringerPiece`, `Newel`, `Railing`, `Note`…) sont dans `src/core/stair-types.ts`, sans calcul : les modules de `core` les importent de là, `stair.ts` les ré-exporte pour le reste. Seul cycle gardé, d'appel : `stair-notes.ts` rappelle `compute` pour chercher les marches balancées.
 
 Selon le sujet, lire aussi :
 
@@ -33,7 +33,7 @@ En entrant dans une forme en U, `changeForme` reprend ses cotes d'exemple (`EXEM
 ## Nez, limons, foulée
 
 - Lignes de nez : du point Q côté jour, par le point P sur la ligne de foulée, jusqu'au côté mur. `nr` est la normale vers le haut de l'escalier.
-- Limons : bord haut à `LIFT` = 50 mm au-dessus de la ligne de nez, contour dans `stringerOutline`.
+- Limons : bord haut à `LIFT` = 50 mm au-dessus de la ligne de nez, contour dans `stringerOutline`, couché dans le sens du plateau par `layBoard` (`src/core/stringer.ts`, pour le DXF et la fiche).
 - Ligne de foulée : côtés du jour décalés de f, raccordés par un quart de cercle autour de chaque angle (`tA`, `tB`).
 - Balancement par tournant (`stair.bals`, `stair.bal` = le premier) ; deux zones qui se chevauchent se partagent à la ligne la plus proche du milieu de la volée du milieu (un creux du giron au jour à chaque angle).
 - Hauteur du tour : pas de réglage enregistré, elle découle de A et B (balancement centré sur l'angle). Le champ « Marches droites avant le tour » affiche `bal.a` ; le modifier recalcule A et B à A + B constant (`turnLengths`, bornes `turnRange`), donc même ligne de foulée et même confort.
@@ -41,6 +41,6 @@ En entrant dans une forme en U, `changeForme` reprend ses cotes d'exemple (`EXEM
 
 ## Garde-corps
 
-`stair.rail`, `src/core/railing.ts`, constantes `GC`. Réglages `gc` (aucun par défaut, ce qui garde les fichiers de référence d'origine), `gcPose`, `mcL`, `mcH`, `bs`.
+`stair.rail`, `src/core/railing.ts`, constantes `GC`. Réglages `gc` (aucun par défaut, ce qui garde les fichiers de référence d'origine), `gcPose`, `mcL`, `mcH`, `bs`. Contours des pièces dans leur plan (`handrailOutline`, `postOutline`, `railOutline`, tenon `postTenon`) au même endroit, pour la 3D comme pour `garde-corps.dxf`.
 
 Chaque tronçon de main courante suit en plan un tronçon de limon de jour, même abscisse u ; sa pente minimise la surhauteur au-dessus de 900 mm (recherche ternaire, fonction convexe). En quart tournant, le poteau monte à la main courante et reçoit sa mortaise.
