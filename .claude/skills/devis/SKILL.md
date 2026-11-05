@@ -13,9 +13,9 @@ En préparation (cahier des charges : https://claude.ai/artifact/9a4Pgq2CeteosuJ
 
 ## Calcul
 
-Pur : `quantites(R, cnc)` puis `devis(Q, tarifs, saisie)`.
+Pur : `quantites(R, pieces(R))` puis `devis(Q, tarifs, saisie)`.
 
-- `quantites` (`src/cnc/quantites.ts`) part des pièces de la liste de débit ; finition sur deux faces de chaque pièce, chants non comptés.
+- `quantites` (`src/cnc/quantites.ts`) part des pièces de la liste de débit (`pieces`, `src/core/pieces.ts`, sans les entités DXF) ; finition sur deux faces de chaque pièce, chants non comptés.
 - `devis` (`src/core/devis.ts`) travaille en centimes entiers : chaque ligne arrondie, totaux faits des lignes, remise répartie sur les taux de TVA.
 - Une ligne sans tarif a un total `null` et nomme ce qui manque (`aCompleter`).
 - Fourniture sans pose à 20 %.
@@ -25,7 +25,7 @@ Pur : `quantites(R, cnc)` puis `devis(Q, tarifs, saisie)`.
 
 `DevisView`, `src/ui/devis.ts`, section `#devisView`. Bouton de l'en-tête sur grand écran, cinquième onglet sur téléphone, tous deux `body[data-tab="devis"]` (classe `Tabs`) ; absent en pas à pas.
 
-Un seul devis par escalier, `Project.devis` (`DevisProjet` : client et `Saisie`), enregistré dans le projet et le fichier `.escalier`. Seules la saisie et les corrections sont gardées, les lignes se recalculent (`buildCNC` seulement quand l'onglet est à l'écran). Une correction égale au calcul s'efface.
+Un seul devis par escalier, `Project.devis` (`DevisProjet` : client et `Saisie`), enregistré dans le projet et le fichier `.escalier`. Seules la saisie et les corrections sont gardées, les lignes se recalculent (`pieces` seulement quand l'onglet est à l'écran). Une correction égale au calcul s'efface.
 
 ## Remise au client (lot 4)
 

@@ -2,7 +2,7 @@
 import { ceil10, fmt } from "../core/format";
 import { DENSITE } from "../core/params";
 import type { Stair, Status } from "../core/stair";
-import { oversize, stockVolume, tightBoards, type BoardPart, type CNC, type TreadPart } from "./build";
+import { oversize, stockVolume, tightBoards, type BoardPart, type Pieces, type TreadPart } from "../core/pieces";
 
 export interface CutRow {
   name: string;
@@ -34,10 +34,10 @@ function group(list: readonly TreadPart[], one: string, many: string, e: number)
 const up = (v: number) => Math.ceil(v - 1e-6);
 
 /** Liste de débit : limons, marches, contremarches, garde-corps, poteau. */
-export function cutRows(cnc: CNC, R: Stair): CutRow[] {
+export function cutRows(P: Pieces, R: Stair): CutRow[] {
   const p = R.params;
   return [
-    ...cnc.boardParts.map((b) => ({
+    ...P.boardParts.map((b) => ({
       name: b.name.charAt(0) + b.name.slice(1).toLowerCase(),
       L: Math.ceil(b.L),
       l: Math.ceil(b.l),
@@ -45,12 +45,12 @@ export function cutRows(cnc: CNC, R: Stair): CutRow[] {
       q: 1,
     })),
     ...group(
-      cnc.treadParts.filter((q) => !q.palier),
+      P.treadParts.filter((q) => !q.palier),
       "Marche",
       "Marches",
       p.et,
     ),
-    ...cnc.treadParts
+    ...P.treadParts
       .filter((q) => q.palier)
       .map((q, i, all) => ({
         name: all.length > 1 ? `Palier ${i + 1}` : "Palier",
@@ -59,19 +59,19 @@ export function cutRows(cnc: CNC, R: Stair): CutRow[] {
         l: Math.ceil(q.l),
         e: p.et,
       })),
-    ...(cnc.mpPart ? [{ name: "Marche palière", q: 1, L: up(cnc.mpPart.L), l: up(cnc.mpPart.l), e: p.mpE }] : []),
-    ...group(cnc.riserParts, "Contremarche", "Contremarches", p.ecm),
-    ...(cnc.rail
+    ...(P.mpPart ? [{ name: "Marche palière", q: 1, L: up(P.mpPart.L), l: up(P.mpPart.l), e: p.mpE }] : []),
+    ...group(P.riserParts, "Contremarche", "Contremarches", p.ecm),
+    ...(P.rail
       ? [
-          ...cnc.rail.handrailParts.map((q) => ({ name: q.name, q: 1, L: Math.ceil(q.L), l: p.mcH, e: p.mcL })),
+          ...P.rail.handrailParts.map((q) => ({ name: q.name, q: 1, L: Math.ceil(q.L), l: p.mcH, e: p.mcL })),
           ...(R.rail?.type === "balustres"
-            ? group(cnc.rail.postParts, "Balustre", "Balustres", p.bs)
-            : group(cnc.rail.postParts, "Montant", "Montants", p.bs)),
-          ...group(cnc.rail.railParts, "Lisse", "Lisses", p.bs),
+            ? group(P.rail.postParts, "Balustre", "Balustres", p.bs)
+            : group(P.rail.postParts, "Montant", "Montants", p.bs)),
+          ...group(P.rail.railParts, "Lisse", "Lisses", p.bs),
         ]
       : []),
-    ...cnc.postParts.map((q) => ({
-      name: cnc.postParts.length > 1 ? `Poteau ${q.j}` : "Poteau",
+    ...P.postParts.map((q) => ({
+      name: P.postParts.length > 1 ? `Poteau ${q.j}` : "Poteau",
       q: 1,
       L: Math.ceil(q.L),
       l: q.l,
@@ -91,10 +91,10 @@ const cell = (v: string) => (/[;"\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` :
 
 /** Liste de débit au format CSV (séparateur point-virgule, décimales à la française), avec une ligne de total.
     Le volume de chaque ligne est pris sur les cotes brutes affichées, quantité comprise. */
-export function cutListCSV(cnc: CNC, R: Stair): string {
+export function cutListCSV(P: Pieces, R: Stair): string {
   const ess = ESSENCE_LABEL[R.params.ess];
   const essence = ess.charAt(0).toUpperCase() + ess.slice(1);
-  const rows = cutRows(cnc, R).map((r) => ({ ...r, v: (r.q * r.L * r.l * r.e) / 1e9 }));
+  const rows = cutRows(P, R).map((r) => ({ ...r, v: (r.q * r.L * r.l * r.e) / 1e9 }));
   const q = rows.reduce((t, r) => t + r.q, 0),
     v = rows.reduce((t, r) => t + r.v, 0);
   const lines: string[][] = [
@@ -106,8 +106,8 @@ export function cutListCSV(cnc: CNC, R: Stair): string {
 }
 
 /** Volume brut et poids approximatif selon l'essence. */
-export function volumeText(cnc: CNC, R: Stair): string {
-  const v = stockVolume(cnc, R),
+export function volumeText(P: Pieces, R: Stair): string {
+  const v = stockVolume(P, R),
     ess = R.params.ess;
   return `Volume brut débité : ${fmt(v, 3)} m³ de ${ESSENCE_LABEL[ess]}, soit environ ${fmt(Math.round((v * DENSITE[ess]) / 5) * 5)} kg (${fmt(DENSITE[ess])} kg/m³).`;
 }
@@ -131,9 +131,9 @@ export function stringerFitNote(boards: readonly BoardPart[], R: Stair): [Status
 }
 
 /** Alertes si des pièces dépassent les plateaux disponibles. */
-export function stockNotes(cnc: CNC, R: Stair): [Status, string][] {
+export function stockNotes(P: Pieces, R: Stair): [Status, string][] {
   const { pL, pW } = R.params;
-  const big = oversize(cnc, pL, pW);
+  const big = oversize(P, pL, pW);
   const plateau = `plateau de ${fmt(pL)} × ${fmt(pW)} mm`;
   const list = (ps: readonly TreadPart[]) => ps.map((q) => q.j).join(", ");
   const notes: string[] = [];
@@ -155,13 +155,13 @@ export function stockNotes(cnc: CNC, R: Stair): [Status, string][] {
     "Marches",
   );
   // Palier : un plateau de l'épaisseur des marches, toujours plus profond qu'une planche.
-  const pals = cnc.treadParts.filter((q) => q.palier && q.l > pW + 0.5);
+  const pals = P.treadParts.filter((q) => q.palier && q.l > pW + 0.5);
   if (pals.length)
     notes.push(
       `${pals.length > 1 ? "Paliers" : "Palier"} de ${pals.map((q) => `${fmt(Math.ceil(q.L))} × ${fmt(Math.ceil(q.l))}`).join(" et ")} mm : plateau collé à chant, fil le long du nez, logé comme une marche.`,
     );
   glued(big.risers, "Contremarche", "Contremarches");
-  const mp = cnc.mpPart;
+  const mp = P.mpPart;
   if (mp && (mp.L > pL + 0.5 || mp.l > pW + 0.5))
     notes.push(
       `Marche palière (${fmt(Math.ceil(mp.L))} × ${fmt(Math.ceil(mp.l))} mm) plus grande que le ${plateau} : à reconstituer en lames collées, fil le long du nez.`,

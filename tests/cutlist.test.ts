@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildCNC, stockVolume } from "../src/cnc/build";
 import { cutListCSV, cutRows } from "../src/cnc/cutlist";
 import { exportFiles, readme } from "../src/cnc/package";
+import { pieces, stockVolume } from "../src/core/pieces";
 import { CASES, stairOf } from "./cases";
 
 /** Cellules d'une ligne du CSV (aucune cellule de ces cas n'est entre guillemets). */
@@ -11,7 +11,7 @@ const fr = (s: string) => Number(s.replace(",", "."));
 
 describe.each(Object.entries(CASES))("liste de débit %s", (name, over) => {
   const R = stairOf(over);
-  const cnc = buildCNC(R);
+  const cnc = pieces(R);
   const csv = cutListCSV(cnc, R);
   const lines = csv.split("\n");
 
@@ -54,7 +54,7 @@ describe.each(Object.entries(CASES))("liste de débit %s", (name, over) => {
   });
 
   it("met la liste de débit dans l'archive, avec un BOM, et la cite dans la notice", () => {
-    const f = exportFiles(R, cnc).find((x) => x.name === "liste-debit.csv");
+    const f = exportFiles(R).find((x) => x.name === "liste-debit.csv");
     expect(f?.data).toBe("﻿" + csv);
     expect(readme(R)).toContain("liste-debit.csv : ");
   });
@@ -63,7 +63,7 @@ describe.each(Object.entries(CASES))("liste de débit %s", (name, over) => {
 describe("liste de débit pour le tableur", () => {
   it("écrit les cotes décimales avec une virgule, sans séparateur de milliers", () => {
     const R = stairOf({ forme: "droit", et: 27.5, ecm: 18.25 });
-    const csv = cutListCSV(buildCNC(R), R);
+    const csv = cutListCSV(pieces(R), R);
     const marche = cells(csv.split("\n").find((l) => l.startsWith("Marche"))!);
     expect(marche[2]).toBe("27,5");
     // Une seule décimale pour les cotes, comme sur la fiche des marches.
@@ -76,7 +76,7 @@ describe("liste de débit pour le tableur", () => {
 
   it("écrit l'essence et les noms avec leurs accents", () => {
     const R = stairOf({ forme: "quart-d", ess: "hetre" });
-    const csv = cutListCSV(buildCNC(R), R);
+    const csv = cutListCSV(pieces(R), R);
     expect(csv).toContain(";Hêtre;");
     expect(csv.split("\n")[0]).toContain("Pièce;Essence;Épaisseur (mm)");
     expect(csv).toContain("Volume (m³)");
@@ -87,7 +87,7 @@ describe("liste de débit pour le tableur", () => {
 
   it("met entre guillemets une pièce dont le nom contient un point-virgule", () => {
     const R = stairOf({ forme: "droit" });
-    const cnc = buildCNC(R);
+    const cnc = pieces(R);
     cnc.boardParts[0]!.name = 'LIMON "A"; MUR';
     const line = cutListCSV(cnc, R).split("\n")[1]!;
     expect(line.startsWith('"Limon ""a""; mur";Chêne;')).toBe(true);
