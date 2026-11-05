@@ -1,8 +1,9 @@
 /* Export du garde-corps : mains courantes vues de côté avec leur dessous déroulé, balustres ou montants
    et lisses vus de côté, couchés dans le sens du fil. Tenons et mortaises centrés : le côté de la vue importe peu. */
 import { fmt } from "../core/format";
-import { GC, type Handrail, type Post, type Rail, type Railing } from "../core/railing";
+import { GC, handrailOutline, postOutline, postTenon, railOutline } from "../core/railing";
 import type { Params } from "../core/params";
+import type { Handrail, Railing } from "../core/stair-types";
 import { bbox, type Pt } from "../core/vec";
 import type { Entity } from "./entities";
 
@@ -19,91 +20,12 @@ export interface RailingCNC {
   railParts: RailPart[];
 }
 
-/** Tenon carré en bout des balustres et montants : la moitié de leur section. */
-export const postTenon = (p: Params): number => Math.round(p.bs / 2);
-
 const rect = (x0: number, y0: number, x1: number, y1: number): Pt[] => [
   [x0, y0],
   [x1, y0],
   [x1, y1],
   [x0, y1],
 ];
-
-/** Contour d'une main courante dans son plan (u, z) : dessus, bouts d'aplomb ou d'onglet, tenon dans le poteau. */
-export function handrailOutline(hr: Handrail): Pt[] {
-  const top = (u: number) => hr.z0 + hr.b * u,
-    c0 = hr.cut0 ?? 0,
-    c1 = hr.cut1 ?? 0;
-  const tl: Pt = [hr.u0, top(hr.u0)],
-    tr: Pt = [hr.u1, top(hr.u1)],
-    br: Pt = [hr.u1 + c1, top(hr.u1 + c1) - hr.hv],
-    bl: Pt = [hr.u0 + c0, top(hr.u0 + c0) - hr.hv];
-  const hi = hr.tenons.find((t) => t.u0 >= hr.u1 - 1e-6),
-    lo = hr.tenons.find((t) => t !== hi);
-  return [
-    tl,
-    tr,
-    ...(hi
-      ? ([
-          [hi.u0, hi.z1],
-          [hi.u1, hi.z1],
-          [hi.u1, hi.z0],
-          [hi.u0, hi.z0],
-        ] as Pt[])
-      : []),
-    br,
-    bl,
-    ...(lo
-      ? ([
-          [lo.u1, lo.z0],
-          [lo.u0, lo.z0],
-          [lo.u0, lo.z1],
-          [lo.u1, lo.z1],
-        ] as Pt[])
-      : []),
-  ];
-}
-
-/** Contour d'un balustre ou montant dans le plan du garde-corps (u, z) : coupes biais, tenons en bout. */
-export function postOutline(q: Post, p: Params): Pt[] {
-  const w = p.bs / 2,
-    t = postTenon(p) / 2,
-    L = GC.tenon;
-  const zb = (u: number) => q.zb + q.ab * (u - q.u),
-    zt = (u: number) => q.zt + q.at * (u - q.u);
-  const bottom: Pt[] = q.tenonBas
-    ? [
-        [q.u - w, zb(q.u - w)],
-        [q.u - t, zb(q.u - t)],
-        [q.u - t, q.zb - L],
-        [q.u + t, q.zb - L],
-        [q.u + t, zb(q.u + t)],
-        [q.u + w, zb(q.u + w)],
-      ]
-    : [
-        [q.u - w, zb(q.u - w)],
-        [q.u + w, zb(q.u + w)],
-      ];
-  return [
-    ...bottom,
-    [q.u + w, zt(q.u + w)],
-    [q.u + t, zt(q.u + t)],
-    [q.u + t, q.zt + L],
-    [q.u - t, q.zt + L],
-    [q.u - t, zt(q.u - t)],
-    [q.u - w, zt(q.u - w)],
-  ];
-}
-
-export function railOutline(r: Rail): Pt[] {
-  const top = (u: number) => r.z0 + r.b * u;
-  return [
-    [r.uA, top(r.uA)],
-    [r.uB, top(r.uB)],
-    [r.uB, top(r.uB) - r.hv],
-    [r.uA, top(r.uA) - r.hv],
-  ];
-}
 
 /** Rotation d'angle -th autour de l'origine, puis translation au coin bas gauche, décalé de y. */
 function lay(pts: readonly Pt[], th: number, y: number, ref: readonly Pt[] = pts) {

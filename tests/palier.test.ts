@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildCNC } from "../src/cnc/build";
 import { cutRows } from "../src/cnc/cutlist";
-import { handrailOutline } from "../src/cnc/railing";
+import { handrailOutline } from "../src/core/railing";
 import { atelierDefauts } from "../src/core/atelier";
 import { DEFAULTS, type Params } from "../src/core/params";
 import { fileBase, newProject, parseProjectFile, projectFile } from "../src/core/project";

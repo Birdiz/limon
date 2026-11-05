@@ -1,7 +1,7 @@
 /* Plans d'atelier des limons pour la fiche : chaque limon couché comme dans limons.dxf (vu côté marches,
    dans le sens de la planche), avec ses cotes. Coordonnées de planche en mm, x le long du plateau depuis
    son bout gauche, y depuis sa rive basse. */
-import { layBoard } from "../cnc/build";
+import { layBoard } from "../core/stringer";
 import { fmt } from "../core/format";
 import { isLeft } from "../core/params";
 import { GC } from "../core/railing";
