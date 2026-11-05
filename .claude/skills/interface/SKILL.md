@@ -32,6 +32,17 @@ Pas de framework d'interface.
 
 Préférence de l'appareil (`limon-avance`), interrupteur dans l'onglet Mon compte. Sans elle, les éléments `[data-adv]` sont masqués (hauteurs et foulée à la main, marches balancées, progressivité, nez, assemblage CNC, copie des DXF, nouvel escalier complet) et la section Marches montre le choix du calcul.
 
+## Niveaux
+
+Gratuit, payant, premium : `DROITS`, `niveauActif` (`src/core/niveaux.ts`), appliqués par `applyNiveau` (`src/main.ts`). Tant que le paiement en ligne n'existe pas, tout reste ouvert : un artisan limité n'aurait aucun moyen de s'abonner. La préférence de l'appareil `limon-niveau` sert à essayer : `?niveau=gratuit`, `payant`, `premium`, `compte` (suit le statut du compte, `niveauDe`), `?niveau=0` l'enlève. Le contrôle reste dans le navigateur : le dépôt est public, seul ce que fait le serveur s'impose vraiment.
+
+- **Masqués** : `[data-payant]` sans la classe `payant` du `body`, `[data-offre]` (ce qui les remplace) avec elle.
+- **Un escalier à la fois** au gratuit : `makeRoom` (`src/ui/home.ts`) fait remplacer le seul escalier après confirmation, à la création et à l'ouverture d'une copie. Pas de « Dupliquer ».
+- **Escalier reçu par lien et exemple** : à la limite, ils s'affichent sans être gardés, même après un geste, jusqu'à « Garder cet escalier » ; l'exemple ne prend pas de place.
+- **Lecture seule** : au-delà de la limite, les moins récemment modifiés (`enLecture`). Rien n'est effacé ; ils s'ouvrent, se suppriment et se copient, le pas à pas s'y parcourt.
+- **Fiche** : première page et filigrane (`extrait` de `fichePDF`). Sans fichiers pour la machine, liste de débit, tableurs, réglages avancés, Mon atelier, formes en U et palier ; un escalier déjà dans ces formes reste calculé.
+- **Premium** : le devis, en plus de sa préférence `limon-devis`.
+
 ## Vue
 
 `#vue`, `showVue` dans `src/main.ts`. Un seul panneau, le plan ou la 3D (`data-vue`), avec un bouton Plan / 3D et les deux points de vue de chacune (Dessus / Côté pour le plan, Perspective / Dessus pour la 3D). Celle montrée à l'ouverture : préférence de l'appareil (`limon-vue`, `3d` par défaut ou `plan`), dans l'onglet Mon compte. La fiche et le devis PDF n'en dépendent pas : ils portent toujours le plan et la vue 3D.

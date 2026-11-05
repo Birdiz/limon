@@ -46,8 +46,12 @@
       </div>
       <span class="saved" id="saved" role="status"></span>
       <span class="recu" id="recu" hidden
-        >Escalier reçu par lien : pas encore dans Mes escaliers.
+        ><span id="recuTxt">Escalier reçu par lien : pas encore dans Mes escaliers.</span>
         <button class="btn" id="recuGarde" type="button">Garder cet escalier</button></span
+      >
+      <span class="recu" id="lecture" hidden
+        >Lecture seule : l'offre gratuite garde un escalier modifiable à la fois.
+        <a href="/?visite#prix">Voir les prix</a></span
       >
       <span class="undo idle" id="undoBox">
         <button class="ibtn" id="undo" type="button" aria-label="Annuler" disabled>
@@ -152,13 +156,16 @@
           Vos habitudes de travail : chaque nouvel escalier part avec ces réglages. Les cotes du chantier, elles,
           restent propres à chaque escalier.
         </p>
-        <p class="disclaimer" id="atSum"></p>
-        <div class="actions">
+        <p class="disclaimer" data-offre>
+          Vos réglages de départ viennent avec l'abonnement. <a href="/?visite#prix">Voir les prix</a>
+        </p>
+        <p class="disclaimer" id="atSum" data-payant></p>
+        <div class="actions" data-payant>
           <button class="btn" id="atTake" type="button">Reprendre les réglages de l'escalier ouvert</button
           ><button class="btn" id="atReset" type="button">Revenir à l'exemple</button
           ><span class="copied" id="atMsg" role="status" hidden></span>
         </div>
-        <div class="atbody" id="atBody"></div>
+        <div class="atbody" id="atBody" data-payant></div>
         <div class="atbody" id="atDevis" data-devis>
           <p class="disclaimer">
             Pour vos devis : la fiche de votre entreprise et vos tarifs, hors taxes. Un tarif laissé vide donnera une
@@ -352,6 +359,9 @@
             ></span
           ><input type="checkbox" role="switch" id="advToggle"
         /></label>
+        <p class="disclaimer" data-offre>
+          Les réglages avancés viennent avec l'abonnement. <a href="/?visite#prix">Voir les prix</a>
+        </p>
         <div class="adv pref">
           <span
             ><b>Vue à l'ouverture</b
@@ -417,6 +427,10 @@
           <summary><span class="sh">Forme</span><span class="sum" id="sum-forme"></span></summary>
           <div class="sbody">
             <p class="hint">Choisissez la forme de l'escalier. Le plan et la 3D suivent chaque réglage.</p>
+            <p class="disclaimer" data-offre>
+              Double quart, demi-tournant et palier viennent avec l'abonnement.
+              <a href="/?visite#prix">Voir les prix</a>
+            </p>
             <div class="shapes" role="radiogroup" aria-label="Forme de l'escalier">
               <input type="radio" name="forme" id="f-droit" value="droit" />
               <label for="f-droit"
@@ -772,7 +786,8 @@
         </div>
         <div class="actions sideacts" id="sideActs">
           <button class="btn" id="share" type="button">Envoyer à un collègue</button
-          ><button class="btn" id="atKeep" type="button">Garder ces réglages pour mes prochains escaliers</button
+          ><button class="btn" id="atKeep" type="button" data-payant>
+            Garder ces réglages pour mes prochains escaliers</button
           ><button class="btn" id="reset" type="button">Revenir à l'exemple</button
           ><span class="copied" id="sharemsg" hidden></span>
         </div>
@@ -832,6 +847,10 @@
               ><button class="btn go" id="ficheDl" type="button">Télécharger</button>
             </div>
           </div>
+          <p class="disclaimer" data-offre>
+            La fiche entière, sans filigrane, et les tableurs viennent avec l'abonnement.
+            <a href="/?visite#prix">Voir les prix</a>
+          </p>
           <div class="tablewrap"><table id="table"></table></div>
         </section>
 
@@ -840,13 +859,17 @@
             <h2>Fichiers pour la machine</h2>
             <div class="actions">
               <span class="copied" id="dlmsg" hidden></span
-              ><button class="btn" id="cncOpen" type="button">Préparer les fichiers machine</button
+              ><button class="btn" id="cncOpen" type="button" data-payant>Préparer les fichiers machine</button
               ><button class="btn go" id="dl" type="button" hidden>Télécharger les fichiers machine</button
               ><button class="btn" id="cncClose" type="button" hidden>Replier</button>
             </div>
           </div>
           <p class="disclaimer" id="cncIntro">
             Pour la CNC, en DXF : marches, contremarches et limons avec leurs logements, préparés à la demande.
+          </p>
+          <p class="disclaimer" data-offre>
+            Les fichiers pour la machine et la liste de débit viennent avec l'abonnement.
+            <a href="/?visite#prix">Voir les prix</a>
           </p>
           <div class="cncbody" id="cncBody" hidden>
             <div class="group asm" data-adv>

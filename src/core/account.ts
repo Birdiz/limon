@@ -2,8 +2,8 @@ import type { Project } from "./project";
 
 /* Ce que la page et le serveur échangent pour le compte et la synchronisation des projets. */
 
-/** Testeur : compte créé avant l'abonnement. Les autres statuts viendront avec lui. */
-export type Statut = "testeur" | "essai" | "abonne" | "expire";
+/** Testeur : compte créé avant l'abonnement. Les autres statuts viendront avec lui ; abonne au niveau payant, premium au-dessus. */
+export type Statut = "testeur" | "essai" | "abonne" | "premium" | "expire";
 
 export interface Compte {
   id: string;

@@ -1658,6 +1658,18 @@ body:not(.avance) [data-adv] {
 body:not(.devis) [data-devis] {
   display: none !important;
 }
+/* Niveaux : ce que le gratuit n'a pas, et ce qu'il voit à sa place */
+body:not(.payant) [data-payant] {
+  display: none !important;
+}
+body.payant [data-offre] {
+  display: none !important;
+}
+.shapes input:disabled + label,
+#advToggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 /* Onglet Devis : il prend la place de l'escalier, sur grand écran comme sur téléphone. */
 body:not([data-tab="devis"]) .devisv,
 body.home-on .devisv,

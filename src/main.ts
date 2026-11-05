@@ -13,6 +13,7 @@ import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "./core/tarifs";
 import { DEFAULTS, changeForme, type Params } from "./core/params";
+import { DROITS, enLecture, formeOuverte, niveauActif, type Droits } from "./core/niveaux";
 import {
   NOM_PAR_DEFAUT,
   canFinish,
@@ -65,6 +66,12 @@ if (asked.size) history.replaceState(null, "", location.pathname + location.hash
 let project: Project | null = null;
 /** Identifiant de l'escalier reçu par lien, à l'écran mais ni enregistré ni envoyé au compte tant que l'artisan n'y a pas touché. */
 let received: string | null = null;
+/** Droits du niveau appliqué sur cet appareil. */
+let droits: Droits = DROITS.premium;
+/** Escaliers en lecture seule, et nombre d'escaliers gardés, relus avec la liste. */
+let lecture = new Set<string>();
+let gardes = 0;
+const enLectureSeule = () => project !== null && project.id !== received && lecture.has(project.id);
 let params: Params = { ...DEFAULTS };
 let current: ComputeResult | null = null;
 let cnc: CNC | null = null;
@@ -105,8 +112,11 @@ const devisView = new DevisView({
 
 /** Enregistre l'escalier ouvert après un geste de l'artisan ; le premier garde l'escalier reçu par lien. */
 function saveProject(): void {
-  if (!project) return;
+  if (!project || enLectureSeule()) return;
   if (project.id === received) {
+    // Au gratuit, un escalier reçu ne prend la place du sien que par « Garder cet escalier ».
+    if (gardes >= droits.escaliers) return;
+    gardes++;
     received = null;
     byId("recu").hidden = true;
     void store.setCurrent(project.id);
@@ -116,6 +126,23 @@ function saveProject(): void {
 const keepReceived = () => {
   if (project?.id === received) saveProject();
 };
+/** Tire de la liste ce qui dépend du nombre d'escaliers ; l'escalier à l'écran suit. */
+function listed(all: Project[]): void {
+  lecture = enLecture(droits, all);
+  gardes = all.length;
+  showLecture();
+}
+function showLecture(): void {
+  const on = enLectureSeule();
+  byId("lecture").hidden = !on;
+  // Les champs seulement : le pas à pas d'un escalier en lecture seule doit pouvoir mener à sa vue et à sa fiche.
+  document.querySelectorAll<HTMLElement>(".side .sbody").forEach((el) => (el.inert = on));
+  byId("notes").inert = on;
+  byId("pjName").inert = on;
+  byId("undoBox").hidden = on;
+  byId("etatBox").hidden = on;
+}
+const relire = async () => listed(await store.list());
 
 function render(result: ComputeResult): void {
   const errHTML = (e: string) => `<div class="errbox">${e}</div>`;
@@ -175,7 +202,7 @@ function update(): void {
         flash(byId("etatMsg"), "Modifié : l'escalier repasse en brouillon", false, 6000);
       project = changed;
       // Sans geste de l'artisan, un écart de relecture des champs n'enregistre pas un escalier reçu par lien.
-      if (project.id !== received) void store.save(project);
+      if (project.id !== received && !enLectureSeule()) void store.save(project);
       showEtat();
     }
   }
@@ -206,6 +233,7 @@ function schedule(): void {
 
 /** Réglages changés d'un coup (correction d'une note, retour à l'exemple, annuler) : la saisie en attente passe avant. */
 function setParams(p: Params): void {
+  if (enLectureSeule()) return;
   keepReceived();
   if (queued) update();
   undo.touched(null);
@@ -240,6 +268,10 @@ function showEtat(): void {
   byId("etatTxt").innerHTML = fini
     ? `<b>Terminé le ${day(project!.finiLe)}.</b> La fiche est prête à remettre. Une modification le repasse en brouillon.`
     : "<b>Brouillon.</b> La fiche porte la mention « brouillon » tant que l'escalier n'est pas dit terminé.";
+  if (!droits.ficheComplete)
+    byId("etatTxt").innerHTML = fini
+      ? `<b>Terminé le ${day(project!.finiLe)}.</b> La fiche de l'offre gratuite garde la mention « brouillon ».`
+      : "<b>Brouillon.</b> La fiche de l'offre gratuite garde cette mention.";
   byId("etatBtn").textContent = fini ? "Repasser en brouillon" : "Escalier terminé";
 }
 byId("etatBtn").addEventListener("click", () => {
@@ -259,7 +291,8 @@ byId("etatBtn").addEventListener("click", () => {
   project = withEtat(project, fini ? "brouillon" : "fini", Date.now());
   saveProject();
   showEtat();
-  flash(byId("etatMsg"), fini ? "Repassé en brouillon" : "Terminé : la fiche ne porte plus la mention brouillon");
+  const finiMsg = droits.ficheComplete ? "Terminé : la fiche ne porte plus la mention brouillon" : "Terminé";
+  flash(byId("etatMsg"), fini ? "Repassé en brouillon" : finiMsg);
 });
 
 /** Met un escalier à l'écran (état, champs, calcul), sans toucher à l'accueil ni à l'export. */
@@ -268,6 +301,7 @@ function showProject(p: Project | null): void {
   const reprendre = !p !== !project;
   project = p;
   byId("recu").hidden = !p || p.id !== received;
+  showLecture();
   params = p ? { ...p.params } : { ...DEFAULTS };
   byId<HTMLInputElement>("pjName").value = p?.nom ?? "";
   writeInputs(params);
@@ -281,6 +315,7 @@ function showProject(p: Project | null): void {
 
 /** Ouvre un escalier ; null quand il n'en reste aucun : l'accueil prend alors la page. */
 function openProject(p: Project | null): void {
+  void relire();
   if (p) home.hide();
   else void home.show();
   setCNC(false);
@@ -323,8 +358,12 @@ byId("devisBtn").addEventListener("click", () => tabs.show(tabs.current === "dev
 // Tarifs changés dans Mon atelier ou reçus du compte : le devis à l'écran suit.
 atelier.onChange(() => devisView.refresh());
 
+/** Réglages de départ : ceux de l'atelier quand le niveau les comprend. */
+const depart = (): Params => (droits.atelier ? atelier.params() : { ...DEFAULTS });
+
 /** Nouvel escalier : réglages de l'atelier, et toujours en pas à pas sauf choix contraire. */
-async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = atelier.params()): Promise<void> {
+async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = depart()): Promise<void> {
+  if (!(await home.makeRoom())) return;
   const q = newProject(newId(), nom, mode, Date.now(), p);
   await store.save(q);
   await store.setCurrent(q.id);
@@ -334,12 +373,14 @@ async function startNew(nom = "", mode: Project["mode"] = "guide", p: Params = a
 const account = new AccountPanel(store, api);
 const home = new Home(store, {
   current: () => project,
-  params: () => atelier.params(),
+  params: depart,
   open: openProject,
   example: () => void example(),
   signedIn: () => store.account() !== null,
   known: () => store.known(),
   account: () => void account.show(),
+  droits: () => droits,
+  listed,
 });
 const atelierPanel = new AtelierPanel(atelier, {
   params: () => (project ? params : null),
@@ -365,11 +406,11 @@ const prefs = browserStorage();
 
 /** Devis, en préparation : visible sur l'appareil ouvert une fois avec ?devis, masqué de nouveau avec ?devis=0. */
 const DEVIS_KEY = "limon-devis";
-if (asked.has("devis")) {
-  const on = asked.get("devis") !== "0";
-  write(prefs, DEVIS_KEY, on ? "1" : "0");
-  document.body.classList.toggle("devis", on);
-} else document.body.classList.toggle("devis", read(prefs, DEVIS_KEY) === "1");
+if (asked.has("devis")) write(prefs, DEVIS_KEY, asked.get("devis") !== "0" ? "1" : "0");
+
+/** Niveau, pour l'essayer avant le paiement en ligne : ?niveau=gratuit, payant, premium ou compte ; ?niveau=0 l'enlève. */
+const NIVEAU_KEY = "limon-niveau";
+if (asked.has("niveau")) write(prefs, NIVEAU_KEY, asked.get("niveau") === "0" ? null : asked.get("niveau"));
 
 /** Réglages avancés : une préférence de l'appareil, réglée dans l'onglet Mon compte. */
 const ADV_KEY = "limon-avance";
@@ -378,7 +419,33 @@ function setAdvanced(on: boolean): void {
   byId<HTMLInputElement>("advToggle").checked = on;
   sketches();
 }
-setAdvanced(read(prefs, ADV_KEY) === "1");
+
+/** Applique le niveau de cet appareil ; suit le compte quand celui-ci change. */
+function applyNiveau(): void {
+  droits = DROITS[niveauActif(read(prefs, NIVEAU_KEY), store.account()?.statut ?? null)];
+  document.body.classList.toggle("payant", droits.fabrication);
+  document.body.classList.toggle("devis", droits.devis && read(prefs, DEVIS_KEY) === "1");
+  if (!droits.devis && tabs.current === "devis") tabs.show("reglages");
+  document.querySelectorAll<HTMLInputElement>('input[name="forme"]').forEach((r) => {
+    r.disabled = !formeOuverte(droits, r.value === "droit" ? "droit" : (`${r.value}-d` as Params["forme"]));
+  });
+  byId<HTMLSelectElement>("tournant").querySelector<HTMLOptionElement>('option[value="palier"]')!.disabled =
+    !droits.formes;
+  const fmt = byId<HTMLSelectElement>("ficheFmt");
+  for (const o of fmt.options) o.disabled = !droits.fabrication && o.value !== "pdf";
+  if (fmt.selectedOptions[0]?.disabled) fmt.value = "pdf";
+  const adv = byId<HTMLInputElement>("advToggle");
+  adv.disabled = !droits.avance;
+  setAdvanced(droits.avance && read(prefs, ADV_KEY) === "1");
+  if (!droits.fabrication) setCNC(false);
+  showEtat();
+}
+applyNiveau();
+store.onStatus(() => {
+  const avant = droits;
+  applyNiveau();
+  if (droits !== avant) void relire();
+});
 byId<HTMLInputElement>("advToggle").addEventListener("change", (e) => {
   const on = (e.target as HTMLInputElement).checked;
   setAdvanced(on);
@@ -414,6 +481,7 @@ for (const [id, plan] of [
 
 /** Projets changés sur un autre appareil ou dans un autre onglet : le projet ouvert se met à jour, ou laisse la place s'il a été supprimé. */
 store.onChange(async (ids) => {
+  await relire();
   if (project && ids.includes(project.id)) {
     const p = await store.get(project.id);
     if (p) {
@@ -493,10 +561,26 @@ async function openShared(p: Params): Promise<void> {
   }
   const q = newProject(newId(), "Escalier reçu par lien", "complet", Date.now(), p);
   received = q.id;
+  byId("recuTxt").textContent = "Escalier reçu par lien : pas encore dans Mes escaliers.";
   openProject(q);
 }
-byId("recuGarde").addEventListener("click", keepReceived);
-const example = () => startNew("Exemple", "complet", { ...DEFAULTS });
+byId("recuGarde").addEventListener("click", () => {
+  if (gardes < droits.escaliers) return keepReceived();
+  void home.makeRoom().then(async (place) => {
+    if (!place) return;
+    await relire();
+    keepReceived();
+  });
+});
+const example = async () => {
+  await relire();
+  if (gardes < droits.escaliers) return startNew("Exemple", "complet", { ...DEFAULTS });
+  // Au gratuit, l'exemple se regarde sans prendre la place de l'escalier gardé.
+  const q = newProject(newId(), "Exemple", "complet", Date.now(), { ...DEFAULTS });
+  received = q.id;
+  byId("recuTxt").textContent = "Exemple : pas encore dans Mes escaliers.";
+  openProject(q);
+};
 window.addEventListener("hashchange", () => {
   const p = paramsFromHash(location.hash);
   if (p) void openShared(p);
@@ -549,9 +633,10 @@ byId("ficheDl").addEventListener("click", async () => {
     const vue3d = scene?.snapshot() ?? undefined;
     const date = new Date().toLocaleDateString("fr-FR");
     const nom = project?.nom ?? NOM_PAR_DEFAUT;
-    const brouillon = project?.etat !== "fini";
+    const brouillon = project?.etat !== "fini" || !droits.ficheComplete;
+    const extrait = !droits.ficheComplete;
     downloadBytes(
-      fichePDF(current.stair, { nom, date, brouillon, ...(vue3d ? { vue3d } : {}) }),
+      fichePDF(current.stair, { nom, date, brouillon, extrait, ...(vue3d ? { vue3d } : {}) }),
       `${base}${brouillon ? " (brouillon)" : ""}.pdf`,
       "application/pdf",
     );
@@ -593,6 +678,7 @@ writeInputs(params);
 update();
 void (async () => {
   if (leaving) return;
+  await relire();
   const id = await store.currentId();
   const start = (id && (await store.get(id))) || (await store.list())[0] || null;
   // Sur un appareil vide, l'accueil ne passe pas avant l'escalier du lien.
