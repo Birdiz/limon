@@ -24,7 +24,7 @@ function panel(storage: KeyValue | null) {
     new Api(async () => new Response("[]", { status: 200 })),
     storage,
   );
-  new AccountPanel(store, new Api());
+  new AccountPanel(store, new Api(), null);
   return store;
 }
 
@@ -110,7 +110,7 @@ describe("état de l'enregistrement dans l'en-tête", () => {
       return new Response(JSON.stringify(body), { status: 200 });
     });
     const store = new SyncStore(new LocalStore(storage), api, storage);
-    new AccountPanel(store, api);
+    new AccountPanel(store, api, null);
     await store.signIn(COMPTE);
     await settled();
     expect(line().textContent).toContain("1 escalier d'un autre appareil arrivera tout seul");
@@ -134,7 +134,7 @@ describe("état de l'enregistrement dans l'en-tête", () => {
         return new Response(JSON.stringify(body), { status: 200 });
       });
       const store = new SyncStore(new LocalStore(storage), api, storage);
-      return { store, panel: new AccountPanel(store, api) };
+      return { store, panel: new AccountPanel(store, api, null) };
     }
     const refus = (id: string, raison: string) =>
       new Response(JSON.stringify({ index: [], refus: [{ id, raison }] }), { status: 200 });
@@ -203,7 +203,7 @@ describe("état de l'enregistrement dans l'en-tête", () => {
         storage,
         atelier,
       );
-      new AccountPanel(store, new Api());
+      new AccountPanel(store, new Api(), null);
       await store.signIn(COMPTE);
       atelier.set({ tarifs: { ...TARIFS_VIDES, taux: 45 } }, 1000);
       store.atelierChanged();

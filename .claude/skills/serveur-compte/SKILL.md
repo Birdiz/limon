@@ -19,6 +19,8 @@ description: Serveur et /api (server/), base et migrations, compte, passkeys, se
 
 Sans mot de passe : passkey (SimpleWebAuthn, `@simplewebauthn/browser` chargé à part), vérification de la personne exigée partout, à la connexion comme à l'ajout (décision du propriétaire : l'outil ne les propose que là où l'appareil en a) ; code à 8 chiffres par e-mail (`CODE_CHIFFRES`, suivi par les champs de `app/index.html`) (Brevo, `server/mail.ts`) pour créer le compte et en secours, haché avec un sel propre au processus.
 
+**Code attendu** (`limon-code-attendu`, `src/ui/account.ts`) : l'adresse et la fin de validité du code demandé restent sur l'appareil 10 minutes, car la page peut se recharger pendant qu'on lit ses e-mails (mise à jour silencieuse, téléphone qui la libère). Elle rouvre alors Mon compte à l'étape du code. Retour, la connexion ou la fin des 10 minutes l'oublient. Limites : un lien ou un paramètre d'ouverture passe avant ; un code demandé avant une mise en ligne ne vaut plus après, le sel changeant avec le processus : Retour permet d'en redemander un. Le changement d'adresse et la preuve par code ne gardent pas leur étape : après un rechargement, le geste est à refaire.
+
 Session : cookie `limon-session` (`HttpOnly`, `Path=/api`). 90 jours sans usage la ferment (`SESSION_DAYS`) ; un usage la prolonge, une fois par jour au plus, sans dépasser un an après son ouverture (`SESSION_MAX_DAYS`), et le cookie ne promet que ce qui reste. Requêtes qui modifient : origine du site exigée.
 
 **Limites de débit** (`nouvellesLimites`, `server/api.ts`) : en mémoire, un seul serveur, à zéro à chaque redémarrage. Une table par limite, aucune ne pousse dehors les clés d'une autre.
