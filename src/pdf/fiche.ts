@@ -41,6 +41,8 @@ export interface FicheOptions {
   vue3d?: { data: Uint8Array; w: number; h: number };
   /** Escalier pas encore dit fini : mention en tête et filigrane sur chaque page. */
   brouillon?: boolean;
+  /** Niveau gratuit : la première page seule. */
+  extrait?: boolean;
 }
 
 const mm = (v: number, d = 0) => `${fmt(v, d)} mm`;
@@ -286,7 +288,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   const doc = new PdfDoc(o.nom);
   const cnc = buildCNC(R);
   const limons = limonSheets(R, cnc);
-  const PAGES = 3 + limons.pages.length;
+  const PAGES = o.extrait ? 1 : 3 + limons.pages.length;
 
   /* ---------- Page 1 ---------- */
   const pg = doc.page();
@@ -419,6 +421,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
     drawShapes(pg, planShapes(R), PLAN_STYLE, M + 10, y + 26, CW - 20, boxH - 36);
   }
   footer(pg, o, 1, PAGES);
+  if (o.extrait) return doc.bytes();
 
   /* ---------- Page 2 ---------- */
   const p2 = doc.page();
