@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { atelierDefauts, newAtelier } from "../src/core/atelier";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "../src/core/tarifs";
 import { DEFAULTS } from "../src/core/params";
-import { buildCNC } from "../src/cnc/build";
+import { pieces } from "../src/core/pieces";
 import { quantites } from "../src/cnc/quantites";
 import { MAX_OCTETS, SAISIE_DEFAUT, bloquants, devis, newDevis, remettre, type DevisProjet } from "../src/core/devis";
 import { compute } from "../src/core/stair";
@@ -1098,7 +1098,7 @@ describe("atelier", () => {
 describe("poids d'un escalier", () => {
   const r = compute(DEFAULTS, false);
   if (!r.ok) throw new Error("exemple");
-  const Q = quantites(r.stair, buildCNC(r.stair));
+  const Q = quantites(r.stair, pieces(r.stair));
   const T = "é".repeat(200);
   const saisiePleine = {
     ...SAISIE_DEFAUT,

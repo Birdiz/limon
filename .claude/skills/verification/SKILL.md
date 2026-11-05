@@ -12,7 +12,7 @@ description: Vérification, CI GitHub Actions (jobs, contrôles exigés), fichie
 
 ## Dans le navigateur
 
-- Dans l'outil en développement (`/app/`), `window.limon` donne `compute`, `buildCNC`, `toDXF`, `exportZip`, `update`, `current()` et `scene()`.
+- Dans l'outil en développement (`/app/`), `window.limon` donne `compute`, `pieces`, `buildCNC`, `toDXF`, `exportZip`, `update`, `current()` et `scene()`.
 - requestAnimationFrame ne tourne pas dans le panneau navigateur masqué : appeler `limon.update()` plutôt que de compter sur les événements.
 - Pour la 3D en capture d'écran, le renderer utilise `preserveDrawingBuffer: true`. Le rendu reproduit celui de Three.js r147 (gestion des couleurs désactivée, lumières × π) : vérifier l'aspect à l'œil après une mise à jour de Three.js.
 

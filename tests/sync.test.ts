@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildCNC } from "../src/cnc/build";
+import { pieces } from "../src/core/pieces";
 import { quantites } from "../src/cnc/quantites";
 import { atelierDefauts, newAtelier, type AtelierDefauts } from "../src/core/atelier";
 import { devis, newDevis, noterReponse, remettre, versionSuivante } from "../src/core/devis";
@@ -1707,7 +1707,7 @@ describe("deux fenêtres d'un navigateur connectées au même compte", () => {
 describe("versions remises d'un devis, deux appareils qui divergent", () => {
   const R = compute(DEFAULTS, false);
   if (!R.ok) throw new Error("exemple invalide");
-  const Q = quantites(R.stair, buildCNC(R.stair));
+  const Q = quantites(R.stair, pieces(R.stair));
 
   /** Remise au client, chiffrée à ce total de lignes libres : deux documents différents sous le même numéro. */
   function remis(p: Project, client: string, pu: number, now: number): Project {
