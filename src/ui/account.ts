@@ -3,7 +3,15 @@ import { day } from "../core/format";
 import type { Project } from "../core/project";
 import { ApiError, NotSignedIn, ProofNeeded, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
+import { readJSON, write, type KeyValue } from "./store";
 import type { RefusVu, RetenuVu, SyncStatus, SyncStore } from "./sync";
+
+/**
+ * Le code demandé, le temps qu'il vaut sur le serveur. L'artisan quitte la page pour lire ses e-mails, et elle peut se
+ * recharger entre-temps : mise à jour silencieuse, ou téléphone qui la libère.
+ */
+const CODE_ATTENDU = "limon-code-attendu";
+const CODE_MS = 10 * 60_000;
 
 const webauthn = () => import("@simplewebauthn/browser");
 const hasWebAuthn = () => typeof window.PublicKeyCredential === "function";
@@ -96,6 +104,7 @@ export class AccountPanel {
   constructor(
     private store: SyncStore,
     private api: Api,
+    private storage: KeyValue | null,
   ) {
     byId("acPk").addEventListener("click", () => void this.run(() => this.passkeyLogin(false)));
     byId("acEmailForm").addEventListener("submit", (e) => {
@@ -106,7 +115,10 @@ export class AccountPanel {
       e.preventDefault();
       void this.run(() => this.checkCode());
     });
-    byId("acBack").addEventListener("click", () => this.codeStep(false));
+    byId("acBack").addEventListener("click", () => {
+      write(this.storage, CODE_ATTENDU, null);
+      this.codeStep(false);
+    });
     byId("acEmailChange").addEventListener("click", () => this.emailStep("adresse"));
     byId("acNewEmailNo").addEventListener("click", () => this.emailStep(null));
     byId("acNewEmailForm").addEventListener("submit", (e) => {
@@ -210,6 +222,19 @@ export class AccountPanel {
     list.innerHTML = st.refuses.map(refusedItem).join("");
   }
 
+  /** Adresse du code qui attend ; passé son temps, le code ne vaut plus et l'adresse ne reste pas sur l'appareil. */
+  private codeAttendu(): string | null {
+    const v = readJSON(this.storage, CODE_ATTENDU) as { email?: unknown; jusqu?: unknown } | null;
+    if (typeof v?.email === "string" && typeof v.jusqu === "number" && Date.now() < v.jusqu) return v.email;
+    write(this.storage, CODE_ATTENDU, null);
+    return null;
+  }
+
+  /** Un code attend : la page rouvre Mon compte à son arrivée. */
+  awaitsCode(): boolean {
+    return !this.store.account() && this.codeAttendu() !== null;
+  }
+
   /** L'onglet s'affiche : connexion, ou le compte. */
   async show(): Promise<void> {
     this.msg.hidden = true;
@@ -306,8 +331,10 @@ export class AccountPanel {
     byId("acEmailLbl").textContent = known
       ? "Se connecter avec un code, ou créer un autre compte"
       : "Créer un compte, ou se connecter avec un code";
+    const attendu = this.codeAttendu();
+    if (attendu) byId<HTMLInputElement>("acEmail").value = this.email = attendu;
     // Pas de clavier qui surgit à l'ouverture de l'onglet sur le téléphone.
-    this.codeStep(false, false);
+    this.codeStep(attendu !== null, false);
     byId("acPkBox").hidden = !hasWebAuthn();
     // La passkey proposée dans le remplissage automatique du champ e-mail.
     void webauthn().then(async (w) => {
@@ -326,6 +353,7 @@ export class AccountPanel {
   private async sendCode(): Promise<void> {
     this.email = byId<HTMLInputElement>("acEmail").value.trim();
     await this.api.sendCode(this.email);
+    write(this.storage, CODE_ATTENDU, JSON.stringify({ email: this.email, jusqu: Date.now() + CODE_MS }));
     this.codeStep(true);
     flash(this.msg, "Code envoyé : regardez vos e-mails (et les indésirables).", false, 8000);
   }
@@ -350,6 +378,7 @@ export class AccountPanel {
 
   private async signedIn(compte: Compte): Promise<void> {
     await this.store.signIn(compte);
+    write(this.storage, CODE_ATTENDU, null);
     flash(this.msg, "Connecté");
   }
 
