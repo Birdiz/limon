@@ -16,8 +16,14 @@ const ESS: Record<Essence, number> = {
   chene: 0xc4955f,
   hetre: 0xdcae80,
   frene: 0xe2c79f,
-  sapin: 0xe6c78c,
+  chataignier: 0xb98a55,
+  erable: 0xead3ae,
+  merisier: 0xb7744f,
   noyer: 0x80583a,
+  sapin: 0xe6c78c,
+  epicea: 0xead2a0,
+  douglas: 0xc98d5e,
+  meleze: 0xc68752,
 };
 
 /** Générateur pseudo-aléatoire (mulberry32), pour un veinage identique à chaque chargement. */

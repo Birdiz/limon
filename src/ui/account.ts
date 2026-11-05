@@ -1,6 +1,6 @@
 import type { Appareil, Compte, CompteDetail } from "../core/account";
 import { day } from "../core/format";
-import { PRIX, isOffre, offreVue, prixEuros, statutReel, type Rythme } from "../core/niveaux";
+import { PRIX, isOffre, offreVue, prixEuros, prixHT, statutReel, type Rythme } from "../core/niveaux";
 import type { Project } from "../core/project";
 import { ApiError, NotSignedIn, ProofNeeded, type Api } from "./api";
 import { byId, downloadProject, esc, flash } from "./dom";
@@ -545,8 +545,9 @@ export class AccountPanel {
     byId("acMois").setAttribute("aria-pressed", String(rythme === "mois"));
     byId("acAn").setAttribute("aria-pressed", String(rythme === "an"));
     const mots = rythme === "mois" ? "par mois" : "par an";
-    byId("acPrixPayant").textContent = `${prixEuros(PRIX.payant[rythme])} ${mots}`;
-    byId("acPrixPremium").textContent = `${prixEuros(PRIX.premium[rythme])} ${mots}`;
+    const prix = (ttc: number) => `${prixEuros(prixHT(ttc))} HT ${mots} (${prixEuros(ttc)} TTC)`;
+    byId("acPrixPayant").textContent = prix(PRIX.payant[rythme]);
+    byId("acPrixPremium").textContent = prix(PRIX.premium[rythme]);
   }
 
   /** Retour de la page de paiement : l'abonnement s'ouvre quand Stripe a prévenu le serveur, en quelques secondes. */

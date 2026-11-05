@@ -175,7 +175,10 @@ describe("annuler et rétablir", () => {
   it("compte une correction proposée et le retour à l'exemple comme une étape", () => {
     type("hl", "200");
     pause();
-    const fix = document.querySelector<HTMLButtonElement>("#notes button[data-fix]")!;
+    // La correction du limon, en millimètres (celle du giron au jour donne un nombre de marches).
+    const fix = [...document.querySelectorAll<HTMLButtonElement>("#notes button[data-fix]")].find((b) =>
+      b.textContent!.endsWith("mm"),
+    )!;
     expect(fix).not.toBeNull();
     fix.click();
     const fixed = Number(field("hl").value);

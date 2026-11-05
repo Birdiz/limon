@@ -1,15 +1,15 @@
 ---
 name: export-cnc
-description: Export CNC (src/cnc, buildCNC, toDXF, makeZip), DXF, calques, pièces des marches, contremarches, limons, poteaux et garde-corps, panneau CNC.
+description: Export CNC (src/cnc, buildCNC, pieces, toDXF, makeZip), DXF, calques, pièces des marches, contremarches, limons, poteaux et garde-corps, panneau CNC.
 ---
 
 # Export CNC
 
-Voir `buildCNC`, `toDXF`, `makeZip` dans `src/cnc`. Les calculs de pièces que l'écran ou la fiche reprennent vivent dans `src/core` ; `src/cnc` ne fait que les poser en entités DXF.
+Deux étapes. `pieces(R)` (`src/core/pieces.ts`, pur) donne les pièces débitées et leurs cotes (`Pieces` : marches, contremarches, limons, marche palière, poteaux, garde-corps), avec `stockVolume`, `oversize`, `tightBoards`. `buildCNC(R, P?)` (`src/cnc/build.ts`) les reprend et les pose en entités DXF (`CNC` étend `Pieces`), puis `toDXF` et `makeZip`. La liste de débit (`src/cnc/cutlist.ts`), la fiche PDF et le devis n'appellent que `pieces`. Les formes communes aux deux étapes (`treadShape`, `riserShape`, `boardNames`, `lay`, `handrailNames`) sont dans `src/core/pieces.ts` : une cote de pièce et son contour dans le DXF viennent du même calcul.
 
 - **Format** : DXF R12 (AC1009), texte sans accents, zip sans compression avec CRC32.
 - **Panneau** : l'export n'est calculé (`buildCNC`) que lorsque sa section est ouverte ; il contient les réglages d'assemblage (hauteurs de limon, plateaux disponibles, encastrement, jeu).
-- **Marches** : vues de dessus, nez le long de x, encastrement `enc` inclus. Le contour de chacune, coin du débit à l'origine, est gardé dans `TreadPart.outline` pour le traçage à la main de la fiche (skill `fiche-pdf`).
+- **Marches** : vues de dessus, nez le long de x, encastrement `enc` inclus. Le contour de chacune, coin du débit à l'origine, est gardé par `pieces` dans `TreadPart.outline` pour le traçage à la main de la fiche (skill `fiche-pdf`).
 - **Contremarches** : vues de face, longueur hors tout, bouts biais cotés sur `TEXTE`.
 - **Limons** : vus côté marches, tournés au rectangle d'aire minimale (`layBoard`, `src/core/stringer.ts`, partagé avec la fiche PDF).
 - **Poteaux** : POTEAU 1/2 puis 2/2 dans `poteau.dxf`, quatre faces vues de l'extérieur, couchées pied à gauche, dans l'ordre du tour (ordre inversé par le miroir des formes gauches).

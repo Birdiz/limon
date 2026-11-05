@@ -1,6 +1,6 @@
-import { buildCNC, type CNC } from "../cnc/build";
 import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist";
 import { fmt } from "../core/format";
+import { pieces, type Pieces } from "../core/pieces";
 import { isDemi } from "../core/params";
 import { projectUrl } from "../core/share";
 import { planShapes, type PlanRole, type PlanShape } from "../core/plan-shapes";
@@ -233,10 +233,10 @@ interface LimonSheets {
 }
 
 /** Limons à une même échelle, répartis sur des pages à l'italienne. */
-function limonSheets(R: Stair, cnc: CNC): LimonSheets {
+function limonSheets(R: Stair, parts: Pieces): LimonSheets {
   const boards = layBoards(
     R,
-    cnc.boardParts.map((b) => b.name.toLowerCase().replace(/^limon/, "Limon")),
+    parts.boardParts.map((b) => b.name.toLowerCase().replace(/^limon/, "Limon")),
   );
   const n = boardScale(boards, LAND.w - 2 * M - 2 * SIDE);
   const pages: number[][] = [];
@@ -303,7 +303,7 @@ interface TraceSheets {
 const CARDS = { cols: 4, rows: 2, gap: 12 };
 const CARD_W = (LAND_CW - (CARDS.cols - 1) * CARDS.gap) / CARDS.cols;
 
-function traceSheets(R: Stair, L: LimonSheets, cnc: CNC): TraceSheets {
+function traceSheets(R: Stair, L: LimonSheets, parts: Pieces): TraceSheets {
   const p = R.params;
   const intro = traceMethod(p, R.rn).flatMap((s) => wrap(s, 8, LAND_CW)).length * 10.5 + 8;
   const limons: number[][] = [];
@@ -317,7 +317,7 @@ function traceSheets(R: Stair, L: LimonSheets, cnc: CNC): TraceSheets {
     limons[limons.length - 1]!.push(i);
     y += h + 12;
   });
-  const cards = treadCards(cnc, p);
+  const cards = treadCards(parts, p);
   const per = CARDS.cols * CARDS.rows;
   const marches = Array.from({ length: Math.ceil(cards.length / per) }, (_, k) => cards.slice(k * per, (k + 1) * per));
   return { limons, marches, intro };
@@ -394,9 +394,9 @@ export function frame(pg: Page, x: number, y: number, w: number, h: number, titl
 export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   const p = R.params;
   const doc = new PdfDoc(o.nom);
-  const cnc = buildCNC(R);
-  const limons = limonSheets(R, cnc);
-  const trace = traceSheets(R, limons, cnc);
+  const parts = pieces(R);
+  const limons = limonSheets(R, parts);
+  const trace = traceSheets(R, limons, parts);
   const nLimons = 3 + limons.pages.length,
     nTrace = nLimons + trace.limons.length;
   const PAGES = o.extrait ? 1 : nTrace + trace.marches.length;
@@ -633,7 +633,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   const p3 = doc.page();
   p3.text(M, 58, "Liste de débit", { size: 18, bold: true, color: C.ink });
   p3.text(A4.w - M, 46, o.nom, { size: 8.5, color: C.muted, anchor: "end" });
-  const rows = cutRows(cnc, R);
+  const rows = cutRows(parts, R);
   const head = ["Pièce", "Qté", "Longueur", "Largeur", "Épaisseur"];
   // Colonne des pièces large (noms du type « Marches 1, 2, 3 ») ; cotes alignées à droite.
   const nameW = CW * 0.46,
@@ -669,11 +669,11 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   p3.rect(M, 82, CW, y - 82, { stroke: C.rule, width: 0.6 });
   p3.text(M, y + 16, "Cotes brutes de débit en millimètres, longueur dans le fil.", { size: 8, color: C.muted });
   y += 38;
-  p3.text(M, y, volumeText(cnc, R), { size: 9.5, bold: true, color: C.ink });
+  p3.text(M, y, volumeText(parts, R), { size: 9.5, bold: true, color: C.ink });
   y += 22;
   heading(p3, M, y, "Fabrication");
   y += 16;
-  for (const [s, t] of [stringerFitNote(cnc.boardParts, R), ...stockNotes(cnc, R)]) {
+  for (const [s, t] of [stringerFitNote(parts.boardParts, R), ...stockNotes(parts, R)]) {
     const lines = wrap(t, 9.5, CW - 14);
     p3.rect(M, y - 6.5, 5, 5, { fill: ST[s] });
     lines.forEach((ln, i) => p3.text(M + 12, y + i * 12.5, ln, { size: 9.5, color: C.ink }));

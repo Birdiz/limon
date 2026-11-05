@@ -7,10 +7,11 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./styles/main.css";
 
-import { buildCNC, tightBoards, type CNC } from "./cnc/build";
+import { buildCNC, type CNC } from "./cnc/build";
 import { cutListCSV } from "./cnc/cutlist";
 import { toDXF } from "./cnc/dxf";
 import { exportFilename, exportZip } from "./cnc/package";
+import { pieces, tightBoards } from "./core/pieces";
 import { ENTREPRISE_VIDE, TARIFS_VIDES } from "./core/tarifs";
 import { DEFAULTS, changeForme, type Params } from "./core/params";
 import { DROITS, ABONNEMENT_OUVERT, formeOuverte, niveauActif, statutReel, type Droits } from "./core/niveaux";
@@ -542,7 +543,7 @@ byId("ficheDl").addEventListener("click", async () => {
   const csv = (text: string, nom: string) =>
     downloadBytes(new TextEncoder().encode("\ufeff" + text), `${base} - ${nom}.csv`, "text/csv");
   if (kind === "csv") csv(treadsCSV(current.stair), "marches");
-  else if (kind === "debit") csv(cutListCSV(cnc ?? buildCNC(current.stair), current.stair), "liste de débit");
+  else if (kind === "debit") csv(cutListCSV(cnc ?? pieces(current.stair), current.stair), "liste de débit");
   else {
     // La fiche porte toujours la 3D : si elle se charge encore, on l'attend.
     await sceneReady;
@@ -623,6 +624,6 @@ const sceneReady = Promise.all([import("./ui/scene3d"), document.fonts.ready])
 // Accès console en développement : le panneau navigateur masqué ne fait pas tourner requestAnimationFrame.
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    limon: { compute, buildCNC, toDXF, exportZip, update, current: () => current, scene: () => scene },
+    limon: { compute, pieces, buildCNC, toDXF, exportZip, update, current: () => current, scene: () => scene },
   });
 }

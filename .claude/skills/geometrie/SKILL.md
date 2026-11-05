@@ -7,6 +7,25 @@ description: Géométrie de l'escalier (compute, src/core/stair.ts), formes, rep
 
 Voir `compute(p)` dans `src/core/stair.ts`. Les types du modèle (`Stair`, `Tread`, `StringerPiece`, `Newel`, `Railing`, `Note`…) sont dans `src/core/stair-types.ts`, sans calcul : les modules de `core` les importent de là, `stair.ts` les ré-exporte pour le reste. Seul cycle gardé, d'appel : `stair-notes.ts` rappelle `compute` pour chercher les marches balancées.
 
+## Étapes du calcul
+
+`compute` valide les réglages (`validate`), puis enchaîne des étapes, chacune dans son fichier de `src/core/`, entrées et sorties typées. Une étape qui bute renvoie un `ComputeFailure` (`{ ok: false, errors }`), que `compute` rend tel quel (`"errors" in r`).
+
+1. `flights` (`stair-flights.ts`) : volées et ligne de foulée. `Flights` : côtés `inner` et `outer`, `len`, `dirs`, angles `sIn`, arcs `tA`/`tB`, `Lw`, `walkAt`, `walkTan`, `sPerp`, `C` et `single` du demi-tournant.
+2. `heights` (`stair-noses.ts`) : nombre et hauteur des marches, giron, paliers (`pickN`, `palierLayout`), abscisse `ts` de chaque nez sur la ligne de foulée.
+3. `balance` (`stair-noses.ts`) : position `s` de chaque nez sur le jour, zones balancées `bals`.
+4. `noseLines` (`stair-noses.ts`) : lignes de nez.
+5. `treadsAndRisers` (`stair-treads.ts`) : marches, marche palière, contremarches, découpe du plan entre les lignes de nez (`planCuts`).
+6. `stringerLines` (`stair-stringers.ts`) : hauteur des nez le long de chaque côté (`zIn`, `zOut`), tronçons de limon sans logements.
+7. `newelPosts` (`stair-newels.ts`) : faces des poteaux côté marches, traitées comme des bouts de limon.
+8. `stringerPieces` (`stair-stringers.ts`) : logements des limons et des faces de poteaux, hauteurs `hlj` et `need`, tenons, perçages.
+9. `railing` (`railing.ts`) : garde-corps.
+10. `newels` (`stair-newels.ts`) : poteaux, faces, logements et mortaises (limons de jour et mains courantes).
+11. `tremie` (`tremie.ts`) : plancher haut, trémie, échappée.
+12. Contrôles (`comfortStatus`, `CONFORT` dans `confort.ts`) et notes (`stairNotes`).
+
+Les étapes n'importent pas `stair.ts` ; il ré-exporte leurs constantes (`CONFORT`, `FOULEE_MAX`, `LIFT`, `TENON`, `PERCAGE`) et `pickN`, `palierLayout` pour le reste du code. Une étape nouvelle prend sa place dans cette suite, avec ses propres entrées et sorties, plutôt que de rallonger `compute`.
+
 Selon le sujet, lire aussi :
 
 - [palier.md](palier.md) : `tournant` = "palier", demi-tour, pièce PALIER.
@@ -15,7 +34,7 @@ Selon le sujet, lire aussi :
 
 ## Résultat
 
-`compute` renvoie `{ ok: true, stair }` ou `{ ok: false, errors }` (chaque erreur désigne si possible le champ fautif). `stair.params` garde les réglages utilisés. Les notes s'écrivent dans `stairNotes` (`src/core/stair-notes.ts`). Une note peut porter une correction (`Fix`, appliquée d'un clic) ; `compute(p, false)` saute leur recherche.
+`compute` renvoie `{ ok: true, stair }` ou `{ ok: false, errors }` (chaque erreur désigne si possible le champ fautif). `stair.params` garde les réglages utilisés. Les notes s'écrivent dans `stairNotes` (`src/core/stair-notes.ts`). Une note peut porter une correction (`Fix`, appliquée d'un clic) ; `compute(p, false)` saute leur recherche. Deux remarques (`info`, pas des alertes) laissent « tout est dans les règles » : giron au jour bon mais sous `CONFORT.gIn.conseil` (120 mm, avec le nombre de marches balancées qui l'atteint), et pas de garde-corps au-delà de 1 m de chute (il peut être posé à part, ou inutile entre deux murs).
 
 `validate` refuse d'abord, sur son champ, toute cote lue au-delà de `H_MAX` (hauteur) ou de `COTE_MAX` (les autres), en valeur absolue : le calcul reste assez court pour ne pas figer la page. `sanitizeParams` garde la valeur, pour la montrer à corriger. `pickN` et `palierLayout` ne dépassent pas `H_MAX / 120` hauteurs. Une boucle nouvelle qui dépend d'un réglage se teste aux bornes (`tests/stair.test.ts`).
 
@@ -37,7 +56,7 @@ En entrant dans une forme en U, `changeForme` reprend ses cotes d'exemple (`EXEM
 - Ligne de foulée : côtés du jour décalés de f, raccordés par un quart de cercle autour de chaque angle (`tA`, `tB`).
 - Balancement par tournant (`stair.bals`, `stair.bal` = le premier) ; deux zones qui se chevauchent se partagent à la ligne la plus proche du milieu de la volée du milieu (un creux du giron au jour à chaque angle).
 - Hauteur du tour : pas de réglage enregistré, elle découle de A et B (balancement centré sur l'angle). Le champ « Marches droites avant le tour » affiche `bal.a` ; le modifier recalcule A et B à A + B constant (`turnLengths`, bornes `turnRange`), donc même ligne de foulée et même confort.
-- Logements et hauteur nécessaire de chaque limon calculés dans `compute` (`stringerPockets`, `cncFrame` dans `src/core/pockets.ts`). Le limon de jour du quart tournant a sa propre hauteur `hlj` (automatique par défaut : `need` arrondi à 10 mm, 470 mm avec l'exemple) ; chaque pièce porte sa hauteur dans `sp.hl`.
+- Logements et hauteur nécessaire de chaque limon calculés dans `stringerPieces` (`stringerPockets`, `cncFrame` dans `src/core/pockets.ts`). Le limon de jour du quart tournant a sa propre hauteur `hlj` (automatique par défaut : `need` arrondi à 10 mm, 470 mm avec l'exemple) ; chaque pièce porte sa hauteur dans `sp.hl`.
 
 ## Garde-corps
 

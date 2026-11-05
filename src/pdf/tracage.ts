@@ -1,9 +1,9 @@
 /* Traçage à la main, pour l'atelier sans commande numérique : cotes des logements et du contour de chaque limon
    depuis le bout gauche et la rive basse du plateau, puis contour des marches qui ne sont pas des rectangles depuis
    la rive du nez. Mêmes pièces, mêmes repères que limons.dxf et marches.dxf. */
-import type { CNC } from "../cnc/build";
 import { fmt } from "../core/format";
 import type { Params } from "../core/params";
+import type { Pieces } from "../core/pieces";
 import { bbox, V, type Pt } from "../core/vec";
 import { contourNames, pointName, ring, type Board, type LimonColors } from "./limons";
 import { textWidth, wrap, type Page, type RGB } from "./pdf";
@@ -204,7 +204,7 @@ const rectangle = (pts: readonly Pt[]) =>
   });
 
 /** Marches, paliers et marche palière qui ne sont pas des rectangles, dans l'ordre de l'escalier. */
-export function treadCards(cnc: CNC, p: Params): TreadCard[] {
+export function treadCards(cnc: Pieces, p: Params): TreadCard[] {
   const all = [
     ...cnc.treadParts.map((t) => ({ t, title: t.palier ? `Palier, marche ${t.j}` : `Marche ${t.j}`, e: p.et })),
     ...(cnc.mpPart ? [{ t: cnc.mpPart, title: "Marche palière", e: p.mpE }] : []),
