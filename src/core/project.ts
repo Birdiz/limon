@@ -170,6 +170,16 @@ export function withEtat(p: Project, etat: Etat, now: number): Project {
   return { ...p, etat, finiLe: etat === "fini" ? now : 0, ...touched(p, now) };
 }
 
+/** Escalier renommé ; un nom vide redonne le nom par défaut. */
+export function renamed(p: Project, nom: string, now: number): Project {
+  return { ...p, nom: nom.trim() || NOM_PAR_DEFAUT, ...touched(p, now) };
+}
+
+/** Escalier passé à ce mode et à cette étape du pas à pas. */
+export function withEtape(p: Project, mode: Mode, etape: number, now: number): Project {
+  return { ...p, mode, etape, ...touched(p, now) };
+}
+
 /** Escalier avec ces réglages ; le même objet s'ils n'ont pas changé. Un escalier terminé qu'on modifie redevient
     un brouillon : sa fiche n'est plus celle qui a été validée. */
 export function edited(p: Project, params: Params, now: number): Project {
