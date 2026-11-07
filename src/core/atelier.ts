@@ -30,6 +30,8 @@ export const ATELIER_KEYS = [
   "ecm",
   "cmPose",
   "cmEmb",
+  "mdeb",
+  "debJ",
   "el",
   "hl",
   "hljAuto",

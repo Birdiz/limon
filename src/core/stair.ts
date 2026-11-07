@@ -5,7 +5,7 @@ import { CONFORT, comfortStatus } from "./confort";
 import { fmt } from "./format";
 import { ECHAPPEE, ECHAPPEE_MIN, type Headroom } from "./headroom";
 import { nezCote } from "./nez";
-import { COTE_MAX, H_MAX, TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
+import { anglaise, COTE_MAX, H_MAX, TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
 import { railing } from "./railing";
 import { flights } from "./stair-flights";
 import { newelPosts, newels } from "./stair-newels";
@@ -25,7 +25,7 @@ export { ECHAPPEE, ECHAPPEE_MIN };
 export { CONFORT, comfortStatus } from "./confort";
 export { FOULEE_MAX } from "./stair-flights";
 export { palierLayout, pickN } from "./stair-noses";
-export { LIFT, PERCAGE, TENON } from "./stair-stringers";
+export { GORGE, LIFT, PERCAGE, TENON } from "./stair-stringers";
 export { RAINURES_MAX, RAINURE_ARRET, RAINURE_MIN } from "./stair-treads";
 
 /** État d'une échappée (null : tout passe sous la trémie). */
@@ -66,6 +66,7 @@ function cotesLues(p: Params, tours: number): NumericKey[] {
     ...(tours === 2 ? [isDemi(p.forme) ? "J" : "C"] : []),
     ...(p.cm ? ["ecm", "cmEmb"] : []),
     ...(p.rai ? ["raiN", "raiL", "raiP", "raiD", "raiE"] : []),
+    ...(anglaise(p) ? ["debJ"] : []),
     ...(p.fAuto ? [] : ["f"]),
     ...(tours && !p.hljAuto ? ["hlj"] : []),
     ...(p.tAuto ? [] : tours ? ["tX", "tY", ...(p.tForme === "L" ? ["tbD", "tbA"] : [])] : ["tL"]),
@@ -144,6 +145,14 @@ function validate(p: Params, tours: number): InputError[] {
         "raiE",
         `L'entraxe doit laisser au moins 3 mm de bois entre deux rainures : au moins ${fmt(Math.ceil(p.raiL + 3))} mm.`,
       );
+  }
+  if (anglaise(p)) {
+    if (!(p.debJ >= 0 && p.debJ <= 100)) err("debJ", "Le débord au jour doit rester entre 0 et 100 mm.");
+    if (p.gc !== "aucun")
+      errors.push({
+        message:
+          "Pas encore de garde-corps sur des marches débordantes : choisissez « aucun » côté jour, ou des marches logées dans le limon.",
+      });
   }
   if (p.cm && !(p.cmEmb >= 0 && p.cmEmb <= p.et / 2))
     err("cmEmb", `L'embrèvement doit rester entre 0 et la moitié de l'épaisseur de marche (${fmt(p.et / 2, 1)} mm).`);

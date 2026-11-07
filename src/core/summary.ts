@@ -65,6 +65,8 @@ export const COTE_LABEL: Record<keyof Params, string> = {
   ecm: "Épaisseur de contremarche",
   cmPose: "Pose de la contremarche",
   cmEmb: "Embrèvement de la contremarche",
+  mdeb: "Marches débordantes",
+  debJ: "Débord au jour",
   el: "Épaisseur de limon",
   hl: "Hauteur de limon",
   hljAuto: "Hauteur du limon de jour automatique",

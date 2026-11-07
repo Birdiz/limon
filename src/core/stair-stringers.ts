@@ -1,7 +1,7 @@
 /* Étapes 6 et 8 du calcul : limons le long des lignes de nez, puis leurs logements, hauteurs, tenons et perçages.
    Les faces des poteaux (stair-newels) passent entre les deux : elles reçoivent aussi des logements. */
 import { ceil10 } from "./format";
-import type { Params } from "./params";
+import { anglaise, type Params } from "./params";
 import { cncFrame, stringerPockets, type StringerPockets } from "./pockets";
 import type { Poly } from "./poly";
 import type { Flights } from "./stair-flights";
@@ -17,6 +17,41 @@ export const LIFT = 50;
 export const TENON = { long: 40, epaul: 30, fond: 2, tete: 100 } as const;
 /** Diamètre des perçages de l'about des limons de mur. */
 export const PERCAGE = 10;
+/** Gorge de la crémaillère : bois laissé d'équerre au rampant sous chaque angle rentrant des dents. */
+export const GORGE = 90;
+
+/** Crémaillère sous des marches débordantes : un palier de dent sous chaque marche (et sous la marche palière),
+    du dos de la contremarche d'en dessous au dos de la suivante, contre lequel elle s'appuie ; hauteur de la
+    planche qui garde GORGE de bois sous les angles rentrants. */
+function cremaillere(
+  p: Params,
+  sp: StringerGeom,
+  s0: number,
+  lines: readonly NoseLine[],
+  tr: Pick<Treads, "treads" | "mp">,
+): { cut: Pt[]; hl: number } {
+  const dos = p.deb + (p.cm ? p.ecm : 0),
+    uOf = (k: number) => lines[k]!.sIn - s0 + dos;
+  const prof = sp.prof,
+    uEnd = prof[prof.length - 1]![0];
+  const seats = tr.treads.map((t) => ({ u0: uOf(t.j - 1), u1: uOf(t.j), z: t.top - p.et }));
+  if (tr.mp) seats.push({ u0: uOf(lines.length - 1), u1: uEnd, z: tr.mp.top - tr.mp.e });
+  const cut: Pt[] = [[seats[0]!.u0, 0]];
+  for (const q of seats) {
+    if (q.u0 >= uEnd) break;
+    cut.push([q.u0, q.z], [Math.min(q.u1, uEnd), q.z]);
+  }
+  const top = (u: number) =>
+    interp(
+      prof.map((q) => q[0]),
+      prof.map((q) => q[1]),
+      u,
+    );
+  const [a, b] = prof as [Pt, Pt];
+  const gorge = GORGE * Math.hypot(1, (b[1] - a[1]) / (b[0] - a[0]));
+  const deep = Math.max(...seats.filter((q) => q.u1 < uEnd).map((q) => top(q.u1) - q.z), 0);
+  return { cut, hl: ceil10(deep + gorge) };
+}
 
 /** Limon de jour : côté jour d'un escalier tournant (le limon droit côté jour reste un limon de mur). */
 export const isJour = (quart: boolean, sp: Pick<StringerGeom, "side">) => quart && sp.side === "in";
@@ -213,7 +248,12 @@ export function stringerPieces(
       [u, zb + ((zt - zb) * 2) / 3],
     ];
   };
+  const crem = anglaise(p);
   const stringers: StringerPiece[] = withPockets.map((sp) => {
+    if (crem && sp.side === "in") {
+      const c = cremaillere(p, sp, inner.cum[sp.idx]!, lines, tr);
+      return { ...sp, need: c.hl, hl: c.hl, tenons: [], holes: [], cut: c.cut };
+    }
     const hs = jour(sp) ? hlj : hl;
     const tenons = jour(sp)
       ? [...(sp.idx > 0 ? [tenonOf(sp, hs, false)] : []), ...(sp.idx < sp.count - 1 ? [tenonOf(sp, hs, true)] : [])]

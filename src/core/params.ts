@@ -82,6 +82,11 @@ export interface Params {
   cmPose: PoseCm;
   /** Embrèvement de la contremarche sous la marche du haut, profondeur de la rainure de logement ; 0 = sans. */
   cmEmb: number;
+  /** Marches débordantes à l'anglaise : le limon de jour devient une crémaillère, les marches posées dessus le
+      dépassent (escalier droit). */
+  mdeb: boolean;
+  /** Débord des marches au jour, au-delà du flanc de la crémaillère. */
+  debJ: number;
   /** Épaisseur de limon. */
   el: number;
   /** Hauteur de limon (limon de mur en quart tournant). */
@@ -161,6 +166,8 @@ export const DEFAULTS: Readonly<Params> = {
   ecm: 22,
   cmPose: "sur",
   cmEmb: 0,
+  mdeb: false,
+  debJ: 30,
   el: 45,
   hl: 340,
   hljAuto: true,
@@ -293,6 +300,7 @@ export const NUMERIC_KEYS = [
   "raiE",
   "ecm",
   "cmEmb",
+  "debJ",
   "el",
   "hl",
   "hlj",
@@ -325,6 +333,7 @@ export const BOOLEAN_KEYS = [
   "hljAuto",
   "cm",
   "rai",
+  "mdeb",
   "tAuto",
   "mp",
 ] as const satisfies readonly (keyof Params)[];
@@ -345,6 +354,9 @@ export const TEXT_KEYS = [
     posée dessus, ou jusqu'à son parement quand elle descend derrière la marche. */
 export const arriereMarche = (p: Pick<Params, "deb" | "cm" | "ecm" | "cmPose">): number =>
   p.deb + (p.cm && p.cmPose === "sur" ? p.ecm : 0);
+
+/** Marches débordantes réellement appliquées : l'escalier droit seulement, pour l'instant. */
+export const anglaise = (p: Pick<Params, "mdeb" | "forme">): boolean => p.mdeb && TOURS[p.forme] === 0;
 
 /** Fusionne des réglages enregistrés (non fiables) avec les valeurs par défaut, champ par champ. */
 export function sanitizeParams(raw: unknown): Params {

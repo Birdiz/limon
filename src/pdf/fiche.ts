@@ -433,6 +433,7 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   p2.text(A4.w - M, 46, o.nom, { size: 8.5, color: C.muted, anchor: "end" });
 
   heading(p2, M, 88, "Bois");
+  const crem = R.stringers.find((sp) => sp.cut);
   const bois: [string, string][] = [
     ["Essence", ESSENCE_LABEL[p.ess]],
     ["Épaisseur de marche", mm(p.et)],
@@ -449,11 +450,13 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
       : []),
     ["Contremarches", p.cm ? `${mm(p.ecm)}, ${p.cmPose === "derriere" ? "derrière" : "sur"} la marche` : "sans"],
     ...(p.cm && p.cmEmb > 0 ? ([["Embrèvement sous la marche", `${num(p.cmEmb)} mm`]] as [string, string][]) : []),
+    ...(crem ? ([["Marches débordantes", `${num(p.debJ)} mm au jour`]] as [string, string][]) : []),
     ...(R.mp ? ([["Marche palière", `${fmt(R.mp.depth)} × ${fmt(R.mp.e)} mm`]] as [string, string][]) : []),
   ];
   const asm: [string, string][] = [
     ["Épaisseur de limon", mm(p.el)],
-    [R.quart ? "Hauteur du limon de mur" : "Hauteur de limon", mm(R.hl)],
+    [R.quart ? "Hauteur du limon de mur" : crem ? "Hauteur du limon gauche" : "Hauteur de limon", mm(R.hl)],
+    ...(crem ? ([["Limon droit, en crémaillère", mm(crem.hl)]] as [string, string][]) : []),
     ...(R.quart
       ? ([
           ["Hauteur du limon de jour", mm(R.hlj)],
