@@ -31,14 +31,22 @@ describe.each(Object.entries(CASES))("fiche %s", (name, over) => {
     expect(Buffer.from(pdf).equals(readFileSync(file))).toBe(true);
   });
 
-  it("écrit un PDF 1.4 aux décalages justes : trois pages, puis les limons à l'italienne", () => {
+  it("écrit un PDF 1.4 aux décalages justes : trois pages, puis les limons et le traçage à l'italienne", () => {
     const s = latin1(pdf);
     expect(s.startsWith("%PDF-1.4\n%")).toBe(true);
     const pages = s.match(/\/MediaBox \[0 0 [\d.]+ [\d.]+\]/g)!;
     expect(pages.slice(0, 3)).toEqual(Array(3).fill("/MediaBox [0 0 595.28 841.89]"));
     expect(pages.length).toBeGreaterThan(3);
     expect(new Set(pages.slice(3))).toEqual(new Set(["/MediaBox [0 0 841.89 595.28]"]));
-    expect(s.match(/\(Limons\) Tj/g)).toHaveLength(pages.length - 3);
+    const count = (re: RegExp) => s.match(re)?.length ?? 0;
+    const limons = count(/\(Limons\) Tj/g),
+      traceL = count(/\(Tra\\347age des limons\) Tj/g),
+      traceM = count(/\(Tra\\347age des marches\) Tj/g);
+    expect(limons).toBeGreaterThan(0);
+    expect(traceL).toBeGreaterThan(0);
+    expect(limons + traceL + traceM).toBe(pages.length - 3);
+    // Les marches à tracer viennent des marches balancées et des paliers : aucune dans un escalier droit.
+    if (R.params.forme === "droit") expect(traceM).toBe(0);
     expect(s).toContain(`(page ${pages.length}/${pages.length}) Tj`);
     checkXref(pdf);
     expect(s).toContain("(Rouvrir cet escalier) Tj");
@@ -98,5 +106,6 @@ describe("fiche du niveau gratuit", () => {
     expect(s.match(/\/MediaBox/g)).toHaveLength(1);
     expect(s).toContain("(page 1/1) Tj");
     expect(s).not.toContain("(Liste de d\\351bit) Tj");
+    expect(s).not.toContain("(Tra\\347age des limons) Tj");
   });
 });

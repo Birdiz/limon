@@ -7,7 +7,7 @@ import { isLeft } from "../core/params";
 import { GC } from "../core/railing";
 import { PERCAGE, type Stair, type StringerPiece } from "../core/stair";
 import { stringerOutline } from "../core/stringer";
-import { V, bulgePts, type Pt } from "../core/vec";
+import { V, bulgePts, type Pt, type Vertex } from "../core/vec";
 import { textWidth, type Page, type RGB } from "./pdf";
 
 export interface LimonColors {
@@ -44,6 +44,61 @@ export interface Board {
   notes: string[];
   /** L'autre limon de l'escalier droit en est le miroir : un seul dessin pour les deux. */
   mirror?: string;
+  /** Contour à tracer à la main : sommets utiles seulement, nommés a, b, c… dans cet ordre (`ring`). */
+  contour: Pt[];
+  /** Logements à tracer à la main, de gauche à droite sur la planche. */
+  rows: TraceRow[];
+  /** Angle des dessus de marche (traits de niveau) avec la rive, en degrés, positif quand ils montent vers la droite. */
+  pente: number;
+}
+
+/** Logement de marche à tracer : nez et fond sur le dessus de marche, en coordonnées de planche. */
+export interface TraceRow {
+  /** Numéro de la marche, « MP » pour la marche palière. */
+  label: string;
+  nez: Pt;
+  fond: Pt;
+  /** Logement coupé par l'about : le point « nez » est sur l'about, le nez est sur la pièce voisine. */
+  coupe: boolean;
+  /** Logement de la contremarche sous cette marche, mesuré sur le dessus de marche depuis le point « nez ». */
+  cm?: { d0: number; d1: number };
+}
+
+/** Nom du sommet i d'un contour : a à z, puis A à Z, puis a2, b2… */
+export const pointName = (i: number): string =>
+  i < 52 ? String.fromCharCode(i < 26 ? 97 + i : 39 + i) : `${String.fromCharCode(97 + (i % 26))}${Math.floor(i / 26)}`;
+
+/** Contour fermé ramené à ses vrais sommets (sans points alignés à 0,3 mm près), parcouru dans le sens
+    inverse des aiguilles d'une montre (y vers le haut), depuis le point le plus bas, le plus à gauche. */
+export function ring(pts: readonly Pt[]): Pt[] {
+  let r = pts.filter((q, i) => V.len(V.sub(q, pts[(i + 1) % pts.length]!)) > 0.05);
+  for (let changed = true; changed && r.length > 3;) {
+    changed = false;
+    for (let i = 0; i < r.length && r.length > 3; i++) {
+      const a = r[(i + r.length - 1) % r.length]!,
+        b = r[i]!,
+        c = r[(i + 1) % r.length]!;
+      const ac = V.sub(c, a),
+        l = V.len(ac);
+      const off = l < 1e-9 ? V.len(V.sub(b, a)) : Math.abs(ac[0] * (b[1] - a[1]) - ac[1] * (b[0] - a[0])) / l;
+      if (off < 0.3) {
+        r.splice(i, 1);
+        changed = true;
+        i--;
+      }
+    }
+  }
+  const area = r.reduce((s, q, i) => {
+    const n = r[(i + 1) % r.length]!;
+    return s + q[0] * n[1] - n[0] * q[1];
+  }, 0);
+  if (area < 0) r = r.reverse();
+  const y0 = Math.min(...r.map((q) => q[1]));
+  let k = -1;
+  r.forEach((q, i) => {
+    if (q[1] < y0 + 0.5 && (k < 0 || q[0] < r[k]![0])) k = i;
+  });
+  return [...r.slice(k), ...r.slice(0, k)];
 }
 
 export function layBoards(R: Stair, names: readonly string[]): Board[] {
@@ -92,11 +147,20 @@ export function layBoards(R: Stair, names: readonly string[]): Board[] {
         ...(t ? { tenon: `tenon ${fmt(t.u1 - t.u0)} × ${fmt(t.z1 - t.z0)}, ép. ${fmt(t.t1 - t.t0)}` } : {}),
       };
     });
+    // Pente : sens d'un trait de niveau (u croissant) sur la planche.
+    const lv = V.sub(P([1000, 0]), P([0, 0]));
+    let pente = (Math.atan2(lv[1], lv[0]) * 180) / Math.PI;
+    if (pente > 90) pente -= 180;
+    if (pente <= -90) pente += 180;
+    const outline = stringerOutline(sp, sp.hl).map(P);
     return {
       name: names[i]!,
       L: lay.L,
       H: lay.H,
-      outline: stringerOutline(sp, sp.hl).map(P),
+      outline,
+      contour: ring(outline),
+      rows: traceRows(sp, P),
+      pente,
       pockets: sp.pockets.map((pk) => bulgePts(pk.map(lay.tr)).map((q): Pt => [q[0], q[1]])),
       noses,
       cuts,
@@ -118,6 +182,37 @@ export function layBoards(R: Stair, names: readonly string[]): Board[] {
   if (!R.quart && boards.length === 2 && mirrored(boards[0]!, boards[1]!))
     return [{ ...boards[0]!, mirror: boards[1]!.name.toLowerCase() }];
   return boards;
+}
+
+/** Logements de marche d'un limon pour le traçage à la main, de gauche à droite sur la planche. Dans le plan du
+    limon, chaque logement est un rectangle : dessus de marche de niveau, contremarche d'aplomb. */
+function traceRows(sp: StringerPiece, P: (q: readonly [number, number]) => Pt): TraceRow[] {
+  const uLo = sp.prof[0]![0];
+  const box = (pk: readonly Vertex[]) => {
+    const us = pk.map((q) => q[0]),
+      zs = pk.map((q) => q[1]);
+    return { u0: Math.min(...us), u1: Math.max(...us), hi: Math.max(...zs) };
+  };
+  const risers = new Map<number, ReturnType<typeof box>>();
+  sp.pockets.forEach((pk, k) => {
+    const of = sp.pocketOf[k]!;
+    if (of.k === "contremarche") risers.set(of.j, box(pk));
+  });
+  const rows: TraceRow[] = [];
+  sp.pockets.forEach((pk, k) => {
+    const of = sp.pocketOf[k]!;
+    if (of.k === "contremarche") return;
+    const b = box(pk),
+      cm = of.k === "marche" ? risers.get(of.j) : undefined;
+    rows.push({
+      label: of.k === "palière" ? "MP" : String(of.j),
+      nez: P([b.u0, b.hi]),
+      fond: P([b.u1, b.hi]),
+      coupe: b.u0 < uLo + 1,
+      ...(cm ? { cm: { d0: cm.u0 - b.u0, d1: cm.u1 - b.u0 } } : {}),
+    });
+  });
+  return rows.sort((a, b) => Math.min(a.nez[0], a.fond[0]) - Math.min(b.nez[0], b.fond[0]));
 }
 
 /** b est-il a retourné bout pour bout (contour, logements, perçages, à 0,1 mm près) ? */
@@ -195,6 +290,7 @@ export function drawBoard(pg: Page, b: Board, n: number, x: number, y: number, e
   for (const pk of b.pockets) pg.path(pk.map(P), { fill: C.chalkSoft, stroke: C.chalk, width: 0.4 }, true);
   for (const t of b.tenons) pg.path(t.map(P), { stroke: C.ink, width: 0.4, dash: [1.5, 1.5] }, true);
   for (const h of b.holes) pg.circle(...P(h.at), Math.max(0.8, h.r * k), { stroke: C.ink, width: 0.4 });
+  contourNames(pg, b.contour, P, C, 5.5, true);
 
   // Chaîne des nez, au-dessus du limon : du bout gauche du plateau à chaque nez, jusqu'au bout droit.
   const chain = b.noses.filter((q) => !q.cut);
@@ -288,6 +384,37 @@ export function drawBoard(pg: Page, b: Board, n: number, x: number, y: number, e
   hdim(pg, x, xr, yL, fmt(Math.ceil(b.L)), C);
   vdim(pg, xr + 8, yb, top, fmt(Math.ceil(b.H)), C);
   b.notes.forEach((s, i) => pg.text(x, yL + 10 + i * NOTE, s, { size: 7, color: C.muted }));
+}
+
+/** Nom de chaque sommet du contour (a, b, c…), posé en dehors de la pièce sur la bissectrice. P va du plan de la
+    pièce (y vers le haut) à la page. */
+export function contourNames(
+  pg: Page,
+  pts: readonly Pt[],
+  P: (q: Pt) => Pt,
+  C: LimonColors,
+  size = 5.5,
+  /** Noms des sommets qui regardent vers le bas posés dedans, pour laisser la place aux cotes sous la pièce. */
+  upOnly = false,
+): void {
+  const n = pts.length;
+  pts.forEach((q, i) => {
+    const e1 = V.norm(V.sub(q, pts[(i + n - 1) % n]!)),
+      e2 = V.norm(V.sub(pts[(i + 1) % n]!, q));
+    // Contour dans le sens inverse des aiguilles d'une montre : la normale extérieure de d est (d.y, −d.x).
+    const out = V.add([e1[1], -e1[0]], [e2[1], -e2[0]]);
+    let o = V.len(out) < 1e-6 ? ([e1[1], -e1[0]] as Pt) : V.norm(out);
+    if (upOnly && o[1] < -0.3) o = V.mul(o, -1);
+    const at = P(q),
+      d = size * 0.85;
+    pg.text(at[0] + o[0] * d, at[1] - o[1] * d + size * 0.35, pointName(i), {
+      size,
+      bold: true,
+      color: C.muted,
+      anchor: "middle",
+      halo: { color: C.white, width: 1.6 },
+    });
+  });
 }
 
 function tick(pg: Page, x: number, y: number, c: RGB): void {
