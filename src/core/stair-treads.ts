@@ -1,8 +1,8 @@
 /* Étape 5 du calcul : marches, marche palière et contremarches, entre les lignes de nez. */
 import { fmt } from "./format";
 import { nezCote } from "./nez";
-import { arriereMarche, type Params } from "./params";
-import { polyAt, polyCut, polyPath, type Poly } from "./poly";
+import { anglaise, arriereMarche, type Params } from "./params";
+import { offsetPoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import type { Flights } from "./stair-flights";
 import type { Heights } from "./stair-noses";
 import type { Balance, ComputeFailure, LandingTread, NoseLine, Riser, Tread } from "./stair-types";
@@ -129,7 +129,13 @@ export function treadsAndRisers(
 ): Treads | ComputeFailure {
   const { n, h, g, paliers } = he;
   const cuts = planCuts(fl);
-  const { cutOff, region } = cuts;
+  const { region } = cuts;
+  // Marches débordantes : la marche passe sur la crémaillère et la dépasse de debJ, la contremarche s'arrête à son
+  // flanc. Le plan de marche, de nez à nez, reste entre les limons.
+  const ang = anglaise(p);
+  const flT = ang ? { ...fl, inner: offsetPoly(fl.inner, p.el + p.debJ) } : fl,
+    cutsT = ang ? planCuts(flT) : cuts,
+    cutsR = ang ? planCuts({ ...fl, inner: offsetPoly(fl.inner, p.el) }) : cuts;
   const isPalier = (j: number) => paliers.some((q) => q.j === j);
   const bo = arriereMarche(p);
   // Nez profilé : bande de largeur rn derrière la ligne de nez, dessinée à part en 3D.
@@ -142,9 +148,9 @@ export function treadsAndRisers(
       j,
       top: j * h,
       plan: region(fr, bk),
-      solid: region(rn > 0 ? cutOff(fr, rn) : fr, cutOff(bk, bo)),
-      nose: rn > 0 ? cuts.noseSpan(fr, rn) : null,
-      grooves: grooves(p, fl, fr, bk),
+      solid: cutsT.region(cutsT.cutOff(fr, rn), cutsT.cutOff(bk, bo)),
+      nose: rn > 0 ? cutsT.noseSpan(fr, rn) : null,
+      grooves: grooves(p, flT, fr, bk),
       gIn: bk.sIn - fr.sIn,
       gOut: bk.sOut - fr.sOut,
       gWalk: isPalier(j) ? bk.t - fr.t : g,
@@ -173,8 +179,8 @@ export function treadsAndRisers(
         p.mpE,
         mpD,
         Math.min(rn, nezCote(p.nez, p.rn, p.mpE)),
-        cuts,
-        grooves(p, fl, lnA, null, mpD),
+        cutsT,
+        grooves(p, flT, lnA, null, mpD),
       )
     : null;
   // Contremarches : sous le nez de la marche du haut, rentrées de l'embrèvement dans sa rainure ; posées sur la
@@ -187,7 +193,7 @@ export function treadsAndRisers(
       const emb = j === n && !mp ? 0 : p.cmEmb;
       const z1 = j * h - (j === n && mp ? mp.e : p.et) + emb;
       const z0 = (j - 1) * h - (p.cmPose === "derriere" && j > 1 ? p.et : 0);
-      risers.push({ z0, z1, plan: region(cutOff(ln, p.deb), cutOff(ln, p.deb + p.ecm)) });
+      risers.push({ z0, z1, plan: cutsR.region(cutsR.cutOff(ln, p.deb), cutsR.cutOff(ln, p.deb + p.ecm)) });
     }
   if (treads.some((t) => t.gIn <= 1 || t.gOut <= 1)) {
     return {

@@ -97,6 +97,12 @@ export function readme(R: Stair): string {
       "  DECOUPE     contour du limon",
       `  DEFONCE     logements des marches et contremarches, profondeur ${p.enc} mm,`,
       `              jeu de ${fmt(p.jeu, 1)} mm par côté compris${R.rn > 0 ? `, ${BOUT_AVANT[p.nez]}` : ""}`,
+      ...(R.stringers.some((sp) => sp.cut)
+        ? [
+            `  Le LIMON DROIT est une crémaillère : marches posées sur ses dents, débordant de ${fmt(p.debJ)} mm au jour`,
+            "  (bout de marche à profiler comme le nez), contremarches arrêtées à son flanc. Pas de logement côté jour.",
+          ]
+        : []),
       ...(R.quart
         ? [
             `  TENON       tenon des limons de jour dans ${R.newels.length > 1 ? "les poteaux" : "le poteau"} : enlever les joues de part et d'autre`,

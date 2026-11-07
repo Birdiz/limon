@@ -202,6 +202,11 @@ export const AIDE: Partial<Record<AideKey, AideTexte>> = {
     texte:
       "Sur la marche du bas : la contremarche est posée sur l'arrière de la marche, qui passe dessous. Derrière la marche du bas : elle descend jusqu'à son dessous et la marche, plus courte, s'arrête contre elle (vissée dans son chant arrière).",
   },
+  mdeb: {
+    texte:
+      "Escalier à l'anglaise : le limon côté jour est découpé en crémaillère, les marches posées sur ses dents le dépassent et montrent leur bout. Escalier droit, sans garde-corps pour l'instant.",
+  },
+  debJ: { texte: "Avancée du bout des marches au-delà du flanc de la crémaillère.", conseil: courant("debJ") },
   cmEmb: {
     texte:
       "Profondeur de la rainure de logement taillée sous la marche du haut, où entre le haut de la contremarche. 0 : contremarche simplement posée dessous.",

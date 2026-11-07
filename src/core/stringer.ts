@@ -1,9 +1,9 @@
 import type { StringerPiece } from "./stair-types";
-import { bbox, dedupe, type Box, type Pt, type Vertex } from "./vec";
+import { bbox, closeRing, dedupe, interp, type Box, type Pt, type Vertex } from "./vec";
 
 /** Contour du limon dans son plan (u le long du limon, z en hauteur), coupé au sol, tenons compris. */
 export function stringerOutline(
-  sp: Pick<StringerPiece, "prof"> & Partial<Pick<StringerPiece, "tenons">>,
+  sp: Pick<StringerPiece, "prof"> & Partial<Pick<StringerPiece, "tenons" | "cut">>,
   hl: number,
 ): Pt[] {
   const top = sp.prof,
@@ -20,6 +20,23 @@ export function stringerOutline(
       }
     }
     bot.push([u, Math.max(0, r)]);
+  }
+  // Crémaillère : les dents à la place du bord haut, entre le pied de la première et le bout haut.
+  if (sp.cut) {
+    const c = sp.cut,
+      u0 = c[0]![0],
+      u1 = c[c.length - 1]![0];
+    const zb = (u: number) =>
+      Math.max(
+        0,
+        interp(
+          top.map((q) => q[0]),
+          top.map((q) => q[1]),
+          u,
+        ) - hl,
+      );
+    const inside = bot.filter((q) => q[0] > u0 + 1e-6 && q[0] < u1 - 1e-6);
+    return closeRing([...c, [u1, zb(u1)], ...inside.reverse(), [u0, zb(u0)]]);
   }
   // Un tenon sort du bout haut (u croissant), l'autre du bout bas du limon.
   const uEnd = top[top.length - 1]![0],

@@ -218,6 +218,11 @@ export function buildCNC(R: Stair, P?: Pieces): CNC {
           ...(R.quart && sp.side === "out" && sp.idx > 0
             ? [`bout en about contre le ${names.out} ${sp.idx}/${sp.count} : percer en bout au droit de ses percages`]
             : []),
+          ...(sp.cut
+            ? [
+                `CREMAILLERE : marches posees sur les dents, debordant de ${fmt(p.debJ)} mm au jour, collees et vissees${p.cm ? " ; contremarches en appui sur les coupes d'aplomb" : ""}`,
+              ]
+            : []),
         ];
     joints.forEach((s, i) =>
       boardEnts.push({ kind: "text", layer: "TEXTE", x: 0, y: by + H + 100 + 50 * i, h: 30, s }),

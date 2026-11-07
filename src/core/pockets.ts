@@ -1,7 +1,7 @@
 /* Logements des limons : calculés avec l'escalier, pour proposer la hauteur de chaque limon,
    puis repris tels quels par l'export CNC. */
 import { aretes, nezCote, type Arete } from "./nez";
-import { arriereMarche, type Params } from "./params";
+import { anglaise, arriereMarche, type Params } from "./params";
 import { offsetPoly, polyCut, type Cut, type Poly } from "./poly";
 import type { NoseLine, PocketOf, Riser, StringerGeom, Tread } from "./stair-types";
 import { V, clamp, interp, type Pt, type Vertex } from "./vec";
@@ -33,10 +33,14 @@ export interface StairGeom {
   mp?: { line: NoseLine; top: number; e: number; depth: number } | null;
 }
 
+/* Marches débordantes : côté jour, les marches vont jusqu'à leur débord au-delà du flanc de la crémaillère et
+   les contremarches jusqu'à ce flanc ; inOff et inD suivent alors ces bouts, et non plus le fond des logements. */
 export function cncFrame(R: Pick<StairGeom, "inner" | "outer">, p: Params): Frame {
-  const inOff = offsetPoly(R.inner, p.enc),
+  const ang = anglaise(p);
+  const inOff = offsetPoly(R.inner, ang ? p.el + p.debJ : p.enc),
+    riserIn = ang ? offsetPoly(R.inner, p.el) : inOff,
     outOff = offsetPoly(R.outer, -p.enc);
-  const at = (ln: NoseLine, off: number): Section => {
+  const cut = (ln: NoseLine, off: number, inOff: Poly): Section => {
     const pt = V.add(ln.Q, V.mul(ln.nr, off));
     const inF = polyCut(R.inner, pt, ln.dir, "near");
     // Le nez qui part du coin du jour, après un palier, ne coupe le fond des logements que sur son prolongement.
@@ -51,9 +55,10 @@ export function cncFrame(R: Pick<StairGeom, "inner" | "outer">, p: Params): Fram
       throw new Error(`Ligne de marche ${ln.k} sans intersection avec les limons`);
     return cuts as Section;
   };
+  const at = (ln: NoseLine, off: number) => cut(ln, off, inOff);
   const riserBand = (ln: NoseLine) => {
-    const a = at(ln, p.deb),
-      b = at(ln, p.deb + p.ecm);
+    const a = cut(ln, p.deb, riserIn),
+      b = cut(ln, p.deb + p.ecm, riserIn);
     return { a, b, quad: [a.inF.p, a.outF.p, b.outF.p, b.inF.p] };
   };
   return { inOff, outOff, at, riserBand };
@@ -127,6 +132,8 @@ export function stringerPockets(R: StairGeom, p: Params, F: Frame): StringerPock
     nez = aretes(p.nez, nezCote(p.nez, p.rn, p.et)),
     profiled = nez.dessus.k !== "vive" || nez.dessous.k !== "vive";
   return R.stringers.map((sp) => {
+    // Crémaillère des marches débordantes : marches et contremarches posées dessus, sans logement.
+    if (anglaise(p) && sp.side === "in") return { pockets: [], pocketOf: [], need: 0 };
     const uLo = sp.prof[0]![0],
       uHi = sp.prof[sp.prof.length - 1]![0];
     const proj = (q: Pt) => V.dot(V.sub(q, sp.a), sp.dir);

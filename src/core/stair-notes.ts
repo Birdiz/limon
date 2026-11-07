@@ -207,6 +207,11 @@ export function stairNotes(ctx: NotesCtx, suggest: boolean): Note[] {
       "warn",
       `Le rayon du nez (${fmt(rn)} mm) dépasse le débord (${fmt(p.deb)} mm) : l'arrondi du dessous mord sur la contremarche.`,
     ]);
+  if (p.mdeb && tours > 0)
+    N.push([
+      "info",
+      "Marches débordantes : pour l'escalier droit seulement pour l'instant. Ici, les marches restent logées dans les limons.",
+    ]);
   if (p.rai) {
     // Marches qui reçoivent moins de rainures que demandé : giron trop court, au jour sur les marches balancées.
     const want = Math.min(Math.round(p.raiN), 6);

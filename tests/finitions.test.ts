@@ -8,7 +8,8 @@ import { inPolygon } from "../src/core/headroom";
 import { ARETE_CASSEE, aretes, nezCote, noseProfile } from "../src/core/nez";
 import { DEFAULTS, EXEMPLE_U, sanitizeParams, type Params } from "../src/core/params";
 import { paramsFromHash, paramsToHash } from "../src/core/share";
-import { RAINURE_ARRET, compute } from "../src/core/stair";
+import { GORGE, RAINURE_ARRET, compute } from "../src/core/stair";
+import { pieces } from "../src/core/pieces";
 import { V, type Pt, type Vertex } from "../src/core/vec";
 import { stairOf } from "./cases";
 
@@ -242,5 +243,51 @@ describe("pose de la contremarche", () => {
       expect.arrayContaining(["derrière la marche", "embrevée de 8"]),
     );
     expect(texts({ cm: false }).some((t) => t.startsWith("contremarche"))).toBe(false);
+  });
+});
+
+describe("marches débordantes à l'anglaise", () => {
+  const ANG = { forme: "droit", mdeb: true, debJ: 30 } as const;
+
+  it("font du limon côté jour une crémaillère sans logement, qui garde sa gorge", () => {
+    const R = stairOf(ANG),
+      sp = R.stringers.find((s) => s.side === "in")!;
+    expect(sp.cut).toBeDefined();
+    expect(sp.pockets).toHaveLength(0);
+    expect(R.stringers.find((s) => s.side === "out")!.cut).toBeUndefined();
+    // Sous chaque angle rentrant (bout d'un palier de dent, avant la coupe d'aplomb), au moins GORGE d'équerre.
+    const [a, b] = sp.prof as [Pt, Pt],
+      slope = (b[1] - a[1]) / (b[0] - a[0]),
+      cut = sp.cut!;
+    for (let i = 2; i < cut.length - 1; i += 2) {
+      const [u, z] = cut[i]!,
+        bottom = a[1] + slope * (u - a[0]) - sp.hl;
+      expect((z - bottom) / Math.hypot(1, slope)).toBeGreaterThanOrEqual(GORGE - 1e-6);
+    }
+  });
+
+  it("allongent les marches jusqu'au débord et les contremarches jusqu'au flanc du limon", () => {
+    const P0 = pieces(stairOf({ forme: "droit" })),
+      P1 = pieces(stairOf(ANG)),
+      p = DEFAULTS;
+    P1.treadParts.forEach((t, i) => expect(t.L).toBeCloseTo(P0.treadParts[i]!.L - p.enc + p.el + 30, 6));
+    P1.riserParts.forEach((t, i) => expect(t.L).toBeCloseTo(P0.riserParts[i]!.L - p.enc + p.el, 6));
+  });
+
+  it("refusent encore le garde-corps, et ne s'appliquent qu'à l'escalier droit", () => {
+    const r = compute({ ...DEFAULTS, ...ANG, gc: "balustres" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors[0]!.message).toContain("garde-corps");
+    expect(err({ ...ANG, debJ: 120 })).toEqual(["debJ"]);
+    const Q = stairOf({ forme: "quart-d", mdeb: true });
+    expect(Q.stringers.some((s) => s.cut)).toBe(false);
+    expect(Q.notes.some((n) => n[1].startsWith("Marches débordantes"))).toBe(true);
+    expect(sanitizeParams({}).mdeb).toBe(false);
+  });
+
+  it("se disent sous le limon et dans la notice", () => {
+    const R = stairOf(ANG);
+    expect(toDXF(buildCNC(R).boardEnts)).toContain("CREMAILLERE");
+    expect(readme(R)).toContain("crémaillère");
   });
 });
