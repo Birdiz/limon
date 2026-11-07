@@ -274,7 +274,19 @@ describe("double quart tournant : gauche et droite", () => {
     expect(G.lines).toEqual(D.lines);
     const cg = buildCNC(G),
       cd = buildCNC(D);
-    expect(cg.treadParts).toEqual(cd.treadParts);
+    // Contour vu de dessus : celui de gauche est le miroir de celui de droite, dans le même débit.
+    const sans = (ts: typeof cd.treadParts) =>
+      ts.map((t) => {
+        const c = { ...t };
+        delete c.outline;
+        return c;
+      });
+    expect(sans(cg.treadParts)).toEqual(sans(cd.treadParts));
+    cg.treadParts.forEach((t, i) => {
+      const d = cd.treadParts[i]!;
+      const key = (q: readonly number[]) => `${q[0]!.toFixed(6)} ${q[1]!.toFixed(6)}`;
+      expect(new Set(t.outline!.map(key))).toEqual(new Set(d.outline!.map((q) => key([d.L - q[0], q[1]]))));
+    });
     expect(cg.riserParts).toEqual(cd.riserParts);
     expect(cg.boardParts).toEqual(cd.boardParts);
     expect(cg.postParts).toEqual(cd.postParts);

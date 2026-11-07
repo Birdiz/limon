@@ -10,6 +10,7 @@ import { ESSENCE_LABEL, FORME_LABEL, GC_LABEL, POSE_LABEL, STATUS_LABEL, checks,
 import { A4, PdfDoc, hex, wrap, type Page, type RGB, type Stroke } from "./pdf";
 import { boardHeight, boardScale, drawBoard, layBoards, type Board } from "./limons";
 import { qrMatrix } from "./qr";
+import { drawTraceLimon, drawTreadCard, traceLimonHeight, traceMethod, treadCardHeight, treadCards } from "./tracage";
 
 /** Couleurs du thème clair de la page, la fiche étant faite pour l'impression. */
 export const C = {
@@ -252,19 +253,30 @@ function limonSheets(R: Stair, parts: Pieces): LimonSheets {
   return { boards, n, pages };
 }
 
-function limonPage(doc: PdfDoc, R: Stair, L: LimonSheets, ids: number[], nom: string, i: number, count: number): void {
+/** Page à l'italienne : titre, nom de l'escalier et sous-titre à droite, pied de page. */
+function landPage(doc: PdfDoc, title: string, sub: string, nom: string, i: number, count: number): Page {
   const pg = doc.page(true);
-  pg.text(M, 58, "Limons", { size: 18, bold: true, color: C.ink });
+  pg.text(M, 58, title, { size: 18, bold: true, color: C.ink });
   pg.text(LAND.w - M, 46, nom, { size: 8.5, color: C.muted, anchor: "end" });
-  pg.text(LAND.w - M, 58, `Vus côté marches, couchés dans le sens du plateau · échelle 1:${L.n}`, {
-    size: 8.5,
-    color: C.muted,
-    anchor: "end",
-  });
+  pg.text(LAND.w - M, 58, sub, { size: 8.5, color: C.muted, anchor: "end" });
+  pg.text(M, LAND.h - 24, `Quart de tour · ${nom}`, { size: 7.5, color: C.muted });
+  pg.text(LAND.w - M, LAND.h - 24, `page ${i}/${count}`, { size: 7.5, color: C.muted, anchor: "end" });
+  return pg;
+}
+
+function limonPage(doc: PdfDoc, R: Stair, L: LimonSheets, ids: number[], nom: string, i: number, count: number): void {
+  const pg = landPage(
+    doc,
+    "Limons",
+    `Vus côté marches, couchés dans le sens du plateau · échelle 1:${L.n}`,
+    nom,
+    i,
+    count,
+  );
   pg.text(
     M,
     74,
-    `Cotes en millimètres : nez depuis le bout gauche du plateau, hauteurs depuis sa rive basse, angles depuis sa rive. Logements défoncés de ${fmt(R.params.enc)} mm, jeu de ${fmt(R.params.jeu, 1)} mm par côté.`,
+    `Cotes en millimètres : nez depuis le bout gauche du plateau, hauteurs depuis sa rive basse, angles depuis sa rive. Logements défoncés de ${fmt(R.params.enc)} mm, jeu de ${fmt(R.params.jeu, 1)} mm par côté. Points a, b, c… : voir le traçage à la main.`,
     { size: 8, color: C.muted },
   );
   let y = 90;
@@ -273,8 +285,104 @@ function limonPage(doc: PdfDoc, R: Stair, L: LimonSheets, ids: number[], nom: st
     drawBoard(pg, b, L.n, M + SIDE, y, R.params.el, C);
     y += boardHeight(b, L.n) + 12;
   }
-  pg.text(M, LAND.h - 24, `Quart de tour · ${nom}`, { size: 7.5, color: C.muted });
-  pg.text(LAND.w - M, LAND.h - 24, `page ${i}/${count}`, { size: 7.5, color: C.muted, anchor: "end" });
+}
+
+/* ---------- Traçage à la main ---------- */
+
+const LAND_CW = LAND.w - 2 * M;
+
+interface TraceSheets {
+  /** Limons de chaque page de traçage des limons. */
+  limons: number[][];
+  /** Marches à tracer de chaque page, huit par page. */
+  marches: ReturnType<typeof treadCards>[];
+  /** Hauteur de la méthode en tête des pages de limons. */
+  intro: number;
+}
+
+const CARDS = { cols: 4, rows: 2, gap: 12 };
+const CARD_W = (LAND_CW - (CARDS.cols - 1) * CARDS.gap) / CARDS.cols;
+
+function traceSheets(R: Stair, L: LimonSheets, parts: Pieces): TraceSheets {
+  const p = R.params;
+  const intro = traceMethod(p, R.rn).flatMap((s) => wrap(s, 8, LAND_CW)).length * 10.5 + 8;
+  const limons: number[][] = [];
+  let y = Infinity;
+  L.boards.forEach((b, i) => {
+    const h = traceLimonHeight(b, p.cm, LAND_CW);
+    if (y + h > LAND.h - 44) {
+      limons.push([]);
+      y = 74 + intro;
+    }
+    limons[limons.length - 1]!.push(i);
+    y += h + 12;
+  });
+  const cards = treadCards(parts, p);
+  const per = CARDS.cols * CARDS.rows;
+  const marches = Array.from({ length: Math.ceil(cards.length / per) }, (_, k) => cards.slice(k * per, (k + 1) * per));
+  return { limons, marches, intro };
+}
+
+function traceLimonPage(
+  doc: PdfDoc,
+  R: Stair,
+  L: LimonSheets,
+  T: TraceSheets,
+  ids: number[],
+  nom: string,
+  i: number,
+  count: number,
+): void {
+  const pg = landPage(
+    doc,
+    "Traçage des limons",
+    "Pour tracer à la main · cotes en millimètres, logements jeu compris",
+    nom,
+    i,
+    count,
+  );
+  let y = 76;
+  for (const ln of traceMethod(R.params, R.rn).flatMap((s) => wrap(s, 8, LAND_CW))) {
+    pg.text(M, y, ln, { size: 8, color: C.ink });
+    y += 10.5;
+  }
+  y = 74 + T.intro;
+  for (const id of ids) {
+    const b = L.boards[id]!;
+    drawTraceLimon(pg, b, R.params, M, y, LAND_CW, C);
+    y += traceLimonHeight(b, R.params.cm, LAND_CW) + 12;
+  }
+}
+
+function traceMarchesPage(
+  doc: PdfDoc,
+  R: Stair,
+  cards: ReturnType<typeof treadCards>,
+  nom: string,
+  i: number,
+  count: number,
+): void {
+  const pg = landPage(
+    doc,
+    "Traçage des marches",
+    "Pour tracer à la main · vues de dessus, nez en bas · cotes en millimètres",
+    nom,
+    i,
+    count,
+  );
+  const intro = wrap(
+    `Marches qui ne sont pas des rectangles, encastrement de ${fmt(R.params.enc)} mm compris aux deux bouts. Dresser la rive du nez et tracer le bout gauche du débit d'équerre : x se mesure depuis ce bout, y d'équerre depuis la rive du nez. Pointer a, b, c… et les joindre dans l'ordre ; les côtés et les diagonales servent à contrôler. Les autres marches sont des rectangles : voir la liste de débit.`,
+    8,
+    LAND_CW,
+  );
+  intro.forEach((ln, k) => pg.text(M, 76 + k * 10.5, ln, { size: 8, color: C.ink }));
+  const top = 76 + intro.length * 10.5 + 4,
+    h = Math.max(...cards.map((c) => treadCardHeight(c, CARD_W)));
+  cards.forEach((c, k) => {
+    const col = k % CARDS.cols,
+      row = Math.floor(k / CARDS.cols);
+    drawTreadCard(pg, c, M + col * (CARD_W + CARDS.gap), top + row * (h + CARDS.gap), CARD_W, h, C);
+  });
 }
 
 export function frame(pg: Page, x: number, y: number, w: number, h: number, title: string): void {
@@ -288,7 +396,10 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   const doc = new PdfDoc(o.nom);
   const parts = pieces(R);
   const limons = limonSheets(R, parts);
-  const PAGES = o.extrait ? 1 : 3 + limons.pages.length;
+  const trace = traceSheets(R, limons, parts);
+  const nLimons = 3 + limons.pages.length,
+    nTrace = nLimons + trace.limons.length;
+  const PAGES = o.extrait ? 1 : nTrace + trace.marches.length;
 
   /* ---------- Page 1 ---------- */
   const pg = doc.page();
@@ -571,6 +682,8 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   footer(p3, o, 3, PAGES);
 
   limons.pages.forEach((ids, i) => limonPage(doc, R, limons, ids, o.nom, 4 + i, PAGES));
+  trace.limons.forEach((ids, i) => traceLimonPage(doc, R, limons, trace, ids, o.nom, nLimons + 1 + i, PAGES));
+  trace.marches.forEach((cards, i) => traceMarchesPage(doc, R, cards, o.nom, nTrace + 1 + i, PAGES));
 
   return doc.bytes();
 }

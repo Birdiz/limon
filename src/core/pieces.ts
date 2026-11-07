@@ -18,6 +18,8 @@ export interface TreadPart {
   l: number;
   /** Palier d'un tournant, débité et logé comme une marche. */
   palier?: true;
+  /** Marches seulement : contour vu de dessus, nez le long de x, coin du débit à l'origine (comme marches.dxf). */
+  outline?: Pt[];
 }
 
 export interface BoardPart {
@@ -102,7 +104,14 @@ export function treadShape(F: CutFrame, lnF: NoseLine, bk: Section) {
   };
   const o = outline.map(loc),
     b = bbox(o);
-  return { o, b, loc, L: b.x1 - b.x0, l: b.y1 - b.y0 };
+  return {
+    o,
+    b,
+    loc,
+    L: b.x1 - b.x0,
+    l: b.y1 - b.y0,
+    outline: o.map((q): Pt => [q[0] - b.x0, q[1] - b.y0]),
+  };
 }
 
 /** Bout d'une contremarche : abscisse côté parement (f) et côté dos (b). */
@@ -188,12 +197,14 @@ export function railPieces(G: Railing, p: Params): RailPieces {
 export function pieces(R: Stair, F: CutFrame = cutFrame(R)): Pieces {
   const p = R.params;
   const treadParts = R.treads.map((t): TreadPart => {
-    const { L, l } = treadShape(F, R.lines[t.j - 1]!, F.at(R.lines[t.j]!, F.bo));
-    return { j: t.j, L, l, ...(t.palier ? { palier: true as const } : {}) };
+    const { L, l, outline } = treadShape(F, R.lines[t.j - 1]!, F.at(R.lines[t.j]!, F.bo));
+    return { j: t.j, L, l, ...(t.palier ? { palier: true as const } : {}), outline };
   });
   const mp = R.mp,
     lnA = R.lines[R.n - 1]!;
-  const mpPart = mp ? (({ L, l }) => ({ j: R.n, L, l }))(treadShape(F, lnA, F.at(lnA, mp.depth))) : null;
+  const mpPart = mp
+    ? (({ L, l, outline }) => ({ j: R.n, L, l, outline }))(treadShape(F, lnA, F.at(lnA, mp.depth)))
+    : null;
   const riserParts = p.cm
     ? R.risers.map((_, i) => {
         const { L, l } = riserShape(F, R, i);
