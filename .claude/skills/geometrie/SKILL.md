@@ -66,6 +66,8 @@ Rainures antidérapantes (`rai`, `Tread.grooves`, marche palière comprise, calc
 
 Contremarche (`cmPose`, `cmEmb`) : posée sur la marche du bas (la marche va jusqu'à son dos) ou derrière elle (elle descend jusqu'au dessous de la marche du bas, qui s'arrête contre son parement) ; `arriereMarche` donne la coupe arrière des marches, partout (calcul, logements, DXF, vue de côté). L'embrèvement la monte dans une rainure sous la marche du haut, sauf la dernière sans marche palière (plancher d'arrivée).
 
+Marches débordantes à l'anglaise (`mdeb`, `debJ`, `anglaise(p)` : escalier droit seulement, une note le dit ailleurs ; garde-corps refusé tant que les balustres sur les marches n'existent pas, décision de Thomas du 2026-11-07). Le limon côté jour devient une crémaillère (`StringerPiece.cut`, `cremaillere` dans `src/core/stair-stringers.ts`) : un palier de dent sous chaque marche et sous la marche palière, coupe d'aplomb au dos de la contremarche, sans logement ; sa hauteur garde `GORGE` de bois d'équerre au rampant sous les angles rentrants, `prof` reste le rampant qui donne le bord bas (`stringerOutline`). Les marches passent dessus jusqu'à `debJ` au-delà de son flanc, les contremarches s'arrêtent à ce flanc (`cncFrame` : `inOff` et `riserBand` côté jour ; `solid`, `nose` et rainures en 3D).
+
 ## Garde-corps
 
 `stair.rail`, `src/core/railing.ts`, constantes `GC`. Réglages `gc` (aucun par défaut, ce qui garde les fichiers de référence d'origine), `gcPose`, `mcL`, `mcH`, `bs`. Contours des pièces dans leur plan (`handrailOutline`, `postOutline`, `railOutline`, tenon `postTenon`) au même endroit, pour la 3D comme pour `garde-corps.dxf`.

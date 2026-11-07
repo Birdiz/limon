@@ -121,6 +121,8 @@ const GROUPES: readonly { t: string; champs: readonly Champ[] }[] = [
         ],
       },
       { k: "cmEmb", l: "Embrèvement", s: "rainure sous la marche du haut, 0 = sans", min: 0, adv: true },
+      { k: "mdeb", l: "Marches débordantes", s: "escalier droit, limon en crémaillère", coche: "avec" },
+      { k: "debJ", l: "Débord au jour", s: "au-delà du flanc du limon", min: 0, adv: true },
       { k: "mp", l: "Marche palière", s: "logée dans les limons, à l'arrivée", coche: "avec" },
       { k: "mpP", l: "Profondeur de marche palière", s: "depuis le nez", pas: 10, min: 150 },
       { k: "mpE", l: "Épaisseur de marche palière", min: 18 },

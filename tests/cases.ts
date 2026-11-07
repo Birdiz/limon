@@ -11,7 +11,7 @@ export const PALIER = {
 /** Configurations de référence : l'exemple par défaut dans les trois formes, plus des réglages manuels,
     chaque garde-corps, la marche palière et la trémie en L ; le double quart et le demi-tournant avec leurs
     cotes d'exemple, et la trémie en U ; puis à palier ; enfin les finitions des marches (profils du nez,
-    rainures, contremarches derrière la marche et embrevées). */
+    rainures, contremarches derrière la marche et embrevées, marches débordantes sur crémaillère). */
 export const CASES: Record<string, Partial<Params>> = {
   droit: { forme: "droit" },
   "quart-g": { forme: "quart-g" },
@@ -65,6 +65,8 @@ export const CASES: Record<string, Partial<Params>> = {
     mp: true,
   },
   "dq-g-casse-derriere": { forme: "dq-g", ...EXEMPLE_U, nez: "casse", cmPose: "derriere", cmEmb: 10 },
+  "droit-debordantes": { forme: "droit", mdeb: true },
+  "droit-debordantes-palier": { forme: "droit", mdeb: true, debJ: 40, mp: true, cmPose: "derriere", rai: true },
 };
 
 export function stairOf(over: Partial<Params>): Stair {

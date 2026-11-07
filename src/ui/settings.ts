@@ -13,6 +13,7 @@ import {
   type Tournant,
   type Params,
   TOURS,
+  anglaise,
   isDemi,
 } from "../core/params";
 import { turnRange, type InputError, type Stair } from "../core/stair";
@@ -143,6 +144,7 @@ export function syncInputs(p: Params, stair: Stair | null): void {
   byId("rnSub").textContent = RN_SUB[p.nez];
   document.querySelectorAll<HTMLElement>("[data-rai]").forEach((el) => (el.hidden = !p.rai));
   document.querySelectorAll<HTMLElement>("[data-cm]").forEach((el) => (el.hidden = !p.cm));
+  document.querySelectorAll<HTMLElement>("[data-mdeb]").forEach((el) => (el.hidden = !anglaise(p)));
   const pal = p.tournant === "palier";
   document.querySelectorAll<HTMLElement>("[data-bal]").forEach((el) => (el.hidden = pal));
   document.querySelectorAll<HTMLElement>("[data-pal]").forEach((el) => (el.hidden = !pal));

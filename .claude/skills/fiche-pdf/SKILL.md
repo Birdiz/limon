@@ -15,5 +15,5 @@ Voir `fichePDF` dans `src/pdf/fiche.ts`. C'est la seule fiche imprimable.
 - **Extrait** : au niveau gratuit, `extrait` arrête la fiche à sa première page.
 - **Plan** : vient de `planShapes` (`src/core/plan-shapes.ts`), commun au SVG de l'écran et au PDF.
 - **Vue de côté** : vient de `sideShapes` (`src/core/side-shapes.ts`, géométrie dans `sideView`). Développé sur la ligne de foulée, plancher coupé aux bords de trémie, échappée de la ligne de foulée cotée à sa place (rappel de la plus faible si elle tombe ailleurs). Choix « Dessus / Côté » de la vue Plan, page 2 de la fiche.
-- **Coupe au nez** : à droite de la vue de côté, page 2 (`coupeNez`, `src/core/coupe-nez.ts`) : profil du nez, rainures, pose de la contremarche et embrèvement. Les finitions sont aussi dans la liste Bois.
+- **Coupe au nez** : à droite de la vue de côté, page 2 (`coupeNez`, `src/core/coupe-nez.ts`) : profil du nez, rainures, pose de la contremarche et embrèvement. Les finitions sont aussi dans la liste Bois ; la hauteur de la crémaillère dans Limons et assemblage.
 - **Vue 3D** : vient de `Scene3D.snapshot()`, thème clair, taille fixe et cadre en perspective, quels que soient la vue à l'écran et son point de vue.

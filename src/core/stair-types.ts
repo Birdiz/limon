@@ -119,6 +119,9 @@ export interface StringerPiece extends StringerGeom {
   tenons: Tenon[];
   /** Perçages traversants (u, z) pour visser ou boulonner l'about du limon de mur suivant. */
   holes: Pt[];
+  /** Crémaillère des marches débordantes : bord haut découpé en dents sous les marches, du sol au bout haut ;
+      prof reste le rampant dont le bord bas se déduit. */
+  cut?: Pt[];
 }
 
 /** Face du poteau : normale sortante n, abscisse u le long de la face (o + dir·u, de u0 à u1). */

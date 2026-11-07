@@ -99,7 +99,8 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
   });
 
   it("place des logements dans chaque limon", () => {
-    for (const b of cnc.boardParts) expect(b.pockets).toBeGreaterThan(0);
+    // Sauf la crémaillère des marches débordantes, où marches et contremarches sont posées dessus.
+    R.stringers.forEach((sp, i) => expect(cnc.boardParts[i]!.pockets > 0).toBe(!sp.cut));
   });
 
   it("nomme l'archive d'après la forme et le nombre de hauteurs", () => {
