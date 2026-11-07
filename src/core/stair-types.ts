@@ -39,8 +39,10 @@ export interface Tread {
   plan: Pt[];
   /** Surface réelle de la marche (sous la contremarche suivante), sans la bande du nez arrondi. */
   solid: Pt[];
-  /** Bande du nez arrondi, de largeur rn derrière la ligne de nez ; null si le nez est vif. */
+  /** Bande du nez profilé, de largeur rn derrière la ligne de nez ; null si le nez est vif. */
   nose: { o: Pt; len: number; nr: Pt } | null;
+  /** Rainures antidérapantes vues en plan, du nez vers l'arrière ; vide sans rainures. */
+  grooves: Pt[][];
   gIn: number;
   gOut: number;
   gWalk: number;
@@ -59,11 +61,12 @@ export interface LandingTread {
   e: number;
   /** Profondeur depuis le nez. */
   depth: number;
-  /** Rayon du nez appliqué (au plus la moitié de son épaisseur). */
+  /** Cote du profil du nez appliquée (au plus la moitié de son épaisseur). */
   rn: number;
   plan: Pt[];
   solid: Pt[];
   nose: Tread["nose"];
+  grooves: Pt[][];
   /** Longueur de nez. */
   nez: number;
 }
@@ -116,6 +119,9 @@ export interface StringerPiece extends StringerGeom {
   tenons: Tenon[];
   /** Perçages traversants (u, z) pour visser ou boulonner l'about du limon de mur suivant. */
   holes: Pt[];
+  /** Crémaillère des marches débordantes : bord haut découpé en dents sous les marches, du sol au bout haut ;
+      prof reste le rampant dont le bord bas se déduit. */
+  cut?: Pt[];
 }
 
 /** Face du poteau : normale sortante n, abscisse u le long de la face (o + dir·u, de u0 à u1). */
@@ -208,7 +214,7 @@ export interface Stair {
   treads: Tread[];
   risers: Riser[];
   stringers: StringerPiece[];
-  /** Rayon du nez appliqué (au plus la moitié de l'épaisseur de marche). */
+  /** Cote du profil du nez appliquée : rayon ou côte du chanfrein (au plus la moitié de l'épaisseur de marche). */
   rn: number;
   /** Hauteur du limon de mur (ou des deux limons en escalier droit). */
   hl: number;

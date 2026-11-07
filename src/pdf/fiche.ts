@@ -1,5 +1,7 @@
 import { cutRows, stockNotes, stringerFitNote, volumeText } from "../cnc/cutlist";
+import { coupeNez } from "../core/coupe-nez";
 import { fmt } from "../core/format";
+import { nezTexte } from "../core/nez";
 import { pieces, type Pieces } from "../core/pieces";
 import { isDemi } from "../core/params";
 import { projectUrl } from "../core/share";
@@ -47,6 +49,8 @@ export interface FicheOptions {
 }
 
 const mm = (v: number, d = 0) => `${fmt(v, d)} mm`;
+/** Cote sans décimale quand elle est entière. */
+const num = (v: number) => fmt(v, Number.isInteger(v) ? 0 : 1);
 
 export function heading(pg: Page, x: number, y: number, s: string): void {
   pg.text(x, y, s.toUpperCase(), { size: 8.5, bold: true, color: C.muted });
@@ -540,17 +544,30 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
   p2.text(A4.w - M, 46, o.nom, { size: 8.5, color: C.muted, anchor: "end" });
 
   heading(p2, M, 88, "Bois");
+  const crem = R.stringers.find((sp) => sp.cut);
   const bois: [string, string][] = [
     ["Essence", ESSENCE_LABEL[p.ess]],
     ["Épaisseur de marche", mm(p.et)],
     ["Débord de nez", mm(p.deb)],
-    ["Rayon du nez", R.rn > 0 ? mm(R.rn, 1) : "vif"],
-    ["Contremarches", p.cm ? mm(p.ecm) : "sans"],
+    ["Profil du nez", nezTexte(p.nez, R.rn)],
+    ...(p.rai
+      ? ([
+          [
+            "Rainures antidérapantes",
+            `${Math.round(p.raiN)} de ${num(p.raiL)} × ${num(p.raiP)} mm${p.raiN > 1 ? `, entraxe ${num(p.raiE)}` : ""}`,
+          ],
+          ["Première rainure", `axe à ${num(p.raiD)} mm du nez`],
+        ] as [string, string][])
+      : []),
+    ["Contremarches", p.cm ? `${mm(p.ecm)}, ${p.cmPose === "derriere" ? "derrière" : "sur"} la marche` : "sans"],
+    ...(p.cm && p.cmEmb > 0 ? ([["Embrèvement sous la marche", `${num(p.cmEmb)} mm`]] as [string, string][]) : []),
+    ...(crem ? ([["Marches débordantes", `${num(p.debJ)} mm au jour`]] as [string, string][]) : []),
     ...(R.mp ? ([["Marche palière", `${fmt(R.mp.depth)} × ${fmt(R.mp.e)} mm`]] as [string, string][]) : []),
   ];
   const asm: [string, string][] = [
     ["Épaisseur de limon", mm(p.el)],
-    [R.quart ? "Hauteur du limon de mur" : "Hauteur de limon", mm(R.hl)],
+    [R.quart ? "Hauteur du limon de mur" : crem ? "Hauteur du limon gauche" : "Hauteur de limon", mm(R.hl)],
+    ...(crem ? ([["Limon droit, en crémaillère", mm(crem.hl)]] as [string, string][]) : []),
     ...(R.quart
       ? ([
           ["Hauteur du limon de jour", mm(R.hlj)],
@@ -568,8 +585,13 @@ export function fichePDF(R: Stair, o: FicheOptions): Uint8Array<ArrayBuffer> {
 
   y = Math.max(yL, yR) + 14;
   const sideH = 210;
-  frame(p2, M, y, CW, sideH, "Vue de côté, développée sur la ligne de foulée");
-  drawShapes(p2, sideShapes(R), SIDE_STYLE, M + 10, y + 24, CW - 20, sideH - 32);
+  // Vue de côté, et coupe au nez à sa droite : profil, rainures, pose de la contremarche.
+  const coupeW = 150,
+    sideW = CW - coupeW - 12;
+  frame(p2, M, y, sideW, sideH, "Vue de côté, développée sur la ligne de foulée");
+  drawShapes(p2, sideShapes(R), SIDE_STYLE, M + 10, y + 24, sideW - 20, sideH - 32);
+  frame(p2, M + sideW + 12, y, coupeW, sideH, "Coupe au nez");
+  drawShapes(p2, coupeNez(R), SIDE_STYLE, M + sideW + 20, y + 24, coupeW - 16, sideH - 32);
   y += sideH + 22;
   heading(p2, M, y, "Fiche des marches");
   y += 10;

@@ -86,13 +86,21 @@ describe.each(Object.entries(CASES))("export %s", (name, over) => {
     expect(cnc.postEnts.length > 0).toBe(R.quart);
   });
 
-  it("arrondit le bout avant des logements de marche quand le nez est arrondi", () => {
-    // Bulge DXF : code de groupe 42 sur les sommets.
-    expect(limons.includes("\r\n 42\r\n")).toBe(R.rn > 0);
+  it("arrondit le bout avant des logements de marche quand le nez a une arête arrondie", () => {
+    // Bulge DXF : code de groupe 42 sur les sommets ; le chanfrein n'en a pas.
+    expect(limons.includes("\r\n 42\r\n")).toBe(R.rn > 0 && R.params.nez !== "chanfrein");
+  });
+
+  it("met les rainures et l'embrèvement sur leur calque, seulement quand on les demande", () => {
+    const marches = toDXF(cnc.treadEnts);
+    expect(marches.includes("RAINURE")).toBe(R.params.rai);
+    expect(marches.includes("EMBREVEMENT")).toBe(R.params.cm && R.params.cmEmb > 0);
+    expect(marches.includes("CM_DESSUS\r\n 66")).toBe(R.params.cm && R.params.cmPose === "sur");
   });
 
   it("place des logements dans chaque limon", () => {
-    for (const b of cnc.boardParts) expect(b.pockets).toBeGreaterThan(0);
+    // Sauf la crémaillère des marches débordantes, où marches et contremarches sont posées dessus.
+    R.stringers.forEach((sp, i) => expect(cnc.boardParts[i]!.pockets > 0).toBe(!sp.cut));
   });
 
   it("nomme l'archive d'après la forme et le nombre de hauteurs", () => {

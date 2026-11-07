@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { handrailOutline, postOutline, railOutline } from "../core/railing";
-import { isLeft, type Essence } from "../core/params";
+import { noseProfile } from "../core/nez";
+import { isLeft, type Essence, type ProfilNez } from "../core/params";
 import type { StringerPiece, Stair, Tread } from "../core/stair";
 import { stringerOutline } from "../core/stringer";
 import { V, type Pt } from "../core/vec";
@@ -81,19 +82,39 @@ function extrudePlan(poly: readonly Pt[], z0: number, depth: number, mat: THREE.
   return shaded(geo, mat);
 }
 
-/** Nez arrondi : profil (v vers l'arrière de la marche, z) extrudé le long de la ligne de nez. */
-function noseMesh(n: NonNullable<Tread["nose"]>, z0: number, et: number, r: number, mat: THREE.Material): THREE.Mesh {
-  const pts: Pt[] = [],
-    k = 8,
-    flat = et - 2 * r > 0.01;
-  for (let i = 0; i <= k; i++) {
-    const a = -Math.PI / 2 - ((Math.PI / 2) * i) / k;
-    pts.push([r + r * Math.cos(a), r + r * Math.sin(a)]);
-  }
-  for (let i = flat ? 0 : 1; i <= k; i++) {
-    const a = Math.PI - ((Math.PI / 2) * i) / k;
-    pts.push([r + r * Math.cos(a), et - r + r * Math.sin(a)]);
-  }
+/** Contour du plan percé de trous, extrudé vers le haut depuis z0. */
+function extrudeHoles(poly: readonly Pt[], holes: readonly Pt[][], z0: number, depth: number, mat: THREE.Material) {
+  const shape = new THREE.Shape(v2(poly));
+  shape.holes = holes.map((h) => new THREE.Path(v2(h)));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, z0, 0);
+  return shaded(geo, mat);
+}
+
+/** Marche d'épaisseur e, dessus à top : rainures antidérapantes creusées de rp dans son dessus. */
+function treadMeshes(
+  solid: readonly Pt[],
+  grooves: readonly Pt[][],
+  top: number,
+  e: number,
+  rp: number,
+  mat: THREE.Material,
+) {
+  if (!grooves.length) return [extrudePlan(solid, top - e, e, mat)];
+  return [extrudePlan(solid, top - e, e - rp, mat), extrudeHoles(solid, grooves, top - rp, rp, mat)];
+}
+
+/** Nez profilé : sa coupe (v vers l'arrière de la marche, z) extrudée le long de la ligne de nez. */
+function noseMesh(
+  n: NonNullable<Tread["nose"]>,
+  z0: number,
+  et: number,
+  r: number,
+  nez: ProfilNez,
+  mat: THREE.Material,
+): THREE.Mesh {
+  const pts = noseProfile(nez, r, et);
   const geo = new THREE.ExtrudeGeometry(new THREE.Shape(v2(pts)), { depth: n.len, bevelEnabled: false });
   const X = new THREE.Vector3(n.nr[0], 0, -n.nr[1]),
     Y = new THREE.Vector3(0, 1, 0),
@@ -286,13 +307,13 @@ export class Scene3D {
     });
     const g = new THREE.Group();
     R.treads.forEach((t) => {
-      g.add(extrudePlan(t.solid, t.top - p.et, p.et, wood));
-      if (t.nose) g.add(noseMesh(t.nose, t.top - p.et, p.et, R.rn, wood));
+      treadMeshes(t.solid, t.grooves, t.top, p.et, p.raiP, wood).forEach((m) => g.add(m));
+      if (t.nose) g.add(noseMesh(t.nose, t.top - p.et, p.et, R.rn, p.nez, wood));
     });
     if (R.mp) {
       const m = R.mp;
-      g.add(extrudePlan(m.solid, m.top - m.e, m.e, wood));
-      if (m.nose) g.add(noseMesh(m.nose, m.top - m.e, m.e, m.rn, wood));
+      treadMeshes(m.solid, m.grooves, m.top, m.e, p.raiP, wood).forEach((q) => g.add(q));
+      if (m.nose) g.add(noseMesh(m.nose, m.top - m.e, m.e, m.rn, p.nez, wood));
     }
     R.risers.forEach((r) => g.add(extrudePlan(r.plan, r.z0, Math.max(1, r.z1 - r.z0), wood)));
     R.stringers.forEach((sp) => g.add(stringerMesh(sp, woodDark)));

@@ -4,14 +4,15 @@
 import { CONFORT, comfortStatus } from "./confort";
 import { fmt } from "./format";
 import { ECHAPPEE, ECHAPPEE_MIN, type Headroom } from "./headroom";
-import { COTE_MAX, H_MAX, TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
+import { nezCote } from "./nez";
+import { anglaise, COTE_MAX, H_MAX, TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
 import { railing } from "./railing";
 import { flights } from "./stair-flights";
 import { newelPosts, newels } from "./stair-newels";
 import { balance, heights, noseLines } from "./stair-noses";
 import { stairNotes } from "./stair-notes";
 import { stringerLines, stringerPieces } from "./stair-stringers";
-import { treadsAndRisers } from "./stair-treads";
+import { RAINURES_MAX, treadsAndRisers } from "./stair-treads";
 import { tremie } from "./tremie";
 import type { ComputeResult, EchCote, InputError, Stair, Status } from "./stair-types";
 import { clamp } from "./vec";
@@ -24,7 +25,8 @@ export { ECHAPPEE, ECHAPPEE_MIN };
 export { CONFORT, comfortStatus } from "./confort";
 export { FOULEE_MAX } from "./stair-flights";
 export { palierLayout, pickN } from "./stair-noses";
-export { LIFT, PERCAGE, TENON } from "./stair-stringers";
+export { GORGE, LIFT, PERCAGE, TENON } from "./stair-stringers";
+export { RAINURES_MAX, RAINURE_ARRET, RAINURE_MIN } from "./stair-treads";
 
 /** État d'une échappée (null : tout passe sous la trémie). */
 export const echStatus = (e: Headroom | null): Status =>
@@ -62,7 +64,9 @@ function cotesLues(p: Params, tours: number): NumericKey[] {
     "pW",
     ...(tours ? ["A", "B", "ps"] : ["L"]),
     ...(tours === 2 ? [isDemi(p.forme) ? "J" : "C"] : []),
-    ...(p.cm ? ["ecm"] : []),
+    ...(p.cm ? ["ecm", "cmEmb"] : []),
+    ...(p.rai ? ["raiN", "raiL", "raiP", "raiD", "raiE"] : []),
+    ...(anglaise(p) ? ["debJ"] : []),
     ...(p.fAuto ? [] : ["f"]),
     ...(tours && !p.hljAuto ? ["hlj"] : []),
     ...(p.tAuto ? [] : tours ? ["tX", "tY", ...(p.tForme === "L" ? ["tbD", "tbA"] : [])] : ["tL"]),
@@ -121,6 +125,37 @@ function validate(p: Params, tours: number): InputError[] {
         "Les deux mains courantes se touchent contre le poteau : réduisez leur largeur ou élargissez le jour.",
       );
   }
+  if (p.rai) {
+    const r = nezCote(p.nez, p.rn, p.et);
+    if (!(Number.isInteger(p.raiN) && p.raiN >= 1 && p.raiN <= RAINURES_MAX))
+      err("raiN", `Un nombre entier de rainures, de 1 à ${RAINURES_MAX}.`);
+    if (!(p.raiL >= 2 && p.raiL <= 20)) err("raiL", "Les rainures doivent faire de 2 à 20 mm de large.");
+    if (!(p.raiP >= 0.5 && p.raiP <= p.et / 4))
+      err(
+        "raiP",
+        `Les rainures doivent faire de 0,5 mm au quart de l'épaisseur de marche (${fmt(p.et / 4, 1)} mm) de profondeur.`,
+      );
+    if (!(p.raiD - p.raiL / 2 >= r + 3))
+      err(
+        "raiD",
+        `La première rainure doit commencer derrière le profil du nez : axe à au moins ${fmt(Math.ceil(r + 3 + p.raiL / 2))} mm du nez.`,
+      );
+    if (p.raiN > 1 && !(p.raiE >= p.raiL + 3))
+      err(
+        "raiE",
+        `L'entraxe doit laisser au moins 3 mm de bois entre deux rainures : au moins ${fmt(Math.ceil(p.raiL + 3))} mm.`,
+      );
+  }
+  if (anglaise(p)) {
+    if (!(p.debJ >= 0 && p.debJ <= 100)) err("debJ", "Le débord au jour doit rester entre 0 et 100 mm.");
+    if (p.gc !== "aucun")
+      errors.push({
+        message:
+          "Pas encore de garde-corps sur des marches débordantes : choisissez « aucun » côté jour, ou des marches logées dans le limon.",
+      });
+  }
+  if (p.cm && !(p.cmEmb >= 0 && p.cmEmb <= p.et / 2))
+    err("cmEmb", `L'embrèvement doit rester entre 0 et la moitié de l'épaisseur de marche (${fmt(p.et / 2, 1)} mm).`);
   if (p.mp) {
     if (!(p.mpP >= 150)) err("mpP", "La marche palière doit faire au moins 150 mm de profondeur.");
     if (!(p.mpE >= 18)) err("mpE", "La marche palière doit faire au moins 18 mm d'épaisseur.");
@@ -211,6 +246,8 @@ export function compute(p: Params, suggest = true): ComputeResult {
       g,
       Lw,
       rn,
+      treads,
+      mp,
       hl,
       hlj,
       hljAuto,
