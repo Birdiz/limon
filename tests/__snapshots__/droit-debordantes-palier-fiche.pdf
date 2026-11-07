@@ -4,7 +4,7 @@
 << /Type /Catalog /Pages 2 0 R >>
 endobj
 2 0 obj
-<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R 12 0 R] /Count 4 >>
+<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R 12 0 R 14 0 R] /Count 5 >>
 endobj
 3 0 obj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
@@ -340,7 +340,7 @@ S
 [] 0 d 1 j 1.71 w 1 1 1 RG BT /F1 4.82 Tf 0 -1 1 0 354.11 197.21 Tm 1 Tr (giron 260,7) Tj ET 0 j
 BT /F1 4.82 Tf 0 -1 1 0 354.11 197.21 Tm 0 Tr 0.34 0.38 0.42 rg (giron 260,7) Tj ET
 BT /F1 7.5 Tf 1 0 0 1 42 24 Tm 0 Tr 0.34 0.38 0.42 rg (Quart de tour \267 Escalier droit-debordantes-palier) Tj ET
-BT /F1 7.5 Tf 1 0 0 1 524.09 24 Tm 0 Tr 0.34 0.38 0.42 rg (page 1/4) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 524.09 24 Tm 0 Tr 0.34 0.38 0.42 rg (page 1/5) Tj ET
 endstream
 endobj
 8 0 obj
@@ -813,7 +813,7 @@ BT /F1 8 Tf 1 0 0 1 42 88.39 Tm 0 Tr 0.34 0.38 0.42 rg (Cotes en millim\350tres.
 BT /F1 7.5 Tf 1 0 0 1 42 56 Tm 0 Tr 0.34 0.38 0.42 rg (Girons mesur\351s de nez \340 nez. Rep\350res de confort usuels \(Blondel 600 \340 640 mm, hauteur 160 \340 185 mm, giron d'au moins 240 mm, \351chapp\351e d'au) Tj ET
 BT /F1 7.5 Tf 1 0 0 1 42 46 Tm 0 Tr 0.34 0.38 0.42 rg (moins 2 000 mm et jamais sous 1 900 mm\) : \340 confronter au NF DTU 36.3 et aux exigences du chantier avant fabrication.) Tj ET
 BT /F1 7.5 Tf 1 0 0 1 42 24 Tm 0 Tr 0.34 0.38 0.42 rg (Quart de tour \267 Escalier droit-debordantes-palier) Tj ET
-BT /F1 7.5 Tf 1 0 0 1 524.09 24 Tm 0 Tr 0.34 0.38 0.42 rg (page 2/4) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 524.09 24 Tm 0 Tr 0.34 0.38 0.42 rg (page 2/5) Tj ET
 endstream
 endobj
 10 0 obj
@@ -895,19 +895,21 @@ BT /F1 9.5 Tf 1 0 0 1 54 578.89 Tm 0 Tr 0.09 0.11 0.13 rg (Tous les logements ti
 f
 BT /F1 9.5 Tf 1 0 0 1 54 563.39 Tm 0 Tr 0.09 0.11 0.13 rg (Toutes les pi\350ces tiennent dans un plateau de 5 000 \327 600 mm.) Tj ET
 BT /F1 7.5 Tf 1 0 0 1 42 24 Tm 0 Tr 0.34 0.38 0.42 rg (Quart de tour \267 Escalier droit-debordantes-palier) Tj ET
-BT /F1 7.5 Tf 1 0 0 1 524.09 24 Tm 0 Tr 0.34 0.38 0.42 rg (page 3/4) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 524.09 24 Tm 0 Tr 0.34 0.38 0.42 rg (page 3/5) Tj ET
 endstream
 endobj
 12 0 obj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 841.89 595.28] /Contents 13 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>
 endobj
 13 0 obj
-<< /Length 19696 >>
+<< /Length 26134 >>
 stream
 BT /F2 18 Tf 1 0 0 1 42 537.28 Tm 0 Tr 0.09 0.11 0.13 rg (Limons) Tj ET
 BT /F1 8.5 Tf 1 0 0 1 677.07 549.28 Tm 0 Tr 0.34 0.38 0.42 rg (Escalier droit-debordantes-palier) Tj ET
 BT /F1 8.5 Tf 1 0 0 1 550.42 537.28 Tm 0 Tr 0.34 0.38 0.42 rg (Vus c\364t\351 marches, couch\351s dans le sens du plateau \267 \351chelle 1:25) Tj ET
-BT /F1 8 Tf 1 0 0 1 42 521.28 Tm 0 Tr 0.34 0.38 0.42 rg (Cotes en millim\350tres : nez depuis le bout gauche du plateau, hauteurs depuis sa rive basse, angles depuis sa rive. Logements d\351fonc\351s de 15 mm, jeu de 0,5 mm par c\364t\351.) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 42 24 Tm 0 Tr 0.34 0.38 0.42 rg (Quart de tour \267 Escalier droit-debordantes-palier) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 770.7 24 Tm 0 Tr 0.34 0.38 0.42 rg (page 4/5) Tj ET
+BT /F1 8 Tf 1 0 0 1 42 521.28 Tm 0 Tr 0.34 0.38 0.42 rg (Cotes en millim\350tres : nez depuis le bout gauche du plateau, hauteurs depuis sa rive basse, angles depuis sa rive. Logements d\351fonc\351s de 15 mm, jeu de 0,5 mm par c\364t\351. Points a, b, c\205 : voir le tra\347age \340 la main.) Tj ET
 BT /F2 9.5 Tf 1 0 0 1 112 496.28 Tm 0 Tr 0.09 0.11 0.13 rg (Limon droit) Tj ET
 BT /F1 9 Tf 1 0 0 1 172.25 496.28 Tm 0 Tr 0.34 0.38 0.42 rg (4 720 \327 413 \327 45) Tj ET
 0.4 w [2 2] 0 d 0.8 0.82 0.85 RG
@@ -916,6 +918,74 @@ s
 0.7 w [] 0 d 0.09 0.11 0.13 RG 1 1 1 rg
 647.07 452.22 m 638.05 465.28 l 613.73 448.48 l 602.13 465.28 l 577.8 448.48 l 566.21 465.28 l 541.88 448.48 l 530.29 465.28 l 505.96 448.48 l 494.36 465.28 l 470.04 448.48 l 458.44 465.28 l 434.11 448.48 l 422.52 465.28 l 398.19 448.48 l 386.6 465.28 l 362.27 448.48 l 350.67 465.28 l 326.35 448.48 l 314.75 465.28 l 290.43 448.48 l 278.83 465.28 l 254.5 448.48 l 242.91 465.28 l 218.58 448.48 l 206.99 465.28 l 182.66 448.48 l 171.06 465.28 l 146.74 448.48 l 135.14 465.28 l 112 449.3 l 133.26 418.51 l 161.25 437.84 l 197.17 437.84 l 233.1 437.84 l 269.02 437.84 l 304.94 437.84 l 340.86 437.84 l 376.79 437.84 l 412.71 437.84 l 448.63 437.84 l 484.55 437.84 l 520.47 437.84 l 556.4 437.84 l 592.32 437.84 l 626.25 437.84 l 627.6 438.77 l h
 B
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 132.57 421.19 Tm 1 Tr (a) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 132.57 421.19 Tm 0 Tr 0.34 0.38 0.42 rg (a) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 158.18 440.38 Tm 1 Tr (b) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 158.18 440.38 Tm 0 Tr 0.34 0.38 0.42 rg (b) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 623.33 440.38 Tm 1 Tr (c) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 623.33 440.38 Tm 0 Tr 0.34 0.38 0.42 rg (c) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 649.99 449.45 Tm 1 Tr (d) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 649.99 449.45 Tm 0 Tr 0.34 0.38 0.42 rg (d) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 637.37 467.95 Tm 1 Tr (e) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 637.37 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (e) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 613.65 451.16 Tm 1 Tr (f) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 613.65 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (f) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 601.29 467.95 Tm 1 Tr (g) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 601.29 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (g) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 576.97 451.16 Tm 1 Tr (h) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 576.97 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (h) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 566.29 467.95 Tm 1 Tr (i) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 566.29 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (i) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 541.96 451.16 Tm 1 Tr (j) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 541.96 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (j) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 529.6 467.95 Tm 1 Tr (k) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 529.6 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (k) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 506.04 451.16 Tm 1 Tr (l) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 506.04 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (l) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 492.76 467.95 Tm 1 Tr (m) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 492.76 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (m) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 469.2 451.16 Tm 1 Tr (n) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 469.2 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (n) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 457.6 467.95 Tm 1 Tr (o) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 457.6 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (o) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 433.28 451.16 Tm 1 Tr (p) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 433.28 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (p) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 421.68 467.95 Tm 1 Tr (q) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 421.68 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (q) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 397.97 451.16 Tm 1 Tr (r) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 397.97 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (r) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 385.91 467.95 Tm 1 Tr (s) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 385.91 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (s) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 362.2 451.16 Tm 1 Tr (t) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 362.2 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (t) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 349.84 467.95 Tm 1 Tr (u) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 349.84 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (u) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 325.66 451.16 Tm 1 Tr (v) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 325.66 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (v) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 313.45 467.95 Tm 1 Tr (w) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 313.45 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (w) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 289.74 451.16 Tm 1 Tr (x) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 289.74 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 278.14 467.95 Tm 1 Tr (y) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 278.14 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 253.97 451.16 Tm 1 Tr (z) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 253.97 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (z) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 241.76 467.95 Tm 1 Tr (A) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 241.76 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (A) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 217.44 451.16 Tm 1 Tr (B) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 217.44 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (B) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 205.84 467.95 Tm 1 Tr (C) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 205.84 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (C) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 181.52 451.16 Tm 1 Tr (D) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 181.52 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (D) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 170.07 467.95 Tm 1 Tr (E) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 170.07 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (E) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 145.9 451.16 Tm 1 Tr (F) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 145.9 451.16 Tm 0 Tr 0.34 0.38 0.42 rg (F) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 133.84 467.95 Tm 1 Tr (G) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 133.84 467.95 Tm 0 Tr 0.34 0.38 0.42 rg (G) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 105.42 448.22 Tm 1 Tr (H) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 105.42 448.22 Tm 0 Tr 0.34 0.38 0.42 rg (H) Tj ET
 0.35 w [] 0 d 0.34 0.38 0.42 RG
 112 477.28 m 647.07 477.28 l
 S
@@ -1051,6 +1121,20 @@ B
 0.4 w [] 0 d 0.17 0.36 0.7 RG 0.89 0.92 0.96 rg
 615.06 307.37 m 617.2 305.89 l 628.86 322.78 l 626.72 324.26 l h
 B
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 633.45 286.13 Tm 1 Tr (a) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 633.45 286.13 Tm 0 Tr 0.34 0.38 0.42 rg (a) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 660.64 314.1 Tm 1 Tr (b) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 660.64 314.1 Tm 0 Tr 0.34 0.38 0.42 rg (b) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 629.59 337.05 Tm 1 Tr (c) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 629.59 337.05 Tm 0 Tr 0.34 0.38 0.42 rg (c) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 122.96 336.73 Tm 1 Tr (d) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 122.96 336.73 Tm 0 Tr 0.34 0.38 0.42 rg (d) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 105.87 310.28 Tm 1 Tr (e) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 105.87 310.28 Tm 0 Tr 0.34 0.38 0.42 rg (e) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 127.34 305.33 Tm 1 Tr (f) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 127.34 305.33 Tm 0 Tr 0.34 0.38 0.42 rg (f) Tj ET
+[] 0 d 1 j 1.6 w 1 1 1 RG BT /F2 5.5 Tf 1 0 0 1 607.54 305.33 Tm 1 Tr (g) Tj ET 0 j
+BT /F2 5.5 Tf 1 0 0 1 607.54 305.33 Tm 0 Tr 0.34 0.38 0.42 rg (g) Tj ET
 0.35 w [] 0 d 0.34 0.38 0.42 RG
 112 346.51 m 657.72 346.51 l
 S
@@ -1247,28 +1331,535 @@ S
 663.92 332.71 m 667.52 336.31 l
 S
 BT /F1 6.5 Tf 0 1 -1 0 663.22 303.57 Tm 0 Tr 0.09 0.11 0.13 rg (451) Tj ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 841.89 595.28] /Contents 15 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>
+endobj
+15 0 obj
+<< /Length 26138 >>
+stream
+BT /F2 18 Tf 1 0 0 1 42 537.28 Tm 0 Tr 0.09 0.11 0.13 rg (Tra\347age des limons) Tj ET
+BT /F1 8.5 Tf 1 0 0 1 677.07 549.28 Tm 0 Tr 0.34 0.38 0.42 rg (Escalier droit-debordantes-palier) Tj ET
+BT /F1 8.5 Tf 1 0 0 1 549.06 537.28 Tm 0 Tr 0.34 0.38 0.42 rg (Pour tracer \340 la main \267 cotes en millim\350tres, logements jeu compris) Tj ET
 BT /F1 7.5 Tf 1 0 0 1 42 24 Tm 0 Tr 0.34 0.38 0.42 rg (Quart de tour \267 Escalier droit-debordantes-palier) Tj ET
-BT /F1 7.5 Tf 1 0 0 1 770.7 24 Tm 0 Tr 0.34 0.38 0.42 rg (page 4/4) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 770.7 24 Tm 0 Tr 0.34 0.38 0.42 rg (page 5/5) Tj ET
+BT /F1 8 Tf 1 0 0 1 42 519.28 Tm 0 Tr 0.09 0.11 0.13 rg (1. Dresser la rive basse du plateau et tracer le bout gauche d'\351querre : x se mesure le long de la rive depuis ce bout, y d'\351querre depuis la rive.) Tj ET
+BT /F1 8 Tf 1 0 0 1 42 508.78 Tm 0 Tr 0.09 0.11 0.13 rg (2. Contour : pointer a, b, c\205 et les joindre dans l'ordre. Les lettres sont aussi sur le dessin des limons.) Tj ET
+BT /F1 8 Tf 1 0 0 1 42 498.28 Tm 0 Tr 0.09 0.11 0.13 rg (3. Marches : pointer le nez et le fond, les joindre, c'est le dessus de la marche ; tracer le dessous parall\350le, 41 mm plus bas \(marche et jeu\). Arrondir le bout c\364t\351 nez au rayon 10.) Tj ET
+BT /F1 8 Tf 1 0 0 1 42 487.78 Tm 0 Tr 0.09 0.11 0.13 rg (4. Contremarches : sur le dessus de la marche, depuis le nez, pointer les deux distances donn\351es ; tracer d'\351querre vers le bas jusqu'au dessus de la marche d'en dessous, ou jusqu'au sol.) Tj ET
+BT /F1 8 Tf 1 0 0 1 42 477.28 Tm 0 Tr 0.09 0.11 0.13 rg (5. D\351foncer \340 15 mm. Tous les dessus de marche d'un limon sont parall\350les : la fausse \351querre r\351gl\351e comme indiqu\351 les contr\364le.) Tj ET
+BT /F2 9.5 Tf 1 0 0 1 42 451.78 Tm 0 Tr 0.09 0.11 0.13 rg (Limon droit) Tj ET
+BT /F1 8 Tf 1 0 0 1 102.25 451.78 Tm 0 Tr 0.34 0.38 0.42 rg (4 720 \327 413 \327 45 \267 dessus de marche \340 34,6\260 sur la rive, montant vers la droite \(fausse \351querre : 1 000 le long de la rive, 690 d'\351querre\)) Tj ET
+[] 0 d 0.93 0.94 0.95 rg
+42 425.78 322 19 re
+f
+BT /F2 6.5 Tf 1 0 0 1 128.22 437.78 Tm 0 Tr 0.34 0.38 0.42 rg (Nez) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 218.06 437.78 Tm 0 Tr 0.34 0.38 0.42 rg (Fond) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 273.75 437.78 Tm 0 Tr 0.34 0.38 0.42 rg (Contremarche, depuis le nez) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 47 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (Marche) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 125.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 171.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 217.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 263.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 305.41 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (de) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 355.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (\340) Tj ET
+0.5 w [] 0 d 0.8 0.82 0.85 RG
+42 425.78 322 19 re
+s
+[] 0 d 0.93 0.94 0.95 rg
+388 425.78 122 19 re
+f
+BT /F2 6.5 Tf 1 0 0 1 451.36 437.78 Tm 0 Tr 0.34 0.38 0.42 rg (Contour) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 393 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (Point) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 455.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 501.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 7.5 Tf 1 0 0 1 393 418.28 Tm 0 Tr 0.09 0.11 0.13 rg (a) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 446.49 418.28 Tm 0 Tr 0.09 0.11 0.13 rg (187) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 500.83 418.28 Tm 0 Tr 0.09 0.11 0.13 rg (0) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 415.28 m 510 415.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 407.78 Tm 0 Tr 0.09 0.11 0.13 rg (b) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 446.49 407.78 Tm 0 Tr 0.09 0.11 0.13 rg (434) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 407.78 Tm 0 Tr 0.09 0.11 0.13 rg (170) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 404.78 m 510 404.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 397.28 Tm 0 Tr 0.09 0.11 0.13 rg (c) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 397.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 535) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 397.28 Tm 0 Tr 0.09 0.11 0.13 rg (170) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 394.28 m 510 394.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 386.78 Tm 0 Tr 0.09 0.11 0.13 rg (d) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 386.78 Tm 0 Tr 0.09 0.11 0.13 rg (4 719) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 386.78 Tm 0 Tr 0.09 0.11 0.13 rg (297) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 383.78 m 510 383.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 376.28 Tm 0 Tr 0.09 0.11 0.13 rg (e) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 376.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 639) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 376.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 373.28 m 510 373.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 365.78 Tm 0 Tr 0.09 0.11 0.13 rg (f) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 365.78 Tm 0 Tr 0.09 0.11 0.13 rg (4 425) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 365.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 362.78 m 510 362.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 355.28 Tm 0 Tr 0.09 0.11 0.13 rg (g) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 355.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 323) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 355.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 352.28 m 510 352.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 344.78 Tm 0 Tr 0.09 0.11 0.13 rg (h) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 344.78 Tm 0 Tr 0.09 0.11 0.13 rg (4 108) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 344.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 341.78 m 510 341.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 334.28 Tm 0 Tr 0.09 0.11 0.13 rg (i) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 334.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 006) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 334.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 331.28 m 510 331.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 323.78 Tm 0 Tr 0.09 0.11 0.13 rg (j) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 323.78 Tm 0 Tr 0.09 0.11 0.13 rg (3 791) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 323.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 320.78 m 510 320.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 313.28 Tm 0 Tr 0.09 0.11 0.13 rg (k) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 313.28 Tm 0 Tr 0.09 0.11 0.13 rg (3 689) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 313.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 310.28 m 510 310.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 302.78 Tm 0 Tr 0.09 0.11 0.13 rg (l) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 302.78 Tm 0 Tr 0.09 0.11 0.13 rg (3 475) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 302.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 299.78 m 510 299.78 l
+S
+0.5 w [] 0 d 0.8 0.82 0.85 RG
+388 299.78 122 145 re
+s
+[] 0 d 0.93 0.94 0.95 rg
+524 425.78 122 19 re
+f
+BT /F2 6.5 Tf 1 0 0 1 529 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (Point) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 591.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 637.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 7.5 Tf 1 0 0 1 529 418.28 Tm 0 Tr 0.09 0.11 0.13 rg (m) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 418.28 Tm 0 Tr 0.09 0.11 0.13 rg (3 372) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 418.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 415.28 m 646 415.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 407.78 Tm 0 Tr 0.09 0.11 0.13 rg (n) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 407.78 Tm 0 Tr 0.09 0.11 0.13 rg (3 158) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 407.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 404.78 m 646 404.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 397.28 Tm 0 Tr 0.09 0.11 0.13 rg (o) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 397.28 Tm 0 Tr 0.09 0.11 0.13 rg (3 055) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 397.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 394.28 m 646 394.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 386.78 Tm 0 Tr 0.09 0.11 0.13 rg (p) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 386.78 Tm 0 Tr 0.09 0.11 0.13 rg (2 841) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 386.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 383.78 m 646 383.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 376.28 Tm 0 Tr 0.09 0.11 0.13 rg (q) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 376.28 Tm 0 Tr 0.09 0.11 0.13 rg (2 739) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 376.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 373.28 m 646 373.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 365.78 Tm 0 Tr 0.09 0.11 0.13 rg (r) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 365.78 Tm 0 Tr 0.09 0.11 0.13 rg (2 524) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 365.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 362.78 m 646 362.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 355.28 Tm 0 Tr 0.09 0.11 0.13 rg (s) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 355.28 Tm 0 Tr 0.09 0.11 0.13 rg (2 422) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 355.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 352.28 m 646 352.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 344.78 Tm 0 Tr 0.09 0.11 0.13 rg (t) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 344.78 Tm 0 Tr 0.09 0.11 0.13 rg (2 207) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 344.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 341.78 m 646 341.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 334.28 Tm 0 Tr 0.09 0.11 0.13 rg (u) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 334.28 Tm 0 Tr 0.09 0.11 0.13 rg (2 105) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 334.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 331.28 m 646 331.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 323.78 Tm 0 Tr 0.09 0.11 0.13 rg (v) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 323.78 Tm 0 Tr 0.09 0.11 0.13 rg (1 890) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 323.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 320.78 m 646 320.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 313.28 Tm 0 Tr 0.09 0.11 0.13 rg (w) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 313.28 Tm 0 Tr 0.09 0.11 0.13 rg (1 788) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 313.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 310.28 m 646 310.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 302.78 Tm 0 Tr 0.09 0.11 0.13 rg (x) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 576.24 302.78 Tm 0 Tr 0.09 0.11 0.13 rg (1 574) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 302.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 299.78 m 646 299.78 l
+S
+0.5 w [] 0 d 0.8 0.82 0.85 RG
+524 299.78 122 145 re
+s
+[] 0 d 0.93 0.94 0.95 rg
+660 425.78 122 19 re
+f
+BT /F2 6.5 Tf 1 0 0 1 665 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (Point) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 727.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 773.39 429.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 7.5 Tf 1 0 0 1 665 418.28 Tm 0 Tr 0.09 0.11 0.13 rg (y) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 712.24 418.28 Tm 0 Tr 0.09 0.11 0.13 rg (1 471) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 418.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 415.28 m 782 415.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 665 407.78 Tm 0 Tr 0.09 0.11 0.13 rg (z) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 712.24 407.78 Tm 0 Tr 0.09 0.11 0.13 rg (1 257) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 407.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 404.78 m 782 404.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 665 397.28 Tm 0 Tr 0.09 0.11 0.13 rg (A) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 712.24 397.28 Tm 0 Tr 0.09 0.11 0.13 rg (1 155) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 397.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 394.28 m 782 394.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 665 386.78 Tm 0 Tr 0.09 0.11 0.13 rg (B) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 718.49 386.78 Tm 0 Tr 0.09 0.11 0.13 rg (940) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 386.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 383.78 m 782 383.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 665 376.28 Tm 0 Tr 0.09 0.11 0.13 rg (C) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 718.49 376.28 Tm 0 Tr 0.09 0.11 0.13 rg (838) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 376.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 373.28 m 782 373.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 665 365.78 Tm 0 Tr 0.09 0.11 0.13 rg (D) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 718.49 365.78 Tm 0 Tr 0.09 0.11 0.13 rg (623) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 365.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 362.78 m 782 362.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 665 355.28 Tm 0 Tr 0.09 0.11 0.13 rg (E) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 718.49 355.28 Tm 0 Tr 0.09 0.11 0.13 rg (521) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 355.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 352.28 m 782 352.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 665 344.78 Tm 0 Tr 0.09 0.11 0.13 rg (F) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 718.49 344.78 Tm 0 Tr 0.09 0.11 0.13 rg (306) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 344.78 Tm 0 Tr 0.09 0.11 0.13 rg (264) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 341.78 m 782 341.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 665 334.28 Tm 0 Tr 0.09 0.11 0.13 rg (G) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 718.49 334.28 Tm 0 Tr 0.09 0.11 0.13 rg (204) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 334.28 Tm 0 Tr 0.09 0.11 0.13 rg (412) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 331.28 m 782 331.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 665 323.78 Tm 0 Tr 0.09 0.11 0.13 rg (H) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 726.83 323.78 Tm 0 Tr 0.09 0.11 0.13 rg (0) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 323.78 Tm 0 Tr 0.09 0.11 0.13 rg (272) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 320.78 m 782 320.78 l
+S
+0.5 w [] 0 d 0.8 0.82 0.85 RG
+660 320.78 122 124 re
+s
+BT /F2 9.5 Tf 1 0 0 1 42 274.78 Tm 0 Tr 0.09 0.11 0.13 rg (Limon gauche) Tj ET
+BT /F1 8 Tf 1 0 0 1 114.4 274.78 Tm 0 Tr 0.34 0.38 0.42 rg (4 813 \327 451 \327 45 \267 dessus de marche \340 34,6\260 sur la rive, descendant vers la droite \(fausse \351querre : 1 000 le long de la rive, 690 d'\351querre\)) Tj ET
+[] 0 d 0.93 0.94 0.95 rg
+42 248.78 322 19 re
+f
+BT /F2 6.5 Tf 1 0 0 1 128.22 260.78 Tm 0 Tr 0.34 0.38 0.42 rg (Nez) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 218.06 260.78 Tm 0 Tr 0.34 0.38 0.42 rg (Fond) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 273.75 260.78 Tm 0 Tr 0.34 0.38 0.42 rg (Contremarche, depuis le nez) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 47 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (Marche) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 125.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 171.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 217.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 263.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 305.41 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (de) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 355.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (\340) Tj ET
+BT /F2 7.5 Tf 1 0 0 1 47 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (1 *) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 116.49 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (103) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 208.49 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (342) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 238.28 m 364 238.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (2) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 116.49 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (419) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 208.49 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (659) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 227.78 m 364 227.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (3) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 116.49 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (736) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 208.49 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (976) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 217.28 m 364 217.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 209.78 Tm 0 Tr 0.09 0.11 0.13 rg (4) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 209.78 Tm 0 Tr 0.09 0.11 0.13 rg (1 053) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 209.78 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 209.78 Tm 0 Tr 0.09 0.11 0.13 rg (1 293) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 209.78 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 209.78 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 209.78 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 206.78 m 364 206.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 199.28 Tm 0 Tr 0.09 0.11 0.13 rg (5) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 199.28 Tm 0 Tr 0.09 0.11 0.13 rg (1 369) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 199.28 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 199.28 Tm 0 Tr 0.09 0.11 0.13 rg (1 609) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 199.28 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 199.28 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 199.28 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 196.28 m 364 196.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 188.78 Tm 0 Tr 0.09 0.11 0.13 rg (6) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 188.78 Tm 0 Tr 0.09 0.11 0.13 rg (1 686) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 188.78 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 188.78 Tm 0 Tr 0.09 0.11 0.13 rg (1 926) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 188.78 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 188.78 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 188.78 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 185.78 m 364 185.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 178.28 Tm 0 Tr 0.09 0.11 0.13 rg (7) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 178.28 Tm 0 Tr 0.09 0.11 0.13 rg (2 003) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 178.28 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 178.28 Tm 0 Tr 0.09 0.11 0.13 rg (2 243) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 178.28 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 178.28 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 178.28 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 175.28 m 364 175.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 167.78 Tm 0 Tr 0.09 0.11 0.13 rg (8) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 167.78 Tm 0 Tr 0.09 0.11 0.13 rg (2 320) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 167.78 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 167.78 Tm 0 Tr 0.09 0.11 0.13 rg (2 560) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 167.78 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 167.78 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 167.78 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 164.78 m 364 164.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 157.28 Tm 0 Tr 0.09 0.11 0.13 rg (9) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 157.28 Tm 0 Tr 0.09 0.11 0.13 rg (2 637) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 157.28 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 157.28 Tm 0 Tr 0.09 0.11 0.13 rg (2 877) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 157.28 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 157.28 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 157.28 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 154.28 m 364 154.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 146.78 Tm 0 Tr 0.09 0.11 0.13 rg (10) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 146.78 Tm 0 Tr 0.09 0.11 0.13 rg (2 953) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 146.78 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 146.78 Tm 0 Tr 0.09 0.11 0.13 rg (3 194) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 146.78 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 146.78 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 146.78 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 143.78 m 364 143.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 136.28 Tm 0 Tr 0.09 0.11 0.13 rg (11) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 136.28 Tm 0 Tr 0.09 0.11 0.13 rg (3 270) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 136.28 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 136.28 Tm 0 Tr 0.09 0.11 0.13 rg (3 510) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 136.28 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 136.28 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 136.28 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 133.28 m 364 133.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 125.78 Tm 0 Tr 0.09 0.11 0.13 rg (12) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 125.78 Tm 0 Tr 0.09 0.11 0.13 rg (3 587) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 125.78 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 125.78 Tm 0 Tr 0.09 0.11 0.13 rg (3 827) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 125.78 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 125.78 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 125.78 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 122.78 m 364 122.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 115.28 Tm 0 Tr 0.09 0.11 0.13 rg (13) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 115.28 Tm 0 Tr 0.09 0.11 0.13 rg (3 904) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 115.28 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 115.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 144) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 115.28 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 115.28 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 115.28 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 112.28 m 364 112.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 104.78 Tm 0 Tr 0.09 0.11 0.13 rg (14) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 104.78 Tm 0 Tr 0.09 0.11 0.13 rg (4 221) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 104.78 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 104.78 Tm 0 Tr 0.09 0.11 0.13 rg (4 461) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 104.78 Tm 0 Tr 0.09 0.11 0.13 rg (244) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 304.66 104.78 Tm 0 Tr 0.09 0.11 0.13 rg (30) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 350.66 104.78 Tm 0 Tr 0.09 0.11 0.13 rg (53) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 101.78 m 364 101.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 47 94.28 Tm 0 Tr 0.09 0.11 0.13 rg (MP) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 110.24 94.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 538) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 162.49 94.28 Tm 0 Tr 0.09 0.11 0.13 rg (410) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 202.24 94.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 785) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 254.49 94.28 Tm 0 Tr 0.09 0.11 0.13 rg (239) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 308.83 94.28 Tm 0 Tr 0.09 0.11 0.13 rg (\226) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 354.83 94.28 Tm 0 Tr 0.09 0.11 0.13 rg (\226) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+42 91.28 m 364 91.28 l
+S
+0.5 w [] 0 d 0.8 0.82 0.85 RG
+42 91.28 322 176.5 re
+s
+BT /F1 6.5 Tf 1 0 0 1 42 82.28 Tm 0 Tr 0.34 0.38 0.42 rg (* logement coup\351 par l'about : le point \253 nez \273 est pris sur l'about.) Tj ET
+[] 0 d 0.93 0.94 0.95 rg
+388 248.78 122 19 re
+f
+BT /F2 6.5 Tf 1 0 0 1 451.36 260.78 Tm 0 Tr 0.34 0.38 0.42 rg (Contour) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 393 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (Point) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 455.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 501.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 7.5 Tf 1 0 0 1 393 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (a) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 620) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 500.83 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (0) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 238.28 m 510 238.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (b) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (4 813) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (280) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 227.78 m 510 227.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 393 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (c) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 440.24 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 566) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 492.49 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (450) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+388 217.28 m 510 217.28 l
+S
+0.5 w [] 0 d 0.8 0.82 0.85 RG
+388 217.28 122 50.5 re
+s
+[] 0 d 0.93 0.94 0.95 rg
+524 248.78 122 19 re
+f
+BT /F2 6.5 Tf 1 0 0 1 529 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (Point) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 591.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 637.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 7.5 Tf 1 0 0 1 529 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (d) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 582.49 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (131) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (450) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 238.28 m 646 238.28 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (e) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 590.83 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (0) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 230.78 Tm 0 Tr 0.09 0.11 0.13 rg (261) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 227.78 m 646 227.78 l
+S
+BT /F2 7.5 Tf 1 0 0 1 529 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (f) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 582.49 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (131) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 628.49 220.28 Tm 0 Tr 0.09 0.11 0.13 rg (170) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+524 217.28 m 646 217.28 l
+S
+0.5 w [] 0 d 0.8 0.82 0.85 RG
+524 217.28 122 50.5 re
+s
+[] 0 d 0.93 0.94 0.95 rg
+660 248.78 122 19 re
+f
+BT /F2 6.5 Tf 1 0 0 1 665 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (Point) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 727.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (x) Tj ET
+BT /F2 6.5 Tf 1 0 0 1 773.39 252.28 Tm 0 Tr 0.34 0.38 0.42 rg (y) Tj ET
+BT /F2 7.5 Tf 1 0 0 1 665 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (g) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 712.24 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (4 373) Tj ET
+BT /F1 7.5 Tf 1 0 0 1 764.49 241.28 Tm 0 Tr 0.09 0.11 0.13 rg (170) Tj ET
+0.35 w [] 0 d 0.8 0.82 0.85 RG
+660 238.28 m 782 238.28 l
+S
+0.5 w [] 0 d 0.8 0.82 0.85 RG
+660 238.28 122 29.5 re
+s
 endstream
 endobj
 xref
-0 14
+0 16
 0000000000 65535 f 
 0000000015 00000 n 
 0000000064 00000 n 
-0000000141 00000 n 
-0000000238 00000 n 
-0000000340 00000 n 
-0000000533 00000 n 
-0000000675 00000 n 
-0000029456 00000 n 
-0000029598 00000 n 
-0000050918 00000 n 
-0000051062 00000 n 
-0000055344 00000 n 
-0000055488 00000 n 
+0000000148 00000 n 
+0000000245 00000 n 
+0000000347 00000 n 
+0000000540 00000 n 
+0000000682 00000 n 
+0000029463 00000 n 
+0000029605 00000 n 
+0000050925 00000 n 
+0000051069 00000 n 
+0000055351 00000 n 
+0000055495 00000 n 
+0000081683 00000 n 
+0000081827 00000 n 
 trailer
-<< /Size 14 /Root 1 0 R /Info 5 0 R >>
+<< /Size 16 /Root 1 0 R /Info 5 0 R >>
 startxref
-75238
+108019
 %%EOF
