@@ -1,7 +1,7 @@
 /* Captures de l'outil pour la page publique, dans public/vitrine/ : `npm run vitrine`.
 
    Lance le serveur de développement et Google Chrome sans fenêtre, ouvre l'escalier d'exemple et
-   photographie l'outil (clair et sombre), le téléphone et la fiche PDF. Chrome est piloté par son
+   photographie l'outil (clair et sombre), le téléphone, la fiche PDF et sa page de traçage. Chrome est piloté par son
    protocole de débogage, avec le WebSocket de Node : rien à installer. Sur Mac seulement pour la
    fiche, rendue en image par Quick Look (qlmanage) puis convertie par sips. Autre Chrome : CHROME=… */
 
@@ -114,6 +114,17 @@ const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 /** La 3D est dessinée et le calcul affiché. */
 const READY = `!!document.querySelector("#scene canvas") && !!document.querySelector("#plan svg")`;
 
+/** Écrit dans un PDF d'une page la première page d'un PDF qui contient un texte (PDFKit, sur Mac). */
+const PAGE_SWIFT = `import PDFKit
+let a = CommandLine.arguments
+let d = PDFDocument(url: URL(fileURLWithPath: a[1]))!
+var i = 0
+while !(d.page(at: i)!.string ?? "").contains(a[2]) { i += 1 }
+let out = PDFDocument()
+out.insert(d.page(at: i)!, at: 0)
+out.write(to: URL(fileURLWithPath: a[3]))
+`;
+
 async function main(): Promise<void> {
   fs.mkdirSync(OUT, { recursive: true });
   const server = await createServer({ root: ROOT, server: { port: 0 }, logLevel: "warn" });
@@ -176,6 +187,36 @@ async function main(): Promise<void> {
       },
     );
     console.log("  fiche.jpg");
+
+    // Première page de traçage : isolée du PDF, rendue de même, sans le bas de page resté vide.
+    const trace = path.join(tmp, "tracage.pdf");
+    const swift = path.join(tmp, "page.swift");
+    fs.writeFileSync(swift, PAGE_SWIFT);
+    execFileSync("swift", [swift, pdf, "Traçage des limons", trace], { stdio: "ignore" });
+    execFileSync("qlmanage", ["-t", "-s", "1600", "-o", tmp, trace], { stdio: "ignore" });
+    execFileSync(
+      "sips",
+      [
+        "-s",
+        "format",
+        "jpeg",
+        "-s",
+        "formatOptions",
+        "82",
+        "-c",
+        "780",
+        "1600",
+        // Après -c, et pas 0 : sips recadrerait au centre.
+        "--cropOffset",
+        "1",
+        "0",
+        `${trace}.png`,
+        "--out",
+        path.join(OUT, "tracage.jpg"),
+      ],
+      { stdio: "ignore" },
+    );
+    console.log("  tracage.jpg");
 
     // Téléphone : une question du pas à pas, avec son croquis, puis la 3D.
     await page.size(390, 844, 3, true);
