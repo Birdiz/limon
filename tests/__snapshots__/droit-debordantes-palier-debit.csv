@@ -1,0 +1,8 @@
+Pièce;Essence;Épaisseur (mm);Longueur (mm);Largeur (mm);Quantité;Volume (m³)
+Limon droit;Chêne;45;4720;413;1;0,0877
+Limon gauche;Chêne;45;4813;451;1;0,0977
+Marches 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14;Chêne;40;950;291;14;0,1548
+Marche palière;Chêne;40;950;300;1;0,0114
+Contremarche 1;Chêne;22;910;140;1;0,0028
+Contremarches 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15;Chêne;22;910;180;14;0,0505
+Total;;;;;32;0,4049

@@ -32,7 +32,7 @@ Pas de framework d'interface.
 
 ## Réglages avancés
 
-Préférence de l'appareil (`limon-avance`), interrupteur dans l'onglet Mon compte. Sans elle, les éléments `[data-adv]` sont masqués (hauteurs et foulée à la main, marches balancées, progressivité, nez, assemblage CNC, copie des DXF, nouvel escalier complet) et la section Marches montre le choix du calcul.
+Préférence de l'appareil (`limon-avance`), interrupteur dans l'onglet Mon compte. Sans elle, les éléments `[data-adv]` sont masqués (hauteurs et foulée à la main, marches balancées, progressivité, cote du nez, cotes des rainures, embrèvement, assemblage CNC, copie des DXF, nouvel escalier complet) et la section Marches montre le choix du calcul.
 
 ## Niveaux
 

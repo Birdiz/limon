@@ -3,6 +3,7 @@
    et la recherche de marches balancées rappelle compute pour essayer chaque réglage. Il ne joue qu'à l'exécution,
    jamais au chargement des modules. */
 import { ceil10, fmt } from "./format";
+import { dessousProfile } from "./nez";
 import type { Params } from "./params";
 import { BOIS_SOUS_LOGEMENT } from "./pockets";
 import { CONFORT, comfortStatus, compute, echWhere, palierLayout, pickN } from "./stair";
@@ -87,6 +88,8 @@ export interface NotesCtx extends Pick<
   | "g"
   | "Lw"
   | "rn"
+  | "treads"
+  | "mp"
   | "hl"
   | "hlj"
   | "hljAuto"
@@ -192,13 +195,41 @@ export function stairNotes(ctx: NotesCtx, suggest: boolean): Note[] {
       { set: { [key]: v }, label: `Passer à ${fmt(v)} mm` },
     ]);
   });
-  if (p.rn > p.et / 2 + 0.01)
-    N.push(["info", `Rayon du nez ramené à ${fmt(rn, 1)} mm, la moitié de l'épaisseur de marche (demi-rond).`]);
-  if (p.cm && rn > p.deb)
+  if (p.nez !== "casse" && p.rn > p.et / 2 + 0.01)
+    N.push([
+      "info",
+      p.nez === "chanfrein"
+        ? `Chanfrein du nez ramené à ${fmt(rn, 1)} mm, la moitié de l'épaisseur de marche.`
+        : `Rayon du nez ramené à ${fmt(rn, 1)} mm, la moitié de l'épaisseur de marche${p.nez === "arrondi" ? " (demi-rond)" : ""}.`,
+    ]);
+  if (p.cm && dessousProfile(p.nez, rn) && rn > p.deb)
     N.push([
       "warn",
       `Le rayon du nez (${fmt(rn)} mm) dépasse le débord (${fmt(p.deb)} mm) : l'arrondi du dessous mord sur la contremarche.`,
     ]);
+  if (p.mdeb && tours > 0)
+    N.push([
+      "info",
+      "Marches débordantes : pour l'escalier droit seulement pour l'instant. Ici, les marches restent logées dans les limons.",
+    ]);
+  if (p.rai) {
+    // Marches qui reçoivent moins de rainures que demandé : giron trop court, au jour sur les marches balancées.
+    const want = Math.min(Math.round(p.raiN), 6);
+    const nums = ctx.treads.filter((t) => t.grooves.length < want).map((t) => String(t.j)),
+      mpShort = !!ctx.mp && ctx.mp.grooves.length < want;
+    const parts = [
+      ...(nums.length > 1
+        ? [`les marches ${nums.slice(0, -1).join(", ")} et ${nums[nums.length - 1]}`]
+        : nums.map((j) => `la marche ${j}`)),
+      ...(mpShort ? ["la marche palière"] : []),
+    ];
+    const many = nums.length + (mpShort ? 1 : 0) > 1;
+    if (parts.length)
+      N.push([
+        "info",
+        `Rainures : ${parts.join(" et ")} en ${many ? "reçoivent" : "reçoit"} moins de ${want}, ${many ? "leur" : "son"} giron est trop court.`,
+      ]);
+  }
   if (hl < needM - 0.5)
     N.push([
       "warn",

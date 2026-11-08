@@ -1,6 +1,16 @@
 import type { Vertex } from "../core/vec";
 
-export type Layer = "DECOUPE" | "DEFONCE" | "CM_DESSUS" | "CM_DESSOUS" | "TEXTE" | "TENON" | "MORTAISE" | "PERCAGE";
+export type Layer =
+  | "DECOUPE"
+  | "DEFONCE"
+  | "CM_DESSUS"
+  | "CM_DESSOUS"
+  | "TEXTE"
+  | "TENON"
+  | "MORTAISE"
+  | "PERCAGE"
+  | "RAINURE"
+  | "EMBREVEMENT";
 
 /** Calques DXF et leur couleur ACI. */
 export const LAYERS: readonly [Layer, number][] = [
@@ -11,11 +21,14 @@ export const LAYERS: readonly [Layer, number][] = [
   ["TEXTE", 3],
 ];
 
-/** Calques de l'assemblage au poteau, déclarés seulement dans les fichiers qui s'en servent. */
+/** Calques de l'assemblage au poteau et des finitions des marches, déclarés seulement dans les fichiers qui
+    s'en servent. */
 export const EXTRA_LAYERS: readonly [Layer, number][] = [
   ["TENON", 6],
   ["MORTAISE", 2],
   ["PERCAGE", 30],
+  ["RAINURE", 210],
+  ["EMBREVEMENT", 140],
 ];
 
 export interface PolyEntity {

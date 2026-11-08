@@ -1,0 +1,33 @@
+Quart de tour - export CNC
+Escalier droit : 15 hauteurs de 180,0 mm, giron 260,7 mm, emmarchement 850 mm.
+Unités : millimètres. Format DXF R12 (AC1009).
+
+marches.dxf : chaque marche vue de dessus, nez en bas.
+  DECOUPE     contour de découpe, encastrement de 15 mm compris de chaque côté
+  EMBREVEMENT rainure de logement de la contremarche sous le nez, à usiner sur la face inférieure :
+              profondeur 8 mm, largeur 23,0 mm (jeu compris), d'un bout à l'autre
+  RAINURE     rainures antidérapantes sur le dessus : largeur 6,0 mm, profondeur 3,0 mm,
+              arrêtées à 10 mm des limons
+  TEXTE       numéro de marche, nez quart-de-rond R12,0, dessous vif (à profiler, hors contour)
+
+contremarches.dxf : chaque contremarche vue de face depuis l'escalier, bas en bas,
+  longueur hors tout, encastrement de 15 mm compris de chaque côté.
+  DECOUPE     contour de découpe
+  TEXTE       numéro de contremarche ; dans le tournant, angle des bouts biais
+              et face la plus courte (parement = face vue depuis l'escalier, dos = face cachée)
+  Posées derrière la marche du bas, jusqu'à son dessous : la marche s'arrête contre le parement,
+  vissée dans son chant arrière à travers la contremarche (la première descend jusqu'au sol).
+  Le haut entre de 8 mm dans la rainure de logement de la marche (EMBREVEMENT de marches.dxf) ;
+  la dernière, sous le plancher d'arrivée, n'en a pas.
+
+limons.dxf : chaque limon développé, vu depuis la face côté marches, haut en haut,
+  couché dans le sens de la planche (cotes = plus petit rectangle de débit).
+  DECOUPE     contour du limon
+  DEFONCE     logements des marches et contremarches, profondeur 15 mm,
+              jeu de 0,5 mm par côté compris, bout avant arrondi en haut comme le nez (arc)
+  TEXTE       nom de la pièce et cotes brutes
+
+fiche-marches.csv : girons et longueurs de nez de chaque marche.
+liste-debit.csv : liste de débit (essence, épaisseur, cotes brutes, quantité, volume) pour le tableur.
+
+À vérifier avant usinage : sens des pièces, assemblage des limons sur le poteau et au palier.

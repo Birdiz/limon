@@ -1,0 +1,29 @@
+Quart de tour - export CNC
+Escalier droit : 15 hauteurs de 180,0 mm, giron 260,7 mm, emmarchement 850 mm.
+Unités : millimètres. Format DXF R12 (AC1009).
+
+marches.dxf : chaque marche vue de dessus, nez en bas.
+  DECOUPE     contour de découpe, encastrement de 15 mm compris de chaque côté
+  CM_DESSUS   contremarche posée sur la marche (face supérieure)
+  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)
+  TEXTE       numéro de marche, nez arrondi R10,0 dessus et dessous (à profiler, hors contour)
+
+contremarches.dxf : chaque contremarche vue de face depuis l'escalier, bas en bas,
+  longueur hors tout, encastrement de 15 mm compris de chaque côté.
+  DECOUPE     contour de découpe
+  TEXTE       numéro de contremarche ; dans le tournant, angle des bouts biais
+              et face la plus courte (parement = face vue depuis l'escalier, dos = face cachée)
+
+limons.dxf : chaque limon développé, vu depuis la face côté marches, haut en haut,
+  couché dans le sens de la planche (cotes = plus petit rectangle de débit).
+  DECOUPE     contour du limon
+  DEFONCE     logements des marches et contremarches, profondeur 15 mm,
+              jeu de 0,5 mm par côté compris, bout avant arrondi comme le nez (arcs)
+  Le LIMON DROIT est une crémaillère : marches posées sur ses dents, débordant de 30 mm au jour
+  (bout de marche à profiler comme le nez), contremarches arrêtées à son flanc. Pas de logement côté jour.
+  TEXTE       nom de la pièce et cotes brutes
+
+fiche-marches.csv : girons et longueurs de nez de chaque marche.
+liste-debit.csv : liste de débit (essence, épaisseur, cotes brutes, quantité, volume) pour le tableur.
+
+À vérifier avant usinage : sens des pièces, assemblage des limons sur le poteau et au palier.

@@ -1,7 +1,7 @@
 /* Pièces débitées de l'escalier et leurs cotes, sans leur pose dans les fichiers DXF.
    La liste de débit, le volume, les alertes de fabrication et le devis n'ont besoin que d'elles ;
    l'export CNC (src/cnc/build.ts) les reprend et pose leurs contours avec les mêmes formes. */
-import { isLeft } from "./params";
+import { arriereMarche, isLeft } from "./params";
 import type { Params } from "./params";
 import { cncFrame, type Frame, type Section } from "./pockets";
 import { polyPath, type Cut } from "./poly";
@@ -79,7 +79,7 @@ export function cutFrame(R: Stair): CutFrame {
   const p = R.params,
     left = isLeft(p.forme),
     mx = left ? -1 : 1;
-  return { ...cncFrame(R, p), left, M: (q) => [mx * q[0], q[1]], bo: p.deb + (p.cm ? p.ecm : 0) };
+  return { ...cncFrame(R, p), left, M: (q) => [mx * q[0], q[1]], bo: arriereMarche(p) };
 }
 
 /** Contour d'une marche, du nez lnF jusqu'à la coupe arrière bk, dans son repère local

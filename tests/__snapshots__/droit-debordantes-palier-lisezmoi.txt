@@ -1,0 +1,35 @@
+Quart de tour - export CNC
+Escalier droit : 15 hauteurs de 180,0 mm, giron 260,7 mm, emmarchement 850 mm.
+Unités : millimètres. Format DXF R12 (AC1009).
+
+marches.dxf : chaque marche vue de dessus, nez en bas.
+  DECOUPE     contour de découpe, encastrement de 15 mm compris de chaque côté
+  CM_DESSOUS  contremarche sous le nez (face inférieure, vue par transparence)
+  RAINURE     rainures antidérapantes sur le dessus : largeur 6,0 mm, profondeur 3,0 mm,
+              arrêtées à 10 mm des limons
+  TEXTE       numéro de marche, nez arrondi R10,0 dessus et dessous (à profiler, hors contour)
+  La pièce MP est la marche palière : 40 mm d'épaisseur, 300 mm de profondeur depuis le nez,
+  au niveau du sol fini du haut, logée dans les limons jusqu'à leur bout ; le plancher reprend derrière.
+
+contremarches.dxf : chaque contremarche vue de face depuis l'escalier, bas en bas,
+  longueur hors tout, encastrement de 15 mm compris de chaque côté.
+  DECOUPE     contour de découpe
+  TEXTE       numéro de contremarche ; dans le tournant, angle des bouts biais
+              et face la plus courte (parement = face vue depuis l'escalier, dos = face cachée)
+  Posées derrière la marche du bas, jusqu'à son dessous : la marche s'arrête contre le parement,
+  vissée dans son chant arrière à travers la contremarche (la première descend jusqu'au sol).
+
+limons.dxf : chaque limon développé, vu depuis la face côté marches, haut en haut,
+  couché dans le sens de la planche (cotes = plus petit rectangle de débit).
+  DECOUPE     contour du limon
+  DEFONCE     logements des marches et contremarches, profondeur 15 mm,
+              jeu de 0,5 mm par côté compris, bout avant arrondi comme le nez (arcs)
+  Le LIMON DROIT est une crémaillère : marches posées sur ses dents, débordant de 40 mm au jour
+  (bout de marche à profiler comme le nez), contremarches arrêtées à son flanc. Pas de logement côté jour.
+  les limons se prolongent à l'horizontale sur 300 mm au-delà du dernier nez pour loger la marche palière
+  TEXTE       nom de la pièce et cotes brutes
+
+fiche-marches.csv : girons et longueurs de nez de chaque marche.
+liste-debit.csv : liste de débit (essence, épaisseur, cotes brutes, quantité, volume) pour le tableur.
+
+À vérifier avant usinage : sens des pièces, assemblage des limons sur le poteau et au palier.

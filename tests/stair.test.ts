@@ -63,8 +63,8 @@ describe("bornes des cotes", () => {
   });
 
   it("nomme chaque cote hors bornes, seule, sans autre message", () => {
-    const base: Params = { ...DEFAULTS, ...BASES[3]!, tForme: "L", tAuto: false };
-    const lues = NUMERIC_KEYS.filter((k) => !["L", "C", "J", "n", "mb", "prog", "tL"].includes(k));
+    const base: Params = { ...DEFAULTS, ...BASES[3]!, tForme: "L", tAuto: false, rai: true };
+    const lues = NUMERIC_KEYS.filter((k) => !["L", "C", "J", "n", "mb", "prog", "tL", "debJ"].includes(k));
     for (const k of lues)
       for (const v of [1e15, -1e15]) {
         const r = compute({ ...base, [k]: v });
