@@ -26,6 +26,7 @@ TypeScript strict, Vite, sans framework d'interface.
 index.html            page publique (/)
 app/index.html        gabarit de l'outil (/app/)
 mentions-legales/     mentions légales et confidentialité
+contact/              page de contact
 src/
   core/               calcul pur, sans DOM : géométrie, escalier, réglages, fiche CSV
   cnc/                export : pièces à usiner, DXF R12, zip, notice

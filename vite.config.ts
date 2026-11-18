@@ -6,11 +6,11 @@ import { defineConfig } from "vitest/config";
 import { textesAbonnement } from "./src/core/niveaux";
 
 /**
- * Les trois pages : la page publique (/), l'outil (/app/) et les mentions légales. Chemins relatifs à
+ * Les quatre pages : la page publique (/), l'outil (/app/), les mentions légales et le contact. Chemins relatifs à
  * la racine : en absolu, Railway, qui construit dans /app, confondrait /app/index.html (la page
  * publique) avec l'adresse de l'outil, et la page publique manquerait au build.
  */
-const PAGES = ["./index.html", "./app/index.html", "./mentions-legales/index.html"];
+const PAGES = ["./index.html", "./app/index.html", "./mentions-legales/index.html", "./contact/index.html"];
 
 /** Textes des pages selon l'interrupteur de l'abonnement, au build comme en développement. */
 function abonnement(): Plugin {
