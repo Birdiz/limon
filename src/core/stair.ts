@@ -5,7 +5,17 @@ import { CONFORT, comfortStatus } from "./confort";
 import { fmt } from "./format";
 import { ECHAPPEE, ECHAPPEE_MIN, type Headroom } from "./headroom";
 import { nezCote } from "./nez";
-import { anglaise, COTE_MAX, H_MAX, TOURS, isDemi, jourUnPoteau, type NumericKey, type Params } from "./params";
+import {
+  anglaise,
+  COTE_MAX,
+  cotesLues,
+  H_MAX,
+  TOURS,
+  isDemi,
+  jourUnPoteau,
+  type NumericKey,
+  type Params,
+} from "./params";
 import { railing } from "./railing";
 import { flights } from "./stair-flights";
 import { newelPosts, newels } from "./stair-newels";
@@ -46,40 +56,11 @@ export function echSidesShown(R: Stair): boolean {
   return R.quart || v.some((x) => x !== v[0]);
 }
 
-/** Cotes que le calcul lit avec ces réglages. Les autres (autre forme, valeur automatique) sont sans effet : hors de
-    vue, ou non relues du formulaire, elles ne doivent pas bloquer l'escalier. */
-function cotesLues(p: Params, tours: number): NumericKey[] {
-  return [
-    "H",
-    "W",
-    "et",
-    "deb",
-    "rn",
-    "el",
-    "hl",
-    "ep",
-    "enc",
-    "jeu",
-    "pL",
-    "pW",
-    ...(tours ? ["A", "B", "ps"] : ["L"]),
-    ...(tours === 2 ? [isDemi(p.forme) ? "J" : "C"] : []),
-    ...(p.cm ? ["ecm", "cmEmb"] : []),
-    ...(p.rai ? ["raiN", "raiL", "raiP", "raiD", "raiE"] : []),
-    ...(anglaise(p) ? ["debJ"] : []),
-    ...(p.fAuto ? [] : ["f"]),
-    ...(tours && !p.hljAuto ? ["hlj"] : []),
-    ...(p.tAuto ? [] : tours ? ["tX", "tY", ...(p.tForme === "L" ? ["tbD", "tbA"] : [])] : ["tL"]),
-    ...(p.gc === "aucun" ? [] : ["bs", "mcL", "mcH"]),
-    ...(p.mp ? ["mpP", "mpE"] : []),
-  ] as NumericKey[];
-}
-
 function validate(p: Params, tours: number): InputError[] {
   const quart = tours > 0;
   const errors: InputError[] = [];
   const err = (key: NumericKey, message: string) => errors.push({ key, message });
-  for (const k of cotesLues(p, tours)) {
+  for (const k of cotesLues(p)) {
     const max = k === "H" ? H_MAX : COTE_MAX;
     if (!(Math.abs(p[k]) <= max)) err(k, `Cette cote sort des limites d'un escalier : ${fmt(max)} mm au plus.`);
   }
