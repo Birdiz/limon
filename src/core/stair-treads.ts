@@ -1,7 +1,7 @@
 /* Étape 5 du calcul : marches, marche palière et contremarches, entre les lignes de nez. */
 import { fmt } from "./format";
 import { nezCote } from "./nez";
-import { anglaise, arriereMarche, type Params } from "./params";
+import { RAINURES_MAX, anglaise, arriereMarche, type Params } from "./params";
 import { offsetPoly, polyAt, polyCut, polyPath, type Poly } from "./poly";
 import type { Flights } from "./stair-flights";
 import type { Heights } from "./stair-noses";
@@ -12,7 +12,7 @@ type Edge = { sIn: number; sOut: number };
 
 /** Rainures antidérapantes : au plus RAINURES_MAX, arrêtées à RAINURE_ARRET des limons et de la ligne de nez
     suivante, une rainure plus courte que RAINURE_MIN n'est pas taillée. */
-export const RAINURES_MAX = 6;
+export { RAINURES_MAX };
 export const RAINURE_ARRET = 10;
 export const RAINURE_MIN = 50;
 

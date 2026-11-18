@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ATELIER_KEYS } from "../src/core/atelier";
 import {
   BOOLEAN_KEYS,
@@ -10,145 +10,22 @@ import {
   FORMES,
   NUMERIC_KEYS,
   TEXT_KEYS,
-  TOURS,
-  anglaise,
   cotesLues,
   etatReglage,
-  isDemi,
-  type NumericKey,
+  reglage,
   type Params,
 } from "../src/core/params";
 import { COTE_LABEL } from "../src/core/summary";
+import { AtelierPanel, AtelierStore } from "../src/ui/atelier";
 import { syncInputs, writeInputs } from "../src/ui/settings";
 
 /*
- * Catalogue des réglages (REGLAGES, src/core/params.ts) : il remplace des règles écrites à plusieurs endroits.
- * Les règles d'avant sont figées ici, le temps de la migration, pour montrer qu'il les redonne à l'identique.
+ * Catalogue des réglages (REGLAGES, src/core/params.ts) : le calcul, le formulaire du gabarit (app/index.html) et
+ * Mon atelier en découlent. Le gabarit est écrit à la main : ces tests le tiennent d'accord avec le catalogue.
  */
 
-/** `cotesLues` de src/core/stair.ts avant le catalogue. */
-function cotesLuesAvant(p: Params, tours: number): NumericKey[] {
-  return [
-    "H",
-    "W",
-    "et",
-    "deb",
-    "rn",
-    "el",
-    "hl",
-    "ep",
-    "enc",
-    "jeu",
-    "pL",
-    "pW",
-    ...(tours ? ["A", "B", "ps"] : ["L"]),
-    ...(tours === 2 ? [isDemi(p.forme) ? "J" : "C"] : []),
-    ...(p.cm ? ["ecm", "cmEmb"] : []),
-    ...(p.rai ? ["raiN", "raiL", "raiP", "raiD", "raiE"] : []),
-    ...(anglaise(p) ? ["debJ"] : []),
-    ...(p.fAuto ? [] : ["f"]),
-    ...(tours && !p.hljAuto ? ["hlj"] : []),
-    ...(p.tAuto ? [] : tours ? ["tX", "tY", ...(p.tForme === "L" ? ["tbD", "tbA"] : [])] : ["tL"]),
-    ...(p.gc === "aucun" ? [] : ["bs", "mcL", "mcH"]),
-    ...(p.mp ? ["mpP", "mpE"] : []),
-  ] as NumericKey[];
-}
-
-const DEFAULTS_AVANT = {
-  forme: "quart-d",
-  H: 2700,
-  L: 3650,
-  A: 2900,
-  B: 1800,
-  C: 2400,
-  J: 200,
-  W: 850,
-  fAuto: true,
-  f: 425,
-  nAuto: true,
-  n: 15,
-  mb: 7,
-  prog: 60,
-  tournant: "balance",
-  ess: "chene",
-  et: 40,
-  deb: 30,
-  rn: 10,
-  nez: "arrondi",
-  rai: false,
-  raiN: 2,
-  raiL: 6,
-  raiP: 3,
-  raiD: 25,
-  raiE: 15,
-  cm: true,
-  ecm: 22,
-  cmPose: "sur",
-  cmEmb: 0,
-  mdeb: false,
-  debJ: 30,
-  el: 45,
-  hl: 340,
-  hljAuto: true,
-  hlj: 470,
-  tAuto: false,
-  ps: 100,
-  gc: "aucun",
-  gcPose: "chant",
-  mcL: 50,
-  mcH: 70,
-  bs: 30,
-  tL: 3200,
-  tX: 1845,
-  tY: 2550,
-  tForme: "rect",
-  tbD: 950,
-  tbA: 950,
-  mp: false,
-  mpP: 300,
-  mpE: 40,
-  ep: 200,
-  enc: 15,
-  jeu: 0.5,
-  pL: 5000,
-  pW: 600,
-};
-
-const ATELIER_AVANT = [
-  "ess",
-  "et",
-  "deb",
-  "rn",
-  "nez",
-  "rai",
-  "raiN",
-  "raiL",
-  "raiP",
-  "raiD",
-  "raiE",
-  "cm",
-  "ecm",
-  "cmPose",
-  "cmEmb",
-  "mdeb",
-  "debJ",
-  "el",
-  "hl",
-  "hljAuto",
-  "ps",
-  "enc",
-  "jeu",
-  "pL",
-  "pW",
-  "gc",
-  "gcPose",
-  "mcL",
-  "mcH",
-  "bs",
-  "mp",
-  "mpP",
-  "mpE",
-];
+const html = fs.readFileSync(path.resolve("app/index.html"), "utf8");
+const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
 
 /** Toutes les combinaisons des réglages dont dépendent les règles, sur les autres valeurs de l'exemple. */
 function* combinaisons(cases: readonly (typeof BOOLEAN_KEYS)[number][] = BOOLEAN_KEYS): Generator<Params> {
@@ -164,17 +41,45 @@ function* combinaisons(cases: readonly (typeof BOOLEAN_KEYS)[number][] = BOOLEAN
             }
 }
 
-describe("catalogue des réglages", () => {
-  it("redonne les valeurs de l'exemple, dans le même ordre", () => {
-    expect(JSON.stringify(DEFAULTS)).toBe(JSON.stringify(DEFAULTS_AVANT));
-  });
+/** Ce que montre un champ de réglage, pour comparer le gabarit, le catalogue et Mon atelier. */
+function champ(el: HTMLElement) {
+  const avance = !!el.closest("[data-adv]");
+  if (el instanceof HTMLSelectElement)
+    return { avance, options: [...el.options].map((o) => [o.value, o.textContent?.trim()]) };
+  const i = el as HTMLInputElement;
+  if (i.type === "checkbox") return { avance, mot: i.closest("label")?.textContent?.trim() };
+  return {
+    avance,
+    curseur: i.type === "range",
+    pas: Number(i.step),
+    min: Number(i.min),
+    max: i.max === "" ? undefined : Number(i.max),
+    clavier: i.getAttribute("inputmode"),
+    unite: i.nextElementSibling?.textContent ?? "",
+  };
+}
 
+/** Le même, d'après le catalogue. */
+function attendu(k: keyof Params) {
+  const r = reglage(k);
+  const avance = !!r.avance;
+  if (r.valeurs) return { avance, options: r.valeurs.map((v) => [v, r.noms?.[v]]) };
+  const s = r.saisie;
+  if (!s) return { avance, mot: r.mot };
+  return {
+    avance,
+    curseur: !!s.curseur,
+    pas: s.pas,
+    min: s.min,
+    max: s.max,
+    clavier: s.curseur ? null : s.pas < 1 ? "decimal" : "numeric",
+    unite: s.sansUnite ? "" : "mm",
+  };
+}
+
+describe("catalogue des réglages", () => {
   it("classe chaque réglage dans une seule des trois listes", () => {
     expect([...TEXT_KEYS, ...NUMERIC_KEYS, ...BOOLEAN_KEYS].sort()).toEqual([...CLES].sort());
-  });
-
-  it("redonne les réglages du profil de l'atelier", () => {
-    expect([...ATELIER_KEYS].sort()).toEqual([...ATELIER_AVANT].sort());
   });
 
   it("nomme chaque réglage, d'un nom propre à chacun", () => {
@@ -183,20 +88,46 @@ describe("catalogue des réglages", () => {
     expect(new Set(noms).size).toBe(noms.length);
   });
 
-  it("relit et borne les mêmes cotes qu'avant, sauf le rayon du nez masqué des arêtes cassées", () => {
-    let n = 0;
-    for (const p of combinaisons()) {
-      const avant = cotesLuesAvant(p, TOURS[p.forme]).filter((k) => !(k === "rn" && p.nez === "casse"));
-      expect([...cotesLues(p)].sort(), JSON.stringify(p)).toEqual([...avant].sort());
-      n++;
+  it("nomme chaque valeur des listes", () => {
+    for (const k of TEXT_KEYS) {
+      const { valeurs, noms } = reglage(k);
+      expect(Object.keys(noms ?? {}), k).toEqual(valeurs);
     }
-    expect(n).toBe(7 * 2 * 2 * 2 * 2 * 256);
   });
+
+  it(
+    "ne relit que des cotes montrées et saisies, jamais celles que le calcul ramène dans leurs bornes",
+    { timeout: 60_000 },
+    () => {
+      for (const p of combinaisons()) {
+        for (const k of cotesLues(p)) {
+          expect(reglage(k).ramene, k).toBeUndefined();
+          expect(etatReglage(k, p), k).toEqual({ montre: true, mode: "saisi" });
+        }
+      }
+    },
+  );
 });
 
-describe("catalogue et formulaire", () => {
-  const html = fs.readFileSync(path.resolve("app/index.html"), "utf8");
-  const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
+describe("catalogue et gabarit", () => {
+  beforeEach(() => {
+    document.body.innerHTML = body;
+    writeInputs(DEFAULTS);
+  });
+
+  const champs = () =>
+    CLES.map((k) => [k, document.getElementById(k)] as const).filter(
+      (c): c is readonly [keyof Params, HTMLInputElement] => c[1] !== null,
+    );
+
+  it("a un champ par réglage, avec la saisie, les options et le mot du catalogue", () => {
+    // Sauf la forme, choisie par deux groupes de boutons (forme et sens), et la trémie à calculer, par deux boutons.
+    expect(CLES.filter((k) => !champs().some(([c]) => c === k))).toEqual(["forme"]);
+    for (const [k, el] of champs()) {
+      if (k === "tAuto") continue;
+      expect({ k, ...champ(el) }).toEqual({ k, ...attendu(k) });
+    }
+  });
 
   /** Visible à l'écran : aucun parent masqué, l'export CNC compté ouvert (il est replié au chargement). */
   const visible = (el: HTMLElement) => {
@@ -206,15 +137,8 @@ describe("catalogue et formulaire", () => {
   };
 
   it("montre, grise et calcule les champs comme le dit le catalogue", { timeout: 60_000 }, () => {
-    document.body.innerHTML = body;
-    writeInputs(DEFAULTS);
-    const champs = CLES.map((k) => [k, document.getElementById(k)] as const).filter(
-      (c): c is readonly [keyof Params, HTMLInputElement] => c[1] !== null,
-    );
-    // Chaque réglage a son champ, sauf la forme, choisie par deux groupes de boutons (forme et sens).
-    expect(CLES.filter((k) => !champs.some(([c]) => c === k))).toEqual(["forme"]);
-    // Les règles croisent la forme avec une seule case à la fois : toutes les cases ensemble suffisent, plus chacune
-    // seule sur deux formes.
+    // Les règles croisent la forme avec une seule case à la fois : toutes les cases ensemble suffisent, plus un
+    // échantillon des cases mêlées sur deux formes.
     const essais = [
       ...[...combinaisons([])].flatMap((p) => [
         { ...p, ...Object.fromEntries(BOOLEAN_KEYS.map((k) => [k, false])) },
@@ -225,12 +149,20 @@ describe("catalogue et formulaire", () => {
     const ecarts: string[] = [];
     for (const p of essais) {
       syncInputs(p, null);
-      for (const [k, el] of champs) {
+      for (const [k, el] of champs()) {
         const { montre, mode } = etatReglage(k, p);
         if (visible(el) !== montre || el.disabled !== (mode !== "saisi"))
           ecarts.push(`${k} (montré ${visible(el)}, grisé ${el.disabled}) avec ${JSON.stringify(p)}`);
       }
     }
     expect(ecarts.slice(0, 5)).toEqual([]);
+  });
+
+  it("a dans Mon atelier un champ par réglage du profil, pareil à celui de la colonne de réglages", () => {
+    new AtelierPanel(new AtelierStore(null), { params: () => null, saved: () => {} });
+    const ids = [...document.querySelectorAll<HTMLElement>("#atBody [id^=at-]")].map((el) => el.id.slice(3));
+    expect([...ids].sort()).toEqual([...ATELIER_KEYS].sort());
+    for (const k of ATELIER_KEYS)
+      expect({ k, ...champ(document.getElementById(`at-${k}`)!) }).toEqual({ k, ...attendu(k) });
   });
 });

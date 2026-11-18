@@ -10,10 +10,9 @@ import {
   type AtelierKey,
 } from "../core/atelier";
 import { fmt } from "../core/format";
-import { NEZ_LABEL } from "../core/nez";
-import { DEFAULTS, sanitizeParams, type Params } from "../core/params";
+import { DEFAULTS, reglage, sanitizeParams, type Params, type Saisie } from "../core/params";
 import { stamped } from "../core/project";
-import { ESSENCE_LABEL, GC_LABEL } from "../core/summary";
+import { ESSENCE_LABEL } from "../core/summary";
 import { byId, flash } from "./dom";
 import { browserStorage, readJSON, write, type KeyValue } from "./store";
 
@@ -77,113 +76,99 @@ export class AtelierStore {
   }
 }
 
-/** Un réglage du profil, dessiné comme les champs de la colonne de réglages. */
+/** Un réglage du profil, dessiné comme les champs de la colonne de réglages : saisie, options, mot de la case et
+    réglage avancé viennent du catalogue des réglages (REGLAGES). */
 interface Champ {
   k: AtelierKey;
-  l: string;
+  /** Intitulé, s'il diffère du nom du réglage. */
+  l?: string;
   /** Précision sous l'intitulé. */
   s?: string;
-  /** Réglage avancé, masqué sans la préférence de l'appareil. */
-  adv?: boolean;
-  pas?: number;
-  min?: number;
-  /** Case à cocher, avec le mot qui la suit. */
-  coche?: string;
-  opts?: readonly (readonly [string, string])[];
-  /** Unité affichée après le nombre ; mm par défaut. */
-  unite?: string;
 }
 
 const GROUPES: readonly { t: string; champs: readonly Champ[] }[] = [
   {
     t: "Bois",
     champs: [
-      { k: "ess", l: "Essence", opts: Object.entries(ESSENCE_LABEL) },
-      { k: "et", l: "Épaisseur de marche", min: 18 },
-      { k: "deb", l: "Débord de nez", s: "recouvrement", min: 0, adv: true },
-      { k: "nez", l: "Profil du nez", opts: Object.entries(NEZ_LABEL) },
-      { k: "rn", l: "Rayon du nez", s: "ou côte du chanfrein, 0 = vif", min: 0, adv: true },
-      { k: "rai", l: "Rainures antidérapantes", s: "près du nez", coche: "avec" },
-      { k: "raiN", l: "Nombre de rainures", min: 1, adv: true, unite: "" },
-      { k: "raiL", l: "Largeur des rainures", min: 2, adv: true },
-      { k: "raiP", l: "Profondeur des rainures", pas: 0.5, min: 0.5, adv: true },
-      { k: "raiD", l: "Première rainure", s: "son axe, depuis le nez", min: 5, adv: true },
-      { k: "raiE", l: "Entraxe des rainures", min: 5, adv: true },
-      { k: "cm", l: "Contremarches", coche: "avec" },
-      { k: "ecm", l: "Épaisseur de contremarche", min: 10 },
-      {
-        k: "cmPose",
-        l: "Pose de la contremarche",
-        s: "par rapport à la marche du bas",
-        opts: [
-          ["sur", "Sur la marche"],
-          ["derriere", "Derrière"],
-        ],
-      },
-      { k: "cmEmb", l: "Embrèvement", s: "rainure sous la marche du haut, 0 = sans", min: 0, adv: true },
-      { k: "mdeb", l: "Marches débordantes", s: "escalier droit, limon en crémaillère", coche: "avec" },
-      { k: "debJ", l: "Débord au jour", s: "au-delà du flanc du limon", min: 0, adv: true },
-      { k: "mp", l: "Marche palière", s: "logée dans les limons, à l'arrivée", coche: "avec" },
-      { k: "mpP", l: "Profondeur de marche palière", s: "depuis le nez", pas: 10, min: 150 },
-      { k: "mpE", l: "Épaisseur de marche palière", min: 18 },
+      { k: "ess" },
+      { k: "et" },
+      { k: "deb", s: "recouvrement" },
+      { k: "nez" },
+      { k: "rn", s: "ou côte du chanfrein, 0 = vif" },
+      { k: "rai", s: "près du nez" },
+      { k: "raiN" },
+      { k: "raiL" },
+      { k: "raiP" },
+      { k: "raiD", s: "son axe, depuis le nez" },
+      { k: "raiE" },
+      { k: "cm" },
+      { k: "ecm" },
+      { k: "cmPose", s: "par rapport à la marche du bas" },
+      { k: "cmEmb", l: "Embrèvement", s: "rainure sous la marche du haut, 0 = sans" },
+      { k: "mdeb", s: "escalier droit, limon en crémaillère" },
+      { k: "debJ", s: "au-delà du flanc du limon" },
+      { k: "mp", s: "logée dans les limons, à l'arrivée" },
+      { k: "mpP", s: "depuis le nez" },
+      { k: "mpE" },
     ],
   },
   {
     t: "Limons et poteau",
     champs: [
-      { k: "el", l: "Épaisseur de limon", min: 20 },
-      { k: "hl", l: "Hauteur de limon", s: "limon de mur en quart tournant", pas: 5, min: 150, adv: true },
-      { k: "hljAuto", l: "Hauteur du limon de jour", coche: "automatique", adv: true },
-      { k: "ps", l: "Section du poteau", s: "carrée", pas: 5, min: 75 },
+      { k: "el" },
+      { k: "hl", s: "limon de mur en quart tournant" },
+      { k: "hljAuto", l: "Hauteur du limon de jour" },
+      { k: "ps", s: "carrée" },
     ],
   },
   {
     t: "Assemblage et plateaux",
     champs: [
-      { k: "enc", l: "Encastrement", s: "marches et contremarches dans les limons", min: 0, adv: true },
-      { k: "jeu", l: "Jeu d'assemblage", s: "par côté, sur les logements", pas: 0.1, min: 0, adv: true },
-      { k: "pL", l: "Longueur des plateaux", s: "bois disponible, dans le fil", pas: 100, min: 500, adv: true },
-      { k: "pW", l: "Largeur des plateaux", s: "bois disponible", pas: 10, min: 100, adv: true },
+      { k: "enc", s: "marches et contremarches dans les limons" },
+      { k: "jeu", s: "par côté, sur les logements" },
+      { k: "pL", s: "bois disponible, dans le fil" },
+      { k: "pW", s: "bois disponible" },
     ],
   },
   {
     t: "Garde-corps",
     champs: [
-      { k: "gc", l: "Côté jour", opts: Object.entries(GC_LABEL) },
-      {
-        k: "gcPose",
-        l: "Pose sur le limon",
-        opts: [
-          ["chant", "Dans le chant"],
-          ["anglaise", "À l'anglaise"],
-        ],
-      },
-      { k: "mcL", l: "Largeur de main courante", pas: 5, min: 30 },
-      { k: "mcH", l: "Hauteur de main courante", pas: 5, min: 30 },
-      { k: "bs", l: "Section des balustres", s: "carrée ; montants et lisses aussi", min: 20 },
+      { k: "gc" },
+      { k: "gcPose" },
+      { k: "mcL" },
+      { k: "mcH" },
+      { k: "bs", s: "carrée ; montants et lisses aussi" },
     ],
   },
 ];
 
 const CHAMPS: readonly Champ[] = GROUPES.flatMap((g) => g.champs);
 
+const avance = (c: Champ) => !!reglage(c.k).avance;
+
 function rowHTML(c: Champ): string {
+  const r = reglage(c.k);
   const id = `at-${c.k}`;
-  const adv = c.adv ? " data-adv" : "";
-  const lab = `<label for="${id}">${c.l}${c.s ? `<small>${c.s}</small>` : ""}</label>`;
-  if (c.opts) {
-    const opts = c.opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+  const adv = r.avance ? " data-adv" : "";
+  const lab = `<label for="${id}">${c.l ?? r.libelle}${c.s ? `<small>${c.s}</small>` : ""}</label>`;
+  if (r.valeurs) {
+    const opts = r.valeurs.map((v) => `<option value="${v}">${r.noms?.[v] ?? v}</option>`).join("");
     return `<div class="row"${adv}>${lab}<select id="${id}">${opts}</select></div>`;
   }
-  if (c.coche)
-    return `<div class="row"${adv}>${lab}<label class="check"><input type="checkbox" id="${id}" /> ${c.coche}</label></div>`;
-  const pas = c.pas ?? 1;
-  const mode = pas < 1 ? "" : ' inputmode="numeric"';
+  if (!r.saisie)
+    return `<div class="row"${adv}>${lab}<label class="check"><input type="checkbox" id="${id}" /> ${r.mot ?? ""}</label></div>`;
+  return `<div class="row"${adv}>${lab}${saisieHTML(id, r.saisie)}</div>`;
+}
+
+/** Champ d'un nombre, comme ceux du gabarit de la page (app/index.html). */
+export function saisieHTML(id: string, s: Saisie): string {
+  const mode = s.pas < 1 ? ' inputmode="decimal"' : ' inputmode="numeric"';
+  const max = s.max === undefined ? "" : ` max="${s.max}"`;
   return (
-    `<div class="row"${adv}>${lab}<div class="num">` +
-    `<input id="${id}" type="number"${mode} step="${pas}" min="${c.min ?? 0}" />` +
-    (c.unite === "" ? "" : `<span>${c.unite ?? "mm"}</span>`) +
-    `</div></div>`
+    `<div class="num${s.sansUnite ? " nounit" : ""}">` +
+    `<input id="${id}" type="number"${mode} step="${s.pas}" min="${s.min}"${max} />` +
+    (s.sansUnite ? "" : "<span>mm</span>") +
+    `</div>`
   );
 }
 
@@ -209,7 +194,7 @@ export class AtelierPanel {
       // Un groupe entièrement avancé disparaît avec ses champs, titre compris.
       GROUPES.map(
         (g) =>
-          `<div class="group"${g.champs.every((c) => c.adv) ? " data-adv" : ""}>` +
+          `<div class="group"${g.champs.every(avance) ? " data-adv" : ""}>` +
           `<h3>${g.t}</h3>${g.champs.map(rowHTML).join("")}</div>`,
       ).join(""),
     );
@@ -252,8 +237,9 @@ export class AtelierPanel {
     const raw: Record<string, unknown> = {};
     for (const c of CHAMPS) {
       const el = byId<HTMLInputElement>(`at-${c.k}`);
-      if (c.opts) raw[c.k] = el.value;
-      else if (c.coche) raw[c.k] = el.checked;
+      const r = reglage(c.k);
+      if (r.valeurs) raw[c.k] = el.value;
+      else if (!r.saisie) raw[c.k] = el.checked;
       else {
         const v = parseFloat(el.value);
         if (!Number.isNaN(v)) raw[c.k] = v;

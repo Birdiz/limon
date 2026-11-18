@@ -12,35 +12,11 @@ import {
 } from "./params";
 import { CONFORT, echSidesShown, echStatus, type EchCote, type Headroom, type Stair, type Status } from "./stair";
 
-export const FORME_LABEL: Record<Forme, string> = {
-  droit: "Droit",
-  "quart-g": "Quart tournant gauche",
-  "quart-d": "Quart tournant droit",
-  "dq-g": "Double quart tournant gauche",
-  "dq-d": "Double quart tournant droit",
-  "demi-g": "Demi-tournant gauche",
-  "demi-d": "Demi-tournant droit",
-};
+export const FORME_LABEL: Readonly<Record<Forme, string>> = REGLAGES.forme.noms;
 
-export const ESSENCE_LABEL: Record<Essence, string> = {
-  chene: "Chêne",
-  hetre: "Hêtre",
-  frene: "Frêne",
-  chataignier: "Châtaignier",
-  erable: "Érable",
-  merisier: "Merisier",
-  noyer: "Noyer",
-  sapin: "Sapin",
-  epicea: "Épicéa",
-  douglas: "Douglas",
-  meleze: "Mélèze",
-};
+export const ESSENCE_LABEL: Readonly<Record<Essence, string>> = REGLAGES.ess.noms;
 
-export const GC_LABEL: Record<GardeCorps, string> = {
-  aucun: "Aucun",
-  balustres: "Balustres",
-  lisses: "Lisses rampantes",
-};
+export const GC_LABEL: Readonly<Record<GardeCorps, string>> = REGLAGES.gc.noms;
 export const POSE_LABEL: Record<Pose, string> = { chant: "dans le chant", anglaise: "à l'anglaise" };
 
 /** Nom d'un réglage pour l'artisan, comme à l'écran ; la trémie change de côté selon la forme. */

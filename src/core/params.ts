@@ -227,6 +227,19 @@ export const COTE_MAX = 50000;
    réglages il existe, se grise ou se calcule. Le calcul (cotes relues et bornées), le formulaire (lignes masquées,
    champs grisés), le profil de l'atelier et les noms des cotes en découlent. */
 
+/** Rainures antidérapantes par marche, au plus. */
+export const RAINURES_MAX = 6;
+
+/** Champ d'un nombre, dans la colonne de réglages comme dans Mon atelier : pas et bornes de la saisie (celles du
+    calcul sont dans `validate`), en millimètres sauf `sansUnite` ; `curseur` pour un pourcentage. */
+export interface Saisie {
+  pas: number;
+  min: number;
+  max?: number;
+  sansUnite?: true;
+  curseur?: true;
+}
+
 /** Ce que l'outil sait d'un réglage. */
 type Reglage<K extends keyof Params> = {
   /** Nom pour l'artisan hors de son champ : cotes ignorées d'un fichier, réglages de l'atelier. */
@@ -235,6 +248,8 @@ type Reglage<K extends keyof Params> = {
   defaut: Params[K];
   /** Repris par chaque nouvel escalier depuis le profil de l'atelier. */
   atelier?: true;
+  /** Réglage avancé : masqué sans la préférence de l'appareil. */
+  avance?: true;
   /** Nombre ramené dans ses bornes par le calcul plutôt que refusé. */
   ramene?: true;
   /** N'existe qu'avec ces réglages (forme, option cochée) ; sinon masqué et sans effet sur le calcul. */
@@ -243,7 +258,18 @@ type Reglage<K extends keyof Params> = {
   allume?: (p: Params) => boolean;
   /** Sa case « automatique » est cochée : le champ montre le calcul, et le formulaire ne le relit pas. */
   auto?: (p: Params) => boolean;
-} & (Params[K] extends string ? { /** Valeurs permises. */ valeurs: readonly Params[K][] } : { valeurs?: never });
+} & (Params[K] extends string
+  ? {
+      /** Valeurs permises, dans l'ordre des listes de choix. */
+      valeurs: readonly Params[K][];
+      /** Nom de chaque valeur, dans les listes de choix. */
+      noms: { readonly [V in Params[K] & string]: string };
+      saisie?: never;
+      mot?: never;
+    }
+  : Params[K] extends number
+    ? { saisie: Saisie; valeurs?: never; noms?: never; mot?: never }
+    : { /** Mot qui suit la case. */ mot?: string; valeurs?: never; noms?: never; saisie?: never });
 
 const tourne = (p: Params) => TOURS[p.forme] > 0;
 const droit = (p: Params) => TOURS[p.forme] === 0;
@@ -256,79 +282,295 @@ const avecMarchePaliere = (p: Params) => p.mp;
 
 /** Tous les réglages, dans l'ordre des réglages enregistrés (fichiers .escalier, comparaisons de réglages). */
 export const REGLAGES = {
-  forme: { libelle: "Forme", defaut: "quart-d", valeurs: FORMES },
-  H: { libelle: "Hauteur à monter", defaut: 2700 },
-  L: { libelle: "Reculement", defaut: 3650, existe: droit },
-  A: { libelle: "Longueur côté départ", defaut: 2900, existe: tourne },
-  B: { libelle: "Longueur côté arrivée", defaut: 1800, existe: tourne },
-  C: { libelle: "Longueur côté fond", defaut: 2400, existe: (p) => TOURS[p.forme] === 2 && !isDemi(p.forme) },
-  J: { libelle: "Jour", defaut: 200, existe: (p) => isDemi(p.forme) },
-  W: { libelle: "Emmarchement", defaut: 850 },
-  fAuto: { libelle: "Ligne de foulée automatique", defaut: true },
-  f: { libelle: "Ligne de foulée", defaut: 425, auto: (p) => p.fAuto },
-  nAuto: { libelle: "Nombre de hauteurs automatique", defaut: true },
-  n: { libelle: "Nombre de hauteurs", defaut: 15, ramene: true, auto: (p) => p.nAuto },
-  mb: { libelle: "Marches balancées", defaut: 7, ramene: true, existe: balancees },
-  prog: { libelle: "Progressivité", defaut: 60, ramene: true, existe: balancees },
-  tournant: { libelle: "Passage du tournant", defaut: "balance", valeurs: TOURNANTS, existe: tourne },
-  ess: { libelle: "Essence", defaut: "chene", valeurs: ESSENCES, atelier: true },
-  et: { libelle: "Épaisseur de marche", defaut: 40, atelier: true },
-  deb: { libelle: "Débord de nez", defaut: 30, atelier: true },
-  rn: { libelle: "Rayon du nez", defaut: 10, atelier: true, existe: (p) => p.nez !== "casse" },
-  nez: { libelle: "Profil du nez", defaut: "arrondi", valeurs: PROFILS_NEZ, atelier: true },
-  rai: { libelle: "Rainures antidérapantes", defaut: false, atelier: true },
-  raiN: { libelle: "Nombre de rainures", defaut: 2, atelier: true, existe: avecRainures },
-  raiL: { libelle: "Largeur des rainures", defaut: 6, atelier: true, existe: avecRainures },
-  raiP: { libelle: "Profondeur des rainures", defaut: 3, atelier: true, existe: avecRainures },
-  raiD: { libelle: "Première rainure", defaut: 25, atelier: true, existe: avecRainures },
-  raiE: { libelle: "Entraxe des rainures", defaut: 15, atelier: true, existe: avecRainures },
-  cm: { libelle: "Contremarches", defaut: true, atelier: true },
-  ecm: { libelle: "Épaisseur de contremarche", defaut: 22, atelier: true, allume: avecContremarches },
+  forme: {
+    libelle: "Forme",
+    defaut: "quart-d",
+    valeurs: FORMES,
+    noms: {
+      droit: "Droit",
+      "quart-g": "Quart tournant gauche",
+      "quart-d": "Quart tournant droit",
+      "dq-g": "Double quart tournant gauche",
+      "dq-d": "Double quart tournant droit",
+      "demi-g": "Demi-tournant gauche",
+      "demi-d": "Demi-tournant droit",
+    },
+  },
+  H: { libelle: "Hauteur à monter", defaut: 2700, saisie: { pas: 5, min: 300 } },
+  L: { libelle: "Reculement", defaut: 3650, saisie: { pas: 10, min: 500 }, existe: droit },
+  A: { libelle: "Longueur côté départ", defaut: 2900, saisie: { pas: 10, min: 500 }, existe: tourne },
+  B: { libelle: "Longueur côté arrivée", defaut: 1800, saisie: { pas: 10, min: 500 }, existe: tourne },
+  C: {
+    libelle: "Longueur côté fond",
+    defaut: 2400,
+    saisie: { pas: 10, min: 500 },
+    existe: (p) => TOURS[p.forme] === 2 && !isDemi(p.forme),
+  },
+  J: { libelle: "Jour", defaut: 200, saisie: { pas: 10, min: 100 }, existe: (p) => isDemi(p.forme) },
+  W: { libelle: "Emmarchement", defaut: 850, saisie: { pas: 10, min: 400 } },
+  fAuto: { libelle: "Ligne de foulée automatique", defaut: true, mot: "automatique", avance: true },
+  f: { libelle: "Ligne de foulée", defaut: 425, saisie: { pas: 10, min: 100 }, avance: true, auto: (p) => p.fAuto },
+  nAuto: { libelle: "Nombre de hauteurs automatique", defaut: true, mot: "automatique", avance: true },
+  n: {
+    libelle: "Nombre de hauteurs",
+    defaut: 15,
+    saisie: { pas: 1, min: 3, max: 40, sansUnite: true },
+    avance: true,
+    ramene: true,
+    auto: (p) => p.nAuto,
+  },
+  mb: {
+    libelle: "Marches balancées",
+    defaut: 7,
+    saisie: { pas: 1, min: 2, max: 12, sansUnite: true },
+    avance: true,
+    ramene: true,
+    existe: balancees,
+  },
+  prog: {
+    libelle: "Progressivité",
+    defaut: 60,
+    saisie: { pas: 5, min: 0, max: 100, sansUnite: true, curseur: true },
+    avance: true,
+    ramene: true,
+    existe: balancees,
+  },
+  tournant: {
+    libelle: "Passage du tournant",
+    defaut: "balance",
+    valeurs: TOURNANTS,
+    noms: { balance: "Marches balancées", palier: "Palier" },
+    existe: tourne,
+  },
+  ess: {
+    libelle: "Essence",
+    defaut: "chene",
+    valeurs: ESSENCES,
+    noms: {
+      chene: "Chêne",
+      hetre: "Hêtre",
+      frene: "Frêne",
+      chataignier: "Châtaignier",
+      erable: "Érable",
+      merisier: "Merisier",
+      noyer: "Noyer",
+      sapin: "Sapin",
+      epicea: "Épicéa",
+      douglas: "Douglas",
+      meleze: "Mélèze",
+    },
+    atelier: true,
+  },
+  et: { libelle: "Épaisseur de marche", defaut: 40, saisie: { pas: 1, min: 18 }, atelier: true },
+  deb: { libelle: "Débord de nez", defaut: 30, saisie: { pas: 1, min: 0 }, atelier: true, avance: true },
+  rn: {
+    libelle: "Rayon du nez",
+    defaut: 10,
+    saisie: { pas: 1, min: 0 },
+    atelier: true,
+    avance: true,
+    existe: (p) => p.nez !== "casse",
+  },
+  nez: {
+    libelle: "Profil du nez",
+    defaut: "arrondi",
+    valeurs: PROFILS_NEZ,
+    noms: { arrondi: "Arrondi", quart: "Quart-de-rond", chanfrein: "Chanfrein", casse: "Arêtes cassées" },
+    atelier: true,
+  },
+  rai: { libelle: "Rainures antidérapantes", defaut: false, mot: "avec", atelier: true },
+  raiN: {
+    libelle: "Nombre de rainures",
+    defaut: 2,
+    saisie: { pas: 1, min: 1, max: RAINURES_MAX, sansUnite: true },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  raiL: {
+    libelle: "Largeur des rainures",
+    defaut: 6,
+    saisie: { pas: 1, min: 2 },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  raiP: {
+    libelle: "Profondeur des rainures",
+    defaut: 3,
+    saisie: { pas: 0.5, min: 0.5 },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  raiD: {
+    libelle: "Première rainure",
+    defaut: 25,
+    saisie: { pas: 1, min: 5 },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  raiE: {
+    libelle: "Entraxe des rainures",
+    defaut: 15,
+    saisie: { pas: 1, min: 5 },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  cm: { libelle: "Contremarches", defaut: true, mot: "avec", atelier: true },
+  ecm: {
+    libelle: "Épaisseur de contremarche",
+    defaut: 22,
+    saisie: { pas: 1, min: 10 },
+    atelier: true,
+    allume: avecContremarches,
+  },
   cmPose: {
     libelle: "Pose de la contremarche",
     defaut: "sur",
     valeurs: POSES_CM,
+    noms: { sur: "Sur la marche", derriere: "Derrière" },
     atelier: true,
     existe: avecContremarches,
   },
-  cmEmb: { libelle: "Embrèvement de la contremarche", defaut: 0, atelier: true, existe: avecContremarches },
-  mdeb: { libelle: "Marches débordantes", defaut: false, atelier: true, existe: droit },
-  debJ: { libelle: "Débord au jour", defaut: 30, atelier: true, existe: (p) => anglaise(p) },
-  el: { libelle: "Épaisseur de limon", defaut: 45, atelier: true },
-  hl: { libelle: "Hauteur de limon", defaut: 340, atelier: true },
-  hljAuto: { libelle: "Hauteur du limon de jour automatique", defaut: true, atelier: true, existe: tourne },
-  hlj: { libelle: "Hauteur du limon de jour", defaut: 470, existe: tourne, auto: (p) => p.hljAuto },
+  cmEmb: {
+    libelle: "Embrèvement de la contremarche",
+    defaut: 0,
+    saisie: { pas: 1, min: 0 },
+    atelier: true,
+    avance: true,
+    existe: avecContremarches,
+  },
+  mdeb: { libelle: "Marches débordantes", defaut: false, mot: "avec", atelier: true, existe: droit },
+  debJ: {
+    libelle: "Débord au jour",
+    defaut: 30,
+    saisie: { pas: 1, min: 0 },
+    atelier: true,
+    avance: true,
+    existe: (p) => anglaise(p),
+  },
+  el: { libelle: "Épaisseur de limon", defaut: 45, saisie: { pas: 1, min: 20 }, atelier: true },
+  hl: { libelle: "Hauteur de limon", defaut: 340, saisie: { pas: 5, min: 150 }, atelier: true, avance: true },
+  hljAuto: {
+    libelle: "Hauteur du limon de jour automatique",
+    defaut: true,
+    mot: "automatique",
+    atelier: true,
+    avance: true,
+    existe: tourne,
+  },
+  hlj: {
+    libelle: "Hauteur du limon de jour",
+    defaut: 470,
+    saisie: { pas: 5, min: 150 },
+    avance: true,
+    existe: tourne,
+    auto: (p) => p.hljAuto,
+  },
   tAuto: { libelle: "Trémie à calculer", defaut: false },
-  ps: { libelle: "Section du poteau", defaut: 100, atelier: true, existe: tourne },
-  gc: { libelle: "Côté jour", defaut: "aucun", valeurs: GARDE_CORPS, atelier: true },
-  gcPose: { libelle: "Pose sur le limon", defaut: "chant", valeurs: POSES, atelier: true, existe: avecGardeCorps },
-  mcL: { libelle: "Largeur de main courante", defaut: 50, atelier: true, existe: avecGardeCorps },
-  mcH: { libelle: "Hauteur de main courante", defaut: 70, atelier: true, existe: avecGardeCorps },
-  bs: { libelle: "Section des balustres", defaut: 30, atelier: true, existe: avecGardeCorps },
-  tL: { libelle: "Longueur de trémie", defaut: 3200, existe: droit, auto: tremieACalculer },
-  tX: { libelle: "Trémie côté arrivée ou fond", defaut: 1845, existe: tourne, auto: tremieACalculer },
-  tY: { libelle: "Trémie côté départ ou arrivée", defaut: 2550, existe: tourne, auto: tremieACalculer },
-  tForme: { libelle: "Forme de la trémie", defaut: "rect", valeurs: FORMES_TREMIE, existe: tourne },
+  ps: { libelle: "Section du poteau", defaut: 100, saisie: { pas: 5, min: 75 }, atelier: true, existe: tourne },
+  gc: {
+    libelle: "Côté jour",
+    defaut: "aucun",
+    valeurs: GARDE_CORPS,
+    noms: { aucun: "Aucun", balustres: "Balustres", lisses: "Lisses rampantes" },
+    atelier: true,
+  },
+  gcPose: {
+    libelle: "Pose sur le limon",
+    defaut: "chant",
+    valeurs: POSES,
+    noms: { chant: "Dans le chant", anglaise: "À l'anglaise" },
+    atelier: true,
+    existe: avecGardeCorps,
+  },
+  mcL: {
+    libelle: "Largeur de main courante",
+    defaut: 50,
+    saisie: { pas: 5, min: 30 },
+    atelier: true,
+    existe: avecGardeCorps,
+  },
+  mcH: {
+    libelle: "Hauteur de main courante",
+    defaut: 70,
+    saisie: { pas: 5, min: 30 },
+    atelier: true,
+    existe: avecGardeCorps,
+  },
+  bs: {
+    libelle: "Section des balustres",
+    defaut: 30,
+    saisie: { pas: 1, min: 20 },
+    atelier: true,
+    existe: avecGardeCorps,
+  },
+  tL: {
+    libelle: "Longueur de trémie",
+    defaut: 3200,
+    saisie: { pas: 10, min: 0 },
+    existe: droit,
+    auto: tremieACalculer,
+  },
+  tX: {
+    libelle: "Trémie côté arrivée ou fond",
+    defaut: 1845,
+    saisie: { pas: 10, min: 0 },
+    existe: tourne,
+    auto: tremieACalculer,
+  },
+  tY: {
+    libelle: "Trémie côté départ ou arrivée",
+    defaut: 2550,
+    saisie: { pas: 10, min: 0 },
+    existe: tourne,
+    auto: tremieACalculer,
+  },
+  tForme: {
+    libelle: "Forme de la trémie",
+    defaut: "rect",
+    valeurs: FORMES_TREMIE,
+    // « En U » à la place de « En L » quand l'escalier a deux tournants (syncInputs).
+    noms: { rect: "Rectangle", L: "En L" },
+    existe: tourne,
+  },
   tbD: {
     libelle: "Branche de trémie côté départ",
     defaut: 950,
+    saisie: { pas: 10, min: 100 },
     existe: (p) => tourne(p) && p.tForme === "L",
     auto: tremieACalculer,
   },
   tbA: {
     libelle: "Branche de trémie côté arrivée",
     defaut: 950,
+    saisie: { pas: 10, min: 100 },
     existe: (p) => tourne(p) && p.tForme === "L",
     auto: tremieACalculer,
   },
-  mp: { libelle: "Marche palière", defaut: false, atelier: true },
-  mpP: { libelle: "Profondeur de marche palière", defaut: 300, atelier: true, allume: avecMarchePaliere },
-  mpE: { libelle: "Épaisseur de marche palière", defaut: 40, atelier: true, existe: avecMarchePaliere },
-  ep: { libelle: "Épaisseur du plancher", defaut: 200 },
-  enc: { libelle: "Encastrement", defaut: 15, atelier: true },
-  jeu: { libelle: "Jeu d'assemblage", defaut: 0.5, atelier: true },
-  pL: { libelle: "Longueur des plateaux", defaut: 5000, atelier: true },
-  pW: { libelle: "Largeur des plateaux", defaut: 600, atelier: true },
+  mp: { libelle: "Marche palière", defaut: false, mot: "avec", atelier: true },
+  mpP: {
+    libelle: "Profondeur de marche palière",
+    defaut: 300,
+    saisie: { pas: 10, min: 150 },
+    atelier: true,
+    allume: avecMarchePaliere,
+  },
+  mpE: {
+    libelle: "Épaisseur de marche palière",
+    defaut: 40,
+    saisie: { pas: 1, min: 18 },
+    atelier: true,
+    existe: avecMarchePaliere,
+  },
+  ep: { libelle: "Épaisseur du plancher", defaut: 200, saisie: { pas: 5, min: 0 } },
+  enc: { libelle: "Encastrement", defaut: 15, saisie: { pas: 1, min: 0, max: 40 }, atelier: true, avance: true },
+  jeu: { libelle: "Jeu d'assemblage", defaut: 0.5, saisie: { pas: 0.1, min: 0, max: 5 }, atelier: true, avance: true },
+  pL: { libelle: "Longueur des plateaux", defaut: 5000, saisie: { pas: 100, min: 500 }, atelier: true, avance: true },
+  pW: { libelle: "Largeur des plateaux", defaut: 600, saisie: { pas: 10, min: 100 }, atelier: true, avance: true },
 } satisfies { readonly [K in keyof Params]: Reglage<K> };
 
 /** Clés des réglages, dans l'ordre du catalogue. */
@@ -339,7 +581,16 @@ export type NumericKey = ClesDe<number>;
 export type BooleanKey = ClesDe<boolean>;
 export type TextKey = ClesDe<string>;
 
-const reglage = <K extends keyof Params>(k: K): Reglage<K> => REGLAGES[k] as unknown as Reglage<K>;
+/** Entrée du catalogue, lue sans connaître la clé : ce que chaque type de réglage peut porter. */
+export type FicheReglage = Omit<Reglage<keyof Params>, "valeurs" | "noms" | "saisie" | "mot"> & {
+  valeurs?: readonly string[];
+  noms?: Readonly<Record<string, string>>;
+  saisie?: Saisie;
+  mot?: string;
+};
+
+/** Entrée du catalogue d'un réglage. */
+export const reglage = (k: keyof Params): FicheReglage => REGLAGES[k] as FicheReglage;
 
 export const DEFAULTS: Readonly<Params> = Object.fromEntries(CLES.map((k) => [k, reglage(k).defaut])) as never;
 
@@ -387,7 +638,7 @@ export type ModeSaisie = "saisi" | "eteint" | "calcule";
 /** État d'un réglage avec ces réglages : montré ou masqué (sans effet sur le calcul), et le mode de son champ.
     Les deux sont indépendants : la longueur de trémie d'un quart tournant est masquée, et calculée si la trémie l'est. */
 export function etatReglage(k: keyof Params, p: Params): { montre: boolean; mode: ModeSaisie } {
-  const r: Reglage<keyof Params> = reglage(k);
+  const r = reglage(k);
   return {
     montre: r.existe?.(p) ?? true,
     mode: r.auto?.(p) ? "calcule" : r.allume && !r.allume(p) ? "eteint" : "saisi",
