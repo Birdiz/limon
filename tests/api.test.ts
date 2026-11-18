@@ -2759,8 +2759,8 @@ describe("comptes sans connexion", () => {
     });
     await brevoAdresseChangee("cle")("a@exemple.fr");
     expect(envoi.to).toEqual([{ email: "a@exemple.fr" }]);
-    expect(envoi.textContent).toContain("tom.bouzy@gmail.com");
-    expect(envoi.htmlContent).toContain("tom.bouzy@gmail.com");
+    expect(envoi.textContent).toContain("birdiz@proton.me");
+    expect(envoi.htmlContent).toContain("birdiz@proton.me");
   });
 });
 

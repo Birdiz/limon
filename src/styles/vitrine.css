@@ -503,6 +503,37 @@ html {
 .legal b {
   color: var(--ink);
 }
+
+/* Contact : un grand bouton par moyen, facile à toucher au téléphone. */
+.contact .moyens {
+  display: grid;
+  gap: 14px;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.contact .moyens .vbtn {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 16px 22px;
+  color: var(--ink);
+  white-space: normal;
+}
+.contact .moyens .vbtn:hover {
+  color: var(--chalk);
+}
+.contact .moyens small {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 400;
+}
+.contact .moyens b {
+  color: inherit;
+  font-size: clamp(20px, 4vw, 26px);
+  overflow-wrap: anywhere;
+}
 @media (max-width: 920px) {
   .vitrine main > section {
     padding-block: 52px;

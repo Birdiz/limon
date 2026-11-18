@@ -30,6 +30,7 @@ describe("pagePolicy", () => {
     expect(empreintes(pagePolicy(await fs.readFile("index.html", "utf8")))).toBe(1);
     expect(empreintes(pagePolicy(await fs.readFile("app/index.html", "utf8")))).toBe(0);
     expect(empreintes(pagePolicy(await fs.readFile("mentions-legales/index.html", "utf8")))).toBe(0);
+    expect(empreintes(pagePolicy(await fs.readFile("contact/index.html", "utf8")))).toBe(0);
   });
 });
 

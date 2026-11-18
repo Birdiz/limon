@@ -77,7 +77,7 @@ function codeAdresseHtml(code: string): string {
 </body></html>`;
 }
 
-const RESPONSABLE = "tom.bouzy@gmail.com";
+const RESPONSABLE = "birdiz@proton.me";
 
 function adresseChangeeText(): string {
   return [

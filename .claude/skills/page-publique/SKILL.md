@@ -5,7 +5,7 @@ description: Page publique et pages du site, vitrine (/), renvoi vers l'outil, p
 
 # Page publique
 
-Trois pages (entrées de `vite.config.ts`) : la page publique `index.html` (/), l'outil `app/index.html` (/app/), `mentions-legales/index.html`. Les deux premières partagent `src/styles/base.css` (jetons, logo).
+Quatre pages (entrées de `vite.config.ts`) : la page publique `index.html` (/), l'outil `app/index.html` (/app/), `mentions-legales/index.html`, `contact/index.html`. Les deux premières partagent `src/styles/base.css` (jetons, logo).
 
 - **Styles** : la page publique n'a que des styles (`src/vitrine.ts`, `src/styles/vitrine.css`) et un script dans son `<head>`.
 - **Renvoi** : ce script envoie vers l'outil, avant l'affichage, celui qui a des escaliers sur l'appareil (`limon-projets`, `limon-v2`), l'application installée ou un lien de projet (`#…=…`, pas les ancres de la page). `/?visite` la montre quand même. Le serveur l'autorise par son empreinte, calculée au démarrage (`pagePolicy`, `server/static.ts`).
@@ -15,3 +15,4 @@ Trois pages (entrées de `vite.config.ts`) : la page publique `index.html` (/), 
 - **Mentions légales** : l'éditeur est nommé à titre personnel pendant la phase d'essai, sans statut ni SIRET (pas encore immatriculé). À l'immatriculation : statut, adresse, SIRET et mention de TVA.
 - **Confidentialité** : dite deux fois, dans les mentions légales et dans la notice de Mon compte (`details.privacy`, `app/index.html`). Les deux changent ensemble, avec ce que garde le compte, `CONSERVATION`, `PREAVIS` ou l'arrivée d'une sauvegarde. Les clients des devis ne sont dits que par la notice, tant que le devis reste caché (`data-devis`).
 - **Captures** : dans `public/vitrine/` (hors du cache du service worker), refaites par `npm run vitrine` (`scripts/vitrine.ts` : serveur de développement et Google Chrome sans fenêtre ; fiche et page de traçage rendues par qlmanage et sips, la page isolée par PDFKit en Swift, donc sur Mac) après un changement visible de l'outil.
+- **Contact** : une seule adresse, birdiz@proton.me, partout (page Contact, mentions légales, notice et confirmation de Mon compte dans `app/index.html`, `RESPONSABLE` de `server/mail.ts`). Le lien « Contact » du pied de page mène à `contact/` ; un nouveau moyen (téléphone) y prend un bouton de plus dans `.moyens`.
