@@ -1,6 +1,7 @@
 import { fmt } from "../core/format";
 import {
   BOOLEAN_KEYS,
+  CLES,
   NUMERIC_KEYS,
   type Essence,
   type Forme,
@@ -13,7 +14,7 @@ import {
   type Tournant,
   type Params,
   TOURS,
-  anglaise,
+  etatReglage,
   isDemi,
 } from "../core/params";
 import { turnRange, type InputError, type Stair } from "../core/stair";
@@ -22,15 +23,11 @@ import { byId } from "./dom";
 
 const input = (id: string) => byId<HTMLInputElement>(id);
 
-/** Cotes de la trémie, calculées quand elle est « à calculer ». */
+/** Cotes de la trémie, affichées d'après le calcul quand elle est « à calculer ». */
 const TRE_KEYS = ["tL", "tX", "tY", "tbD", "tbA"] as const;
 
 /** Champ qui affiche le calcul tant que son automatique est actif : ce chiffre n'est pas un réglage. */
-const computed = (p: Params, k: NumericKey) =>
-  (k === "n" && p.nAuto) ||
-  (k === "f" && p.fAuto) ||
-  (k === "hlj" && p.hljAuto) ||
-  (p.tAuto && (TRE_KEYS as readonly NumericKey[]).includes(k));
+const computed = (p: Params, k: NumericKey) => etatReglage(k, p).mode === "calcule";
 
 export function writeInputs(p: Params): void {
   // La forme se choisit sans son sens (« quart »), le sens à part (« d ») ; l'escalier droit garde le sens précédent.
@@ -114,10 +111,10 @@ const RN_SUB: Record<ProfilNez, string> = {
   casse: "",
 };
 
-/** Formes où se montre un élément [data-show] : droit, quart (qui tourne), quart1 (un tournant), u (deux tournants),
-    dq (double quart, saisi par le côté fond), demi (demi-tournant, saisi par le jour). */
+/** Formes où se montre un élément [data-show] qui n'est pas un réglage (ceux-là suivent le catalogue) : quart (qui
+    tourne), quart1 (un tournant), u (deux tournants), dq (double quart, saisi par le côté fond), demi (demi-tournant,
+    saisi par le jour). */
 const SHOW: Record<string, (f: Forme) => boolean> = {
-  droit: (f) => TOURS[f] === 0,
   quart: (f) => TOURS[f] > 0,
   quart1: (f) => TOURS[f] === 1,
   u: (f) => TOURS[f] === 2,
@@ -125,35 +122,36 @@ const SHOW: Record<string, (f: Forme) => boolean> = {
   demi: isDemi,
 };
 
+/** Réglages masqués ou grisés d'après le catalogue : une ligne se masque quand aucun de ses réglages n'existe avec
+    ces réglages ; un champ se grise quand sa case est décochée ou qu'il montre le calcul. */
+function showReglages(p: Params): void {
+  const lignes = new Map<HTMLElement, boolean>();
+  for (const k of CLES) {
+    const el = document.getElementById(k) as HTMLInputElement | HTMLSelectElement | null;
+    if (!el) continue;
+    const { montre, mode } = etatReglage(k, p);
+    el.disabled = mode !== "saisi";
+    const ligne = el.closest<HTMLElement>(".row");
+    if (ligne) lignes.set(ligne, (lignes.get(ligne) ?? false) || montre);
+  }
+  lignes.forEach((montre, ligne) => (ligne.hidden = !montre));
+}
+
 /** Champs propres à la forme, champs automatiques grisés et valeurs calculées affichées. */
 export function syncInputs(p: Params, stair: Stair | null): void {
   document
     .querySelectorAll<HTMLElement>("[data-show]")
     .forEach((el) => (el.hidden = !SHOW[el.dataset.show ?? ""]?.(p.forme)));
-  document.querySelectorAll<HTMLElement>("[data-gc]").forEach((el) => (el.hidden = p.gc === "aucun"));
-  document
-    .querySelectorAll<HTMLElement>("[data-tre]")
-    .forEach((el) => (el.hidden = !TOURS[p.forme] || p.tForme !== "L"));
+  showReglages(p);
   // La trémie qui suit l'escalier : en L pour un quart tournant, en U pour deux tournants.
   byId<HTMLSelectElement>("tForme").querySelector<HTMLOptionElement>('option[value="L"]')!.textContent =
     TOURS[p.forme] === 2 ? "En U" : "En L";
-  document.querySelectorAll<HTMLElement>("[data-mp]").forEach((el) => (el.hidden = !p.mp));
-  // Cote du nez : rayon ou côte du chanfrein ; les arêtes cassées ont leur rayon fixe.
-  document.querySelectorAll<HTMLElement>("[data-rn]").forEach((el) => (el.hidden = p.nez === "casse"));
+  // Cote du nez : rayon ou côte du chanfrein.
   byId("rnTxt").textContent = p.nez === "chanfrein" ? "Côte du chanfrein" : "Rayon du nez";
   byId("rnSub").textContent = RN_SUB[p.nez];
-  document.querySelectorAll<HTMLElement>("[data-rai]").forEach((el) => (el.hidden = !p.rai));
-  document.querySelectorAll<HTMLElement>("[data-cm]").forEach((el) => (el.hidden = !p.cm));
-  document.querySelectorAll<HTMLElement>("[data-mdeb]").forEach((el) => (el.hidden = !anglaise(p)));
   const pal = p.tournant === "palier";
   document.querySelectorAll<HTMLElement>("[data-bal]").forEach((el) => (el.hidden = pal));
   document.querySelectorAll<HTMLElement>("[data-pal]").forEach((el) => (el.hidden = !pal));
-  input("n").disabled = p.nAuto;
-  input("f").disabled = p.fAuto;
-  input("hlj").disabled = p.hljAuto;
-  input("ecm").disabled = !p.cm;
-  for (const k of TRE_KEYS) input(k).disabled = p.tAuto;
-  input("mpP").disabled = !p.mp;
   if (stair) {
     if (p.nAuto) input("n").value = String(stair.n);
     if (p.fAuto) input("f").value = String(Math.round(stair.f));

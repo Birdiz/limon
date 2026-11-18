@@ -71,7 +71,7 @@ describe("synchronisation du formulaire", () => {
 
 describe("garde-corps", () => {
   it("lit le remplissage et la pose, et masque leurs réglages sans garde-corps", () => {
-    const rows = () => [...document.querySelectorAll<HTMLElement>("[data-gc]")].map((el) => el.hidden);
+    const rows = () => ["gcPose", "mcL", "mcH", "bs"].map((k) => field(k).closest<HTMLElement>(".row")!.hidden);
     syncInputs(DEFAULTS, null);
     expect(rows().every(Boolean)).toBe(true);
     (document.getElementById("gc") as HTMLSelectElement).value = "balustres";

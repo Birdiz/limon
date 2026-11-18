@@ -135,66 +135,6 @@ export interface Params {
   pW: number;
 }
 
-export const DEFAULTS: Readonly<Params> = {
-  forme: "quart-d",
-  H: 2700,
-  L: 3650,
-  A: 2900,
-  B: 1800,
-  C: 2400,
-  J: 200,
-  W: 850,
-  fAuto: true,
-  f: 425,
-  nAuto: true,
-  n: 15,
-  mb: 7,
-  prog: 60,
-  tournant: "balance",
-  ess: "chene",
-  et: 40,
-  deb: 30,
-  rn: 10,
-  nez: "arrondi",
-  rai: false,
-  raiN: 2,
-  raiL: 6,
-  raiP: 3,
-  raiD: 25,
-  raiE: 15,
-  cm: true,
-  ecm: 22,
-  cmPose: "sur",
-  cmEmb: 0,
-  mdeb: false,
-  debJ: 30,
-  el: 45,
-  hl: 340,
-  hljAuto: true,
-  hlj: 470,
-  tAuto: false,
-  ps: 100,
-  gc: "aucun",
-  gcPose: "chant",
-  mcL: 50,
-  mcH: 70,
-  bs: 30,
-  tL: 3200,
-  tX: 1845,
-  tY: 2550,
-  tForme: "rect",
-  tbD: 950,
-  tbA: 950,
-  mp: false,
-  mpP: 300,
-  mpE: 40,
-  ep: 200,
-  enc: 15,
-  jeu: 0.5,
-  pL: 5000,
-  pW: 600,
-};
-
 export const FORMES: readonly Forme[] = ["droit", "quart-g", "quart-d", "dq-g", "dq-d", "demi-g", "demi-d"];
 /** Nombre de tournants de chaque forme, tous du même sens. */
 export const TOURS: Record<Forme, number> = {
@@ -278,55 +218,387 @@ export const DENSITE: Record<Essence, number> = {
   meleze: 600,
 };
 
-export const NUMERIC_KEYS = [
-  "H",
-  "L",
-  "A",
-  "B",
-  "C",
-  "J",
-  "W",
-  "f",
-  "n",
-  "mb",
-  "prog",
-  "et",
-  "deb",
-  "rn",
-  "raiN",
-  "raiL",
-  "raiP",
-  "raiD",
-  "raiE",
-  "ecm",
-  "cmEmb",
-  "debJ",
-  "el",
-  "hl",
-  "hlj",
-  "ps",
-  "mcL",
-  "mcH",
-  "bs",
-  "tL",
-  "tX",
-  "tY",
-  "tbD",
-  "tbA",
-  "mpP",
-  "mpE",
-  "ep",
-  "enc",
-  "jeu",
-  "pL",
-  "pW",
-] as const satisfies readonly (keyof Params)[];
-export type NumericKey = (typeof NUMERIC_KEYS)[number];
-
 /** Bornes de toute cote, en mm, loin de ce qu'un escalier demande : au-delà, le calcul ne tiendrait plus à l'écran. */
 export const H_MAX = 20000;
 export const COTE_MAX = 50000;
 
+/* ---------- Catalogue des réglages ----------
+   Ce que l'outil sait de chaque réglage, en un seul endroit : sa valeur d'exemple, son nom, et pour quels autres
+   réglages il existe, se grise ou se calcule. Le calcul (cotes relues et bornées), le formulaire (lignes masquées,
+   champs grisés), le profil de l'atelier et les noms des cotes en découlent. */
+
+/** Rainures antidérapantes par marche, au plus. */
+export const RAINURES_MAX = 6;
+
+/** Champ d'un nombre, dans la colonne de réglages comme dans Mon atelier : pas et bornes de la saisie (celles du
+    calcul sont dans `validate`), en millimètres sauf `sansUnite` ; `curseur` pour un pourcentage. */
+export interface Saisie {
+  pas: number;
+  min: number;
+  max?: number;
+  sansUnite?: true;
+  curseur?: true;
+}
+
+/** Ce que l'outil sait d'un réglage. */
+type Reglage<K extends keyof Params> = {
+  /** Nom pour l'artisan hors de son champ : cotes ignorées d'un fichier, réglages de l'atelier. */
+  libelle: string;
+  /** Valeur de l'exemple, celle d'un nouvel escalier sans profil d'atelier. */
+  defaut: Params[K];
+  /** Repris par chaque nouvel escalier depuis le profil de l'atelier. */
+  atelier?: true;
+  /** Réglage avancé : masqué sans la préférence de l'appareil. */
+  avance?: true;
+  /** Nombre ramené dans ses bornes par le calcul plutôt que refusé. */
+  ramene?: true;
+  /** N'existe qu'avec ces réglages (forme, option cochée) ; sinon masqué et sans effet sur le calcul. */
+  existe?: (p: Params) => boolean;
+  /** Sa case, dans la même ligne, est cochée ; décochée, le champ reste visible, grisé, et garde sa valeur. */
+  allume?: (p: Params) => boolean;
+  /** Sa case « automatique » est cochée : le champ montre le calcul, et le formulaire ne le relit pas. */
+  auto?: (p: Params) => boolean;
+} & (Params[K] extends string
+  ? {
+      /** Valeurs permises, dans l'ordre des listes de choix. */
+      valeurs: readonly Params[K][];
+      /** Nom de chaque valeur, dans les listes de choix. */
+      noms: { readonly [V in Params[K] & string]: string };
+      saisie?: never;
+      mot?: never;
+    }
+  : Params[K] extends number
+    ? { saisie: Saisie; valeurs?: never; noms?: never; mot?: never }
+    : { /** Mot qui suit la case. */ mot?: string; valeurs?: never; noms?: never; saisie?: never });
+
+const tourne = (p: Params) => TOURS[p.forme] > 0;
+const droit = (p: Params) => TOURS[p.forme] === 0;
+const balancees = (p: Params) => tourne(p) && p.tournant === "balance";
+const tremieACalculer = (p: Params) => p.tAuto;
+const avecGardeCorps = (p: Params) => p.gc !== "aucun";
+const avecRainures = (p: Params) => p.rai;
+const avecContremarches = (p: Params) => p.cm;
+const avecMarchePaliere = (p: Params) => p.mp;
+
+/** Tous les réglages, dans l'ordre des réglages enregistrés (fichiers .escalier, comparaisons de réglages). */
+export const REGLAGES = {
+  forme: {
+    libelle: "Forme",
+    defaut: "quart-d",
+    valeurs: FORMES,
+    noms: {
+      droit: "Droit",
+      "quart-g": "Quart tournant gauche",
+      "quart-d": "Quart tournant droit",
+      "dq-g": "Double quart tournant gauche",
+      "dq-d": "Double quart tournant droit",
+      "demi-g": "Demi-tournant gauche",
+      "demi-d": "Demi-tournant droit",
+    },
+  },
+  H: { libelle: "Hauteur à monter", defaut: 2700, saisie: { pas: 5, min: 300 } },
+  L: { libelle: "Reculement", defaut: 3650, saisie: { pas: 10, min: 500 }, existe: droit },
+  A: { libelle: "Longueur côté départ", defaut: 2900, saisie: { pas: 10, min: 500 }, existe: tourne },
+  B: { libelle: "Longueur côté arrivée", defaut: 1800, saisie: { pas: 10, min: 500 }, existe: tourne },
+  C: {
+    libelle: "Longueur côté fond",
+    defaut: 2400,
+    saisie: { pas: 10, min: 500 },
+    existe: (p) => TOURS[p.forme] === 2 && !isDemi(p.forme),
+  },
+  J: { libelle: "Jour", defaut: 200, saisie: { pas: 10, min: 100 }, existe: (p) => isDemi(p.forme) },
+  W: { libelle: "Emmarchement", defaut: 850, saisie: { pas: 10, min: 400 } },
+  fAuto: { libelle: "Ligne de foulée automatique", defaut: true, mot: "automatique", avance: true },
+  f: { libelle: "Ligne de foulée", defaut: 425, saisie: { pas: 10, min: 100 }, avance: true, auto: (p) => p.fAuto },
+  nAuto: { libelle: "Nombre de hauteurs automatique", defaut: true, mot: "automatique", avance: true },
+  n: {
+    libelle: "Nombre de hauteurs",
+    defaut: 15,
+    saisie: { pas: 1, min: 3, max: 40, sansUnite: true },
+    avance: true,
+    ramene: true,
+    auto: (p) => p.nAuto,
+  },
+  mb: {
+    libelle: "Marches balancées",
+    defaut: 7,
+    saisie: { pas: 1, min: 2, max: 12, sansUnite: true },
+    avance: true,
+    ramene: true,
+    existe: balancees,
+  },
+  prog: {
+    libelle: "Progressivité",
+    defaut: 60,
+    saisie: { pas: 5, min: 0, max: 100, sansUnite: true, curseur: true },
+    avance: true,
+    ramene: true,
+    existe: balancees,
+  },
+  tournant: {
+    libelle: "Passage du tournant",
+    defaut: "balance",
+    valeurs: TOURNANTS,
+    noms: { balance: "Marches balancées", palier: "Palier" },
+    existe: tourne,
+  },
+  ess: {
+    libelle: "Essence",
+    defaut: "chene",
+    valeurs: ESSENCES,
+    noms: {
+      chene: "Chêne",
+      hetre: "Hêtre",
+      frene: "Frêne",
+      chataignier: "Châtaignier",
+      erable: "Érable",
+      merisier: "Merisier",
+      noyer: "Noyer",
+      sapin: "Sapin",
+      epicea: "Épicéa",
+      douglas: "Douglas",
+      meleze: "Mélèze",
+    },
+    atelier: true,
+  },
+  et: { libelle: "Épaisseur de marche", defaut: 40, saisie: { pas: 1, min: 18 }, atelier: true },
+  deb: { libelle: "Débord de nez", defaut: 30, saisie: { pas: 1, min: 0 }, atelier: true, avance: true },
+  rn: {
+    libelle: "Rayon du nez",
+    defaut: 10,
+    saisie: { pas: 1, min: 0 },
+    atelier: true,
+    avance: true,
+    existe: (p) => p.nez !== "casse",
+  },
+  nez: {
+    libelle: "Profil du nez",
+    defaut: "arrondi",
+    valeurs: PROFILS_NEZ,
+    noms: { arrondi: "Arrondi", quart: "Quart-de-rond", chanfrein: "Chanfrein", casse: "Arêtes cassées" },
+    atelier: true,
+  },
+  rai: { libelle: "Rainures antidérapantes", defaut: false, mot: "avec", atelier: true },
+  raiN: {
+    libelle: "Nombre de rainures",
+    defaut: 2,
+    saisie: { pas: 1, min: 1, max: RAINURES_MAX, sansUnite: true },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  raiL: {
+    libelle: "Largeur des rainures",
+    defaut: 6,
+    saisie: { pas: 1, min: 2 },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  raiP: {
+    libelle: "Profondeur des rainures",
+    defaut: 3,
+    saisie: { pas: 0.5, min: 0.5 },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  raiD: {
+    libelle: "Première rainure",
+    defaut: 25,
+    saisie: { pas: 1, min: 5 },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  raiE: {
+    libelle: "Entraxe des rainures",
+    defaut: 15,
+    saisie: { pas: 1, min: 5 },
+    atelier: true,
+    avance: true,
+    existe: avecRainures,
+  },
+  cm: { libelle: "Contremarches", defaut: true, mot: "avec", atelier: true },
+  ecm: {
+    libelle: "Épaisseur de contremarche",
+    defaut: 22,
+    saisie: { pas: 1, min: 10 },
+    atelier: true,
+    allume: avecContremarches,
+  },
+  cmPose: {
+    libelle: "Pose de la contremarche",
+    defaut: "sur",
+    valeurs: POSES_CM,
+    noms: { sur: "Sur la marche", derriere: "Derrière" },
+    atelier: true,
+    existe: avecContremarches,
+  },
+  cmEmb: {
+    libelle: "Embrèvement de la contremarche",
+    defaut: 0,
+    saisie: { pas: 1, min: 0 },
+    atelier: true,
+    avance: true,
+    existe: avecContremarches,
+  },
+  mdeb: { libelle: "Marches débordantes", defaut: false, mot: "avec", atelier: true, existe: droit },
+  debJ: {
+    libelle: "Débord au jour",
+    defaut: 30,
+    saisie: { pas: 1, min: 0 },
+    atelier: true,
+    avance: true,
+    existe: (p) => anglaise(p),
+  },
+  el: { libelle: "Épaisseur de limon", defaut: 45, saisie: { pas: 1, min: 20 }, atelier: true },
+  hl: { libelle: "Hauteur de limon", defaut: 340, saisie: { pas: 5, min: 150 }, atelier: true, avance: true },
+  hljAuto: {
+    libelle: "Hauteur du limon de jour automatique",
+    defaut: true,
+    mot: "automatique",
+    atelier: true,
+    avance: true,
+    existe: tourne,
+  },
+  hlj: {
+    libelle: "Hauteur du limon de jour",
+    defaut: 470,
+    saisie: { pas: 5, min: 150 },
+    avance: true,
+    existe: tourne,
+    auto: (p) => p.hljAuto,
+  },
+  tAuto: { libelle: "Trémie à calculer", defaut: false },
+  ps: { libelle: "Section du poteau", defaut: 100, saisie: { pas: 5, min: 75 }, atelier: true, existe: tourne },
+  gc: {
+    libelle: "Côté jour",
+    defaut: "aucun",
+    valeurs: GARDE_CORPS,
+    noms: { aucun: "Aucun", balustres: "Balustres", lisses: "Lisses rampantes" },
+    atelier: true,
+  },
+  gcPose: {
+    libelle: "Pose sur le limon",
+    defaut: "chant",
+    valeurs: POSES,
+    noms: { chant: "Dans le chant", anglaise: "À l'anglaise" },
+    atelier: true,
+    existe: avecGardeCorps,
+  },
+  mcL: {
+    libelle: "Largeur de main courante",
+    defaut: 50,
+    saisie: { pas: 5, min: 30 },
+    atelier: true,
+    existe: avecGardeCorps,
+  },
+  mcH: {
+    libelle: "Hauteur de main courante",
+    defaut: 70,
+    saisie: { pas: 5, min: 30 },
+    atelier: true,
+    existe: avecGardeCorps,
+  },
+  bs: {
+    libelle: "Section des balustres",
+    defaut: 30,
+    saisie: { pas: 1, min: 20 },
+    atelier: true,
+    existe: avecGardeCorps,
+  },
+  tL: {
+    libelle: "Longueur de trémie",
+    defaut: 3200,
+    saisie: { pas: 10, min: 0 },
+    existe: droit,
+    auto: tremieACalculer,
+  },
+  tX: {
+    libelle: "Trémie côté arrivée ou fond",
+    defaut: 1845,
+    saisie: { pas: 10, min: 0 },
+    existe: tourne,
+    auto: tremieACalculer,
+  },
+  tY: {
+    libelle: "Trémie côté départ ou arrivée",
+    defaut: 2550,
+    saisie: { pas: 10, min: 0 },
+    existe: tourne,
+    auto: tremieACalculer,
+  },
+  tForme: {
+    libelle: "Forme de la trémie",
+    defaut: "rect",
+    valeurs: FORMES_TREMIE,
+    // « En U » à la place de « En L » quand l'escalier a deux tournants (syncInputs).
+    noms: { rect: "Rectangle", L: "En L" },
+    existe: tourne,
+  },
+  tbD: {
+    libelle: "Branche de trémie côté départ",
+    defaut: 950,
+    saisie: { pas: 10, min: 100 },
+    existe: (p) => tourne(p) && p.tForme === "L",
+    auto: tremieACalculer,
+  },
+  tbA: {
+    libelle: "Branche de trémie côté arrivée",
+    defaut: 950,
+    saisie: { pas: 10, min: 100 },
+    existe: (p) => tourne(p) && p.tForme === "L",
+    auto: tremieACalculer,
+  },
+  mp: { libelle: "Marche palière", defaut: false, mot: "avec", atelier: true },
+  mpP: {
+    libelle: "Profondeur de marche palière",
+    defaut: 300,
+    saisie: { pas: 10, min: 150 },
+    atelier: true,
+    allume: avecMarchePaliere,
+  },
+  mpE: {
+    libelle: "Épaisseur de marche palière",
+    defaut: 40,
+    saisie: { pas: 1, min: 18 },
+    atelier: true,
+    existe: avecMarchePaliere,
+  },
+  ep: { libelle: "Épaisseur du plancher", defaut: 200, saisie: { pas: 5, min: 0 } },
+  enc: { libelle: "Encastrement", defaut: 15, saisie: { pas: 1, min: 0, max: 40 }, atelier: true, avance: true },
+  jeu: { libelle: "Jeu d'assemblage", defaut: 0.5, saisie: { pas: 0.1, min: 0, max: 5 }, atelier: true, avance: true },
+  pL: { libelle: "Longueur des plateaux", defaut: 5000, saisie: { pas: 100, min: 500 }, atelier: true, avance: true },
+  pW: { libelle: "Largeur des plateaux", defaut: 600, saisie: { pas: 10, min: 100 }, atelier: true, avance: true },
+} satisfies { readonly [K in keyof Params]: Reglage<K> };
+
+/** Clés des réglages, dans l'ordre du catalogue. */
+export const CLES = Object.keys(REGLAGES) as readonly (keyof Params)[];
+
+type ClesDe<T> = { [K in keyof Params]: Params[K] extends T ? K : never }[keyof Params];
+export type NumericKey = ClesDe<number>;
+export type BooleanKey = ClesDe<boolean>;
+export type TextKey = ClesDe<string>;
+
+/** Entrée du catalogue, lue sans connaître la clé : ce que chaque type de réglage peut porter. */
+export type FicheReglage = Omit<Reglage<keyof Params>, "valeurs" | "noms" | "saisie" | "mot"> & {
+  valeurs?: readonly string[];
+  noms?: Readonly<Record<string, string>>;
+  saisie?: Saisie;
+  mot?: string;
+};
+
+/** Entrée du catalogue d'un réglage. */
+export const reglage = (k: keyof Params): FicheReglage => REGLAGES[k] as FicheReglage;
+
+export const DEFAULTS: Readonly<Params> = Object.fromEntries(CLES.map((k) => [k, reglage(k).defaut])) as never;
+
+export const NUMERIC_KEYS: readonly NumericKey[] = CLES.filter(
+  (k): k is NumericKey => typeof reglage(k).defaut === "number",
+);
+
+/** Cases à cocher, dans l'ordre du lien de projet : il est écrit dans les codes QR des fiches, ne pas le changer. */
 export const BOOLEAN_KEYS = [
   "fAuto",
   "nAuto",
@@ -336,9 +608,9 @@ export const BOOLEAN_KEYS = [
   "mdeb",
   "tAuto",
   "mp",
-] as const satisfies readonly (keyof Params)[];
+] as const satisfies readonly BooleanKey[];
 
-/** Réglages choisis dans une liste, écrits tels quels dans un lien de projet. */
+/** Réglages choisis dans une liste, écrits tels quels dans un lien de projet, dans cet ordre (voir BOOLEAN_KEYS). */
 export const TEXT_KEYS = [
   "forme",
   "ess",
@@ -348,7 +620,41 @@ export const TEXT_KEYS = [
   "tournant",
   "nez",
   "cmPose",
-] as const satisfies readonly (keyof Params)[];
+] as const satisfies readonly TextKey[];
+
+// Les deux listes du lien nomment toutes les cases et toutes les listes du catalogue : sinon, erreur de type ici.
+type Oublis<L extends readonly string[], U extends string> = Exclude<U, L[number]>;
+const toutDansLeLien: [Oublis<typeof BOOLEAN_KEYS, BooleanKey> | Oublis<typeof TEXT_KEYS, TextKey>] extends [never]
+  ? true
+  : never = true;
+void toutDansLeLien;
+
+/**
+ * Mode du champ d'un réglage : saisi par l'artisan, grisé par sa case décochée (il garde sa valeur), ou calculé
+ * (il montre le calcul et n'est pas relu).
+ */
+export type ModeSaisie = "saisi" | "eteint" | "calcule";
+
+/** État d'un réglage avec ces réglages : montré ou masqué (sans effet sur le calcul), et le mode de son champ.
+    Les deux sont indépendants : la longueur de trémie d'un quart tournant est masquée, et calculée si la trémie l'est. */
+export function etatReglage(k: keyof Params, p: Params): { montre: boolean; mode: ModeSaisie } {
+  const r = reglage(k);
+  return {
+    montre: r.existe?.(p) ?? true,
+    mode: r.auto?.(p) ? "calcule" : r.allume && !r.allume(p) ? "eteint" : "saisi",
+  };
+}
+
+/** Cotes que le calcul relit et borne avec ces réglages : montrées et saisies. Les autres (autre forme, valeur
+    automatique, case décochée) sont sans effet : hors de vue, ou non relues du formulaire, elles ne bloquent pas
+    l'escalier. Le nombre de hauteurs et le balancement sont ramenés dans leurs bornes par le calcul. */
+export function cotesLues(p: Params): NumericKey[] {
+  return NUMERIC_KEYS.filter((k) => {
+    if (reglage(k).ramene) return false;
+    const { montre, mode } = etatReglage(k, p);
+    return montre && mode === "saisi";
+  });
+}
 
 /** Recul de la coupe arrière d'une marche derrière la ligne de nez suivante : jusqu'au dos de la contremarche
     posée dessus, ou jusqu'à son parement quand elle descend derrière la marche. */
@@ -363,15 +669,15 @@ export function sanitizeParams(raw: unknown): Params {
   const p: Params = { ...DEFAULTS };
   if (!raw || typeof raw !== "object") return p;
   const r = raw as Record<string, unknown>;
-  if (FORMES.includes(r.forme as Forme)) p.forme = r.forme as Forme;
-  if (ESSENCES.includes(r.ess as Essence)) p.ess = r.ess as Essence;
-  if (GARDE_CORPS.includes(r.gc as GardeCorps)) p.gc = r.gc as GardeCorps;
-  if (POSES.includes(r.gcPose as Pose)) p.gcPose = r.gcPose as Pose;
-  if (FORMES_TREMIE.includes(r.tForme as FormeTremie)) p.tForme = r.tForme as FormeTremie;
-  if (TOURNANTS.includes(r.tournant as Tournant)) p.tournant = r.tournant as Tournant;
-  if (PROFILS_NEZ.includes(r.nez as ProfilNez)) p.nez = r.nez as ProfilNez;
-  if (POSES_CM.includes(r.cmPose as PoseCm)) p.cmPose = r.cmPose as PoseCm;
-  for (const k of NUMERIC_KEYS) if (typeof r[k] === "number" && Number.isFinite(r[k])) p[k] = r[k];
-  for (const k of BOOLEAN_KEYS) if (typeof r[k] === "boolean") p[k] = r[k];
+  for (const k of CLES) {
+    const v = r[k];
+    const { defaut, valeurs } = reglage(k);
+    const lu = valeurs
+      ? (valeurs as readonly unknown[]).includes(v)
+      : typeof defaut === "number"
+        ? typeof v === "number" && Number.isFinite(v)
+        : typeof v === typeof defaut;
+    if (lu) (p as Record<keyof Params, unknown>)[k] = v;
+  }
   return p;
 }

@@ -1,98 +1,26 @@
 import { fmt } from "./format";
-import { TOURS, isDemi, type Essence, type Forme, type GardeCorps, type Params, type Pose } from "./params";
+import {
+  CLES,
+  REGLAGES,
+  TOURS,
+  isDemi,
+  type Essence,
+  type Forme,
+  type GardeCorps,
+  type Params,
+  type Pose,
+} from "./params";
 import { CONFORT, echSidesShown, echStatus, type EchCote, type Headroom, type Stair, type Status } from "./stair";
 
-export const FORME_LABEL: Record<Forme, string> = {
-  droit: "Droit",
-  "quart-g": "Quart tournant gauche",
-  "quart-d": "Quart tournant droit",
-  "dq-g": "Double quart tournant gauche",
-  "dq-d": "Double quart tournant droit",
-  "demi-g": "Demi-tournant gauche",
-  "demi-d": "Demi-tournant droit",
-};
+export const FORME_LABEL: Readonly<Record<Forme, string>> = REGLAGES.forme.noms;
 
-export const ESSENCE_LABEL: Record<Essence, string> = {
-  chene: "Chêne",
-  hetre: "Hêtre",
-  frene: "Frêne",
-  chataignier: "Châtaignier",
-  erable: "Érable",
-  merisier: "Merisier",
-  noyer: "Noyer",
-  sapin: "Sapin",
-  epicea: "Épicéa",
-  douglas: "Douglas",
-  meleze: "Mélèze",
-};
+export const ESSENCE_LABEL: Readonly<Record<Essence, string>> = REGLAGES.ess.noms;
 
-export const GC_LABEL: Record<GardeCorps, string> = {
-  aucun: "Aucun",
-  balustres: "Balustres",
-  lisses: "Lisses rampantes",
-};
+export const GC_LABEL: Readonly<Record<GardeCorps, string>> = REGLAGES.gc.noms;
 export const POSE_LABEL: Record<Pose, string> = { chant: "dans le chant", anglaise: "à l'anglaise" };
 
 /** Nom d'un réglage pour l'artisan, comme à l'écran ; la trémie change de côté selon la forme. */
-export const COTE_LABEL: Record<keyof Params, string> = {
-  forme: "Forme",
-  H: "Hauteur à monter",
-  L: "Reculement",
-  A: "Longueur côté départ",
-  B: "Longueur côté arrivée",
-  C: "Longueur côté fond",
-  J: "Jour",
-  W: "Emmarchement",
-  fAuto: "Ligne de foulée automatique",
-  f: "Ligne de foulée",
-  nAuto: "Nombre de hauteurs automatique",
-  n: "Nombre de hauteurs",
-  mb: "Marches balancées",
-  prog: "Progressivité",
-  tournant: "Passage du tournant",
-  ess: "Essence",
-  et: "Épaisseur de marche",
-  deb: "Débord de nez",
-  rn: "Rayon du nez",
-  nez: "Profil du nez",
-  rai: "Rainures antidérapantes",
-  raiN: "Nombre de rainures",
-  raiL: "Largeur des rainures",
-  raiP: "Profondeur des rainures",
-  raiD: "Première rainure",
-  raiE: "Entraxe des rainures",
-  cm: "Contremarches",
-  ecm: "Épaisseur de contremarche",
-  cmPose: "Pose de la contremarche",
-  cmEmb: "Embrèvement de la contremarche",
-  mdeb: "Marches débordantes",
-  debJ: "Débord au jour",
-  el: "Épaisseur de limon",
-  hl: "Hauteur de limon",
-  hljAuto: "Hauteur du limon de jour automatique",
-  hlj: "Hauteur du limon de jour",
-  tAuto: "Trémie à calculer",
-  ps: "Section du poteau",
-  gc: "Côté jour",
-  gcPose: "Pose sur le limon",
-  mcL: "Largeur de main courante",
-  mcH: "Hauteur de main courante",
-  bs: "Section des balustres",
-  tL: "Longueur de trémie",
-  tX: "Trémie côté arrivée ou fond",
-  tY: "Trémie côté départ ou arrivée",
-  tForme: "Forme de la trémie",
-  tbD: "Branche de trémie côté départ",
-  tbA: "Branche de trémie côté arrivée",
-  mp: "Marche palière",
-  mpP: "Profondeur de marche palière",
-  mpE: "Épaisseur de marche palière",
-  ep: "Épaisseur du plancher",
-  enc: "Encastrement",
-  jeu: "Jeu d'assemblage",
-  pL: "Longueur des plateaux",
-  pW: "Largeur des plateaux",
-};
+export const COTE_LABEL = Object.fromEntries(CLES.map((k) => [k, REGLAGES[k].libelle])) as Record<keyof Params, string>;
 
 /** Sections de réglage, dans l'ordre du pas à pas. */
 export const SECTIONS = ["forme", "dimensions", "tremie", "marches", "bois", "gardecorps"] as const;

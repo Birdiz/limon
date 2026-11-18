@@ -1,6 +1,6 @@
 /* Liste de débit, volume et alertes de fabrication, communs à la page et à la fiche PDF. */
 import { ceil10, fmt } from "../core/format";
-import { DENSITE, type Essence } from "../core/params";
+import { DENSITE, REGLAGES } from "../core/params";
 import type { Stair, Status } from "../core/stair";
 import { oversize, stockVolume, tightBoards, type BoardPart, type Pieces, type TreadPart } from "../core/pieces";
 
@@ -80,20 +80,6 @@ export function cutRows(P: Pieces, R: Stair): CutRow[] {
   ];
 }
 
-const ESSENCE_LABEL: Record<Essence, string> = {
-  chene: "chêne",
-  hetre: "hêtre",
-  frene: "frêne",
-  chataignier: "châtaignier",
-  erable: "érable",
-  merisier: "merisier",
-  noyer: "noyer",
-  sapin: "sapin",
-  epicea: "épicéa",
-  douglas: "douglas",
-  meleze: "mélèze",
-};
-
 /** Nombre pour un tableur français : virgule décimale, sans séparateur de milliers. */
 const num = (v: number, d: number) =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: d, useGrouping: false });
@@ -104,7 +90,7 @@ const cell = (v: string) => (/[;"\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` :
 /** Liste de débit au format CSV (séparateur point-virgule, décimales à la française), avec une ligne de total.
     Le volume de chaque ligne est pris sur les cotes brutes affichées, quantité comprise. */
 export function cutListCSV(P: Pieces, R: Stair): string {
-  const ess = ESSENCE_LABEL[R.params.ess];
+  const ess = REGLAGES.ess.noms[R.params.ess].toLowerCase();
   const essence = ess.charAt(0).toUpperCase() + ess.slice(1);
   const rows = cutRows(P, R).map((r) => ({ ...r, v: (r.q * r.L * r.l * r.e) / 1e9 }));
   const q = rows.reduce((t, r) => t + r.q, 0),
@@ -121,7 +107,7 @@ export function cutListCSV(P: Pieces, R: Stair): string {
 export function volumeText(P: Pieces, R: Stair): string {
   const v = stockVolume(P, R),
     ess = R.params.ess;
-  return `Volume brut débité : ${fmt(v, 3)} m³ de ${ESSENCE_LABEL[ess]}, soit environ ${fmt(Math.round((v * DENSITE[ess]) / 5) * 5)} kg (${fmt(DENSITE[ess])} kg/m³).`;
+  return `Volume brut débité : ${fmt(v, 3)} m³ de ${REGLAGES.ess.noms[ess].toLowerCase()}, soit environ ${fmt(Math.round((v * DENSITE[ess]) / 5) * 5)} kg (${fmt(DENSITE[ess])} kg/m³).`;
 }
 
 /** Alerte si des logements débordent sous le bord d'un limon. */

@@ -1,4 +1,4 @@
-import { DEFAULTS, sanitizeParams, type Params } from "./params";
+import { CLES, DEFAULTS, REGLAGES, sanitizeParams, type Params } from "./params";
 import {
   ENTREPRISE_VIDE,
   TARIFS_VIDES,
@@ -14,43 +14,10 @@ import { textesPropres } from "./texte";
  * escalier, marche palière comprise. Les cotes du chantier (hauteur, reculement, emmarchement, trémie,
  * nombre de marches) n'en font pas partie : elles changent à chaque escalier.
  */
-export const ATELIER_KEYS = [
-  "ess",
-  "et",
-  "deb",
-  "rn",
-  "nez",
-  "rai",
-  "raiN",
-  "raiL",
-  "raiP",
-  "raiD",
-  "raiE",
-  "cm",
-  "ecm",
-  "cmPose",
-  "cmEmb",
-  "mdeb",
-  "debJ",
-  "el",
-  "hl",
-  "hljAuto",
-  "ps",
-  "enc",
-  "jeu",
-  "pL",
-  "pW",
-  "gc",
-  "gcPose",
-  "mcL",
-  "mcH",
-  "bs",
-  "mp",
-  "mpP",
-  "mpE",
-] as const satisfies readonly (keyof Params)[];
-
-export type AtelierKey = (typeof ATELIER_KEYS)[number];
+export type AtelierKey = {
+  [K in keyof typeof REGLAGES]: (typeof REGLAGES)[K] extends { atelier: true } ? K : never;
+}[keyof typeof REGLAGES];
+export const ATELIER_KEYS = CLES.filter((k): k is AtelierKey => "atelier" in REGLAGES[k]);
 export type AtelierDefauts = Pick<Params, AtelierKey>;
 
 /** Les parties du profil, datées chacune : un appareil ne remplace que ce qu'il a changé. */

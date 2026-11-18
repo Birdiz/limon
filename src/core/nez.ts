@@ -1,19 +1,14 @@
 /* Profil du nez de marche : forme de ses deux arêtes, coupe dessinée en 3D et sur la fiche,
    bout avant des logements dans les limons, mots de la fiche et des DXF. */
 import { fmt } from "./format";
-import type { ProfilNez } from "./params";
+import { REGLAGES, type ProfilNez } from "./params";
 import { clamp, type Pt } from "./vec";
 
 /** Rayon des arêtes cassées d'un nez droit. */
 export const ARETE_CASSEE = 2;
 
 /** Nom court du profil, dans les listes de choix. */
-export const NEZ_LABEL: Record<ProfilNez, string> = {
-  arrondi: "Arrondi",
-  quart: "Quart-de-rond",
-  chanfrein: "Chanfrein",
-  casse: "Arêtes cassées",
-};
+export const NEZ_LABEL: Readonly<Record<ProfilNez, string>> = REGLAGES.nez.noms;
 
 /** Cote appliquée à une marche d'épaisseur e : rayon, ou côte du chanfrein, au plus la moitié de l'épaisseur ;
     0 = nez vif. Les arêtes cassées gardent leur rayon fixe. */
