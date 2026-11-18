@@ -528,6 +528,13 @@ body {
   stroke: var(--chalk);
   stroke-width: 1.6;
 }
+/* Aide : le téléphone et l'adresse en liens directs, qui marchent aussi hors ligne. */
+.invite a {
+  color: var(--chalk);
+  font-weight: 600;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
 .linkbtn {
   display: inline;
   padding: 0;
