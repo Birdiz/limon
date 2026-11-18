@@ -456,6 +456,17 @@ html {
 .faq details[open]::details-content {
   block-size: auto;
 }
+/* Après la dernière question : de quoi joindre l'éditeur, visible aussi sur téléphone (sans menu du haut). */
+.faq .autre {
+  margin: 28px 0 0;
+  font-size: 19px;
+}
+.faq .autre a {
+  color: var(--chalk);
+  font-weight: 600;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
 
 /* Dernier appel */
 .vitrine main > .last {
