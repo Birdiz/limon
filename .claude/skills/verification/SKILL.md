@@ -20,6 +20,7 @@ description: Vérification, CI GitHub Actions (jobs, contrôles exigés), fichie
 
 GitHub Actions, deux pipelines : `Tests` (`tests.yml` : jobs `vitest`, `dxf`, `build` avec démarrage du serveur) et `Code Quality` (`code-quality.yml` : `qualite` pour types, ESLint et Prettier ; `audit`, sans bloquer). Préparation commune dans `.github/actions/setup`.
 
-- **Sur les PR seulement** (`on: pull_request`, pas de `push`) : le travail passe toujours par une branche et une PR, `main` n'est jamais poussé en direct, donc la relancer sur `main` ne ferait que doubler ce que la PR a déjà vérifié. Conséquence : le commit de fusion n'est pas contrôlé en tant que tel — exiger « branche à jour avant fusion » dans la protection de `main` pour que les contrôles portent sur ce qui sera fusionné.
-- La règle « Protection de main » exige `vitest`, `dxf`, `build`, `qualite` par leur nom : renommer un job demande de la mettre à jour.
-- Pas de filtre de chemins sur ces pipelines : un contrôle exigé qui ne se lance pas bloquerait la PR.
+- **Sur les PR seulement** (`on: pull_request`, pas de `push`) : le travail passe toujours par une branche et une PR, `main` n'est jamais poussé en direct, donc relancer les pipelines sur `main` ne ferait que doubler ce que la PR a déjà vérifié.
+- **Rien ne l'impose côté GitHub** : la protection de branche n'est pas disponible sur ce dépôt privé. Les contrôles renseignent, ils ne bloquent pas, et « tout par une PR » tient à la discipline (AGENTS.md). Deux conséquences : le commit de fusion n'est vérifié que si la branche a été remise à jour sur `main` avant la fusion, et un push direct sur `main` ne déclenche plus rien du tout.
+- Noms des jobs : `vitest`, `dxf`, `build`, `qualite`. Ce sont eux qu'une protection de branche exigerait, si elle redevenait possible (dépôt public ou offre payante).
+- Pas de filtre de chemins sur ces pipelines : un contrôle qui ne se lance pas ne dit rien, ce qui se lit mal à côté de ceux qui sont verts.
