@@ -1,13 +1,12 @@
 name: Code Quality
 
+# Sur les PR seulement : tout passe par une PR, main n'est jamais poussé en direct.
 on:
-  push:
-    branches: [main]
   pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

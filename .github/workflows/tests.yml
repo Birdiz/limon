@@ -1,14 +1,13 @@
 name: Tests
 
+# Sur les PR seulement : tout passe par une PR, main n'est jamais poussé en direct.
 on:
-  push:
-    branches: [main]
   pull_request:
 
-# Un nouveau push remplace les essais en cours de sa PR ; sur main, chaque commit va au bout.
+# Un nouveau push remplace les essais en cours de sa PR.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

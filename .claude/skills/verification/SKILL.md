@@ -20,5 +20,6 @@ description: Vérification, CI GitHub Actions (jobs, contrôles exigés), fichie
 
 GitHub Actions, deux pipelines : `Tests` (`tests.yml` : jobs `vitest`, `dxf`, `build` avec démarrage du serveur) et `Code Quality` (`code-quality.yml` : `qualite` pour types, ESLint et Prettier ; `audit`, sans bloquer). Préparation commune dans `.github/actions/setup`.
 
+- **Sur les PR seulement** (`on: pull_request`, pas de `push`) : le travail passe toujours par une branche et une PR, `main` n'est jamais poussé en direct, donc la relancer sur `main` ne ferait que doubler ce que la PR a déjà vérifié. Conséquence : le commit de fusion n'est pas contrôlé en tant que tel — exiger « branche à jour avant fusion » dans la protection de `main` pour que les contrôles portent sur ce qui sera fusionné.
 - La règle « Protection de main » exige `vitest`, `dxf`, `build`, `qualite` par leur nom : renommer un job demande de la mettre à jour.
 - Pas de filtre de chemins sur ces pipelines : un contrôle exigé qui ne se lance pas bloquerait la PR.
